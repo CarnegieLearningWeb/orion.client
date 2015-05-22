@@ -56,9 +56,7 @@ define(["orion/plugin", "profile/UsersService", "domReady!"], function(PluginPro
                                                                                                   	 {"type": "CheckBox", "props": {"id": "pi_emailConfirmed", "readOnly" : true, "name" : "EmailConfirmed"}, "label" : "Email confirmed:"},
                                                                                                     {"type": "DateLong", "props": {"id": "pi_lastLogin", "name" : "LastLoginTimestamp"}, "label" : "Last login:	"},
                                                                                                   	 {"type": "Text", "props": {"id": "pi_diskUsage", "name" : "DiskUsage"}, "label" : "Disk Usage:	"},
-                                                                                                     {"type": "DateLong", "props": {"id": "pi_diskUsageTimestamp", "name" : "DiskUsageTimestamp"}, "label" : "Disk Usage Last Calculated:	"},
-                                                                                                     //Added by Jon
-                                                                                                     {"type": "TextBox", "props": {"id": "pi_homewiki", "readOnly" : false,  "name" : "HomeWiki"}, "label" : "Home Wiki:"},
+                                                                                                     {"type": "DateLong", "props": {"id": "pi_diskUsageTimestamp", "name" : "DiskUsageTimestamp"}, "label" : "Disk Usage Last Calculated:	"}
                                                                                                     ]
                             },
                           {"id": "oauthids", "name": "Manage External Accounts", "type": "iframe", "data" : {"src": "../mixloginstatic/manageExternalIds.html"}}

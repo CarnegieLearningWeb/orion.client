@@ -51,13 +51,5 @@ define({//Default message bundle
 	"Create" : "Create",
 	"Set Password" : "Set Password",
 	"Permission to view user list denied." : "Permission to view user list denied.",
-	"A(lastCalculated B)" : "${0} ( last calculated ${1} )",
-	
-	//Added by Jon
-	"Home Wiki" : "Home Wiki",
-	"HomeWiki options": [
-		'<option></option>',
-		'<option value="rtcwiki">RTC Wiki</option>',
-		'<option value="sandbox">Sandbox</option>',
-	]
+	"A(lastCalculated B)" : "${0} ( last calculated ${1} )"
 });
