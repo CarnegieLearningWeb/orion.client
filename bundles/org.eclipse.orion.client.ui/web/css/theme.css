@@ -82,7 +82,9 @@ a:hover {
 /* Row selection */
 
 .checkedRow {
-	background-color: #4CAAC6 !important; /* was e3e3e3 */
+	background-color: #0b6481 !important; /* was e3e3e3 */
+	border-left-color: black;
+	border: solid 1px pink;
 }
 
 .checkedRow.disabledRow {
@@ -220,7 +222,7 @@ a.breadcrumb.currentLocation {
 }
 
 .mainToolbar {
- 	background: #263238;
+ 	background: #0b6481;
  	padding-left: 2px;
  	padding-right: 5px;
 	/* border-bottom: 1px solid #ebebeb; */

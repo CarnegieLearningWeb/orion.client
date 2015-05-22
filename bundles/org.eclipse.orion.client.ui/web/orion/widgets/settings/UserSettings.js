@@ -19,8 +19,15 @@ define([
 	'orion/widgets/settings/Subsection', 
 	'orion/widgets/input/SettingsTextfield', 
 	'orion/widgets/input/SettingsCheckbox',
+	'orion/widgets/input/SettingsSelect', //$NON-NLS-0$
 	'orion/webui/tooltip'
-], function(messages, mCommands, mSection, lib, objects, Subsection, SettingsTextfield, SettingsCheckbox, mTooltip) {
+], function(messages, mCommands, mSection, lib, objects, Subsection, SettingsTextfield, SettingsCheckbox, SettingsSelect, mTooltip) {
+	
+	var HOME_WIKIS = [
+ 		{value: "", label: messages.Default},
+ 		{value: "rtcwiki", label: "RTC Wiki name"}, //$NON-NLS-1$ //$NON-NLS-0$
+ 		{value: "sandbox", label: "Sandbox Wiki"} //$NON-NLS-1$ //$NON-NLS-0$
+ 	];
 
 	function UserSettings(options, node) {
 		objects.mixin(this, options);
@@ -61,12 +68,35 @@ define([
 			var updateAccountFunction = this.updateAccount.bind(this);
 			var updatePasswordFunction = this.updatePassword.bind(this);
 			
+			var keys = HOME_WIKIS;
+			var options = [];
+			for( var i= 0; i < keys.length; i++ ){
+				var key = keys[i];
+				var set = {
+					value: key.value,
+					label: key.label
+				};
+				options.push(set);
+			}
+			
 			/* - account ----------------------------------------------------- */
 			this.accountFields = [
 				new SettingsTextfield( {fieldlabel:messages['User Name'], editmode:'readonly'}),  //$NON-NLS-0$
-				new SettingsTextfield( {fieldlabel:messages['Full Name'], postChange: updateAccountFunction}),
-				new SettingsTextfield( {fieldlabel:messages['Email Address'], postChange: updateAccountFunction}),
-				new SettingsCheckbox( {fieldlabel: messages['Email Confirmed'], editmode:'readonly'})  //$NON-NLS-0$
+				//Added by Jon, editmode='readonly'
+				new SettingsTextfield( {fieldlabel:messages['Full Name'],  postChange: updateAccountFunction}),
+				new SettingsTextfield( {fieldlabel:messages['Email Address'], editmode:'readonly', postChange: updateAccountFunction}),
+				//end edit
+				
+				new SettingsCheckbox( {fieldlabel: messages['Email Confirmed'], editmode:'readonly'}),  //$NON-NLS-0$
+				
+				//Added by Jon, Home wiki field
+				new SettingsSelect(
+					{	
+						fieldlabel:messages["Home Wiki"], //$NON-NLS-0$
+						options:options,
+						postChange: updateAccountFunction
+					}
+				)
 			];
 			var accountSubsection = new Subsection( {sectionName: messages['Account'], parentNode: this.sections, children: this.accountFields} );
 			accountSubsection.show();
@@ -97,26 +127,29 @@ define([
 				}
 			});
 			
-			this.commandService.addCommand(deleteCommand);
+			//Added by Jon, remove Delete button from view
+//			this.commandService.addCommand(deleteCommand);
+			//end edit
+			
 			this.commandService.registerCommandContribution('profileCommands', "orion.deleteprofile", 3); //$NON-NLS-1$ //$NON-NLS-0$
 
 			this.commandService.renderCommands('profileCommands', lib.node( 'userCommands' ), this, this, "button"); //$NON-NLS-1$ //$NON-NLS-0$  //$NON-NLS-2$		
 			
-			this.linkedAccountSection = new mSection.Section(this.node, {
-				id: "linkedAccountSection", //$NON-NLS-0$
-				title: messages["Linked Accounts"],
-				content: '<div style="margin-left: 10px; margin-top: 17px;" id="iFrameContent"></div>', //$NON-NLS-0$
-				canHide: false,
-				useAuxStyle: true,
-				slideout: true
-			});
-			
-			
-			var iframe = this.iframe = document.createElement("iframe"); //$NON-NLS-0$
-			iframe.src = "../mixloginstatic/manageExternalIds.html"; //$NON-NLS-0$
-			iframe.style.border = "0";
-			iframe.style.width = "500px";
-			lib.node( 'iFrameContent' ).appendChild(iframe); //$NON-NLS-0$
+			/*Added by Jon remove linked accounts section */
+//			this.linkedAccountSection = new mSection.Section(this.node, {
+//				id: "linkedAccountSection", //$NON-NLS-0$
+//				title: messages["Linked Accounts"],
+//				content: '<div style="margin-left: 10px; margin-top: 17px;" id="iFrameContent"></div>', //$NON-NLS-0$
+//				canHide: false,
+//				useAuxStyle: true,
+//				slideout: true,
+//			});
+//			var iframe = this.iframe = document.createElement("iframe"); //$NON-NLS-0$
+//			iframe.src = "../mixloginstatic/manageExternalIds.html"; //$NON-NLS-0$
+//			iframe.style.border = "0";
+//			iframe.style.width = "500px";
+//			lib.node( 'iFrameContent' ).appendChild(iframe); //$NON-NLS-0$
+			//end edit
 		},
 		
 		deleteUser: function(){
@@ -140,6 +173,9 @@ define([
 			userdata.UserName = this.accountFields[0].getValue();
 			userdata.FullName = this.accountFields[1].getValue();
 			userdata.Email = this.accountFields[2].getValue();
+			
+			//Added by Jon
+			userdata.HomeWiki = this.accountFields[4].getSelection();
 			
 			for(var i=0; i<authServices.length; i++){
 				var servicePtr = authServices[i];
@@ -296,6 +332,7 @@ define([
 					authService.getUser().then(function(jsonData){
 
 						var b = userService.getUserInfo(jsonData.Location).then( function( accountData ){
+							console.log(accountData);
 							settingsWidget.UserName = accountData.UserName;
 							settingsWidget.accountFields[0].setValue( accountData.UserName );
 							if (accountData.FullName){
@@ -309,6 +346,13 @@ define([
 								settingsWidget.accountFields[2].setValue( '' );
 							}
 							settingsWidget.accountFields[3].setChecked( accountData.EmailConfirmed );
+							
+							//Added by Jon
+							if(accountData.HomeWiki)
+								settingsWidget.accountFields[4].setSelection(accountData.HomeWiki);
+							else
+								settingsWidget.accountFields[4].setSelection( '' );
+							
 						}, function(error) {
 							messageService.setProgressResult(error);
 						});

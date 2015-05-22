@@ -64,6 +64,7 @@ var MODE_SINGLE = 0;
 var MODE_VERTICAL = 1;
 var MODE_HORIZONTAL = 2;
 var MODE_PIP = 3;
+var MODE_PREVIEW = 4;
 
 var uriTemplate = new URITemplate("#{,resource,params*}"); //$NON-NLS-0$
 
@@ -361,6 +362,22 @@ objects.mixin(EditorViewer.prototype, {
 			if (this.curFileNode) {
 				this.curFileNode.innerHTML = evt.name || "";
 			}
+			
+//			var iframe = document.getElementById("previewFrame");
+//			console.log(iframe);
+//			if(iframe!==undefined && iframe !== null){
+//				var currentFile = window.location.hash.slice(1,window.location.hash.length);
+//				//TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
+//				currentFile = currentFile.replace(new RegExp('25', 'g'),'');				
+//				if(window.location.port!=='')
+//					iframe.src = "http://"+window.location.hostname+":"+window.location.port+currentFile;
+//				else
+//					iframe.src = "http://"+window.location.hostname+currentFile;
+//				iframe.contentWindow.location.reload();
+//				
+//				
+//			}
+			
 		}.bind(this));
 		inputManager.addEventListener("InputChanging", function(e) { //$NON-NLS-0$
 			var previousPool = this.pool;
@@ -941,7 +958,7 @@ objects.mixin(EditorSetup.prototype, {
 		var mainEditorViewerNode = this.editorViewers[0].domNode;
 		mainEditorViewerNode.style.width = mainEditorViewerNode.style.height = "100%"; //$NON-NLS-0$
 
-		var splitEditorViewerNode, splitterNode;
+		var splitEditorViewerNode, splitterNode, rightCodePane;
 		if (this.editorViewers. length > 1) {
 			splitEditorViewerNode = this.editorViewers[1].domNode;
 			splitterNode = this.editorSplitter.$splitter;
@@ -952,6 +969,10 @@ objects.mixin(EditorSetup.prototype, {
 				splitEditorViewerNode.style[p] = ""; //$NON-NLS-0$
 			});
 			splitterNode.style.display = "block"; //$NON-NLS-0$
+			
+			//show right pane
+			rightCodePane = splitEditorViewerNode.childNodes[1];
+			rightCodePane.style.display = "block";
 		}
 		
 		switch(mode){
@@ -977,6 +998,19 @@ objects.mixin(EditorSetup.prototype, {
 			
 			case MODE_VERTICAL:
 				this.editorSplitter.setOrientation(mSplitter.ORIENTATION_HORIZONTAL, true);
+				break;
+				
+			case MODE_PREVIEW:
+				this.editorSplitter.setOrientation(mSplitter.ORIENTATION_HORIZONTAL, true);
+				
+				//remove previous preview pane
+				var previewDiv = document.getElementById("previewHtml");
+				if(previewDiv !== null && previewDiv !== undefined)
+					previewDiv.parentNode.removeChild(previewDiv);
+				
+				var preview = this.editorSplitter.openPreview();
+				rightCodePane.style.display = "none";
+				splitEditorViewerNode.appendChild(preview, rightCodePane);//replace div.editorViewerContent
 				break;
 		}
 		
@@ -1013,6 +1047,7 @@ objects.mixin(EditorSetup.prototype, {
 			{name: messages["SplitVertical"], mode: MODE_VERTICAL, imageClass: "core-sprite-vertical", callback: callback}, //$NON-NLS-0$
 			{name: messages["SplitHorizontal"], mode: MODE_HORIZONTAL, imageClass: "core-sprite-horizontal", callback: callback}, //$NON-NLS-0$
 			{name: messages["SplitPipInPip"], mode: MODE_PIP, imageClass: "core-sprite-pip", callback: callback}, //$NON-NLS-0$
+			{name: messages["SplitPreview"], mode: MODE_PREVIEW, imageClass: "core-sprite-pre", callback: callback}, //$NON-NLS-0$
 		];
 		currentChoice = choices[0];
 		changeSplitModeCommand = new mCommands.Command({

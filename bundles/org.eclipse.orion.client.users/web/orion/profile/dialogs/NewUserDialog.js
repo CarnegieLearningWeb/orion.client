@@ -29,6 +29,8 @@ define(['i18n!profile/nls/messages', 'orion/webui/dialog'], function(messages, d
 		'<td><input id="retypePassword" type="password" /></td></tr>' + //$NON-NLS-0$
 		'<tr><td><label for="email">${Email:}</label></td>' + //$NON-NLS-0$
 		'<td><input id="email" /></td></tr>' + //$NON-NLS-0$
+		'<tr><td><label for="homeWiki">${HomeWiki:}</label></td>' + //$NON-NLS-0$
+		'<td><select id="homeWiki" >'+ messages["HomeWiki options"] + '</select></td></tr>' + //$NON-NLS-0$
 		'</table>'; //$NON-NLS-0$
 
 	NewUserDialog.prototype._init = function(options) {
@@ -56,7 +58,8 @@ define(['i18n!profile/nls/messages', 'orion/webui/dialog'], function(messages, d
 		this.registry.getService("orion.core.user").createUser({
 			UserName: dialog.$userName.value,
 			Password: dialog.$password.value,
-			Email: dialog.$email.value
+			Email: dialog.$email.value,
+			HomeWiki: dialog.$homeWiki.value
 		}).then(dialog.func, function(response) { //$NON-NLS-0$
 			console.info(response);
 			var message = response.Message;

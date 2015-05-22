@@ -18,7 +18,8 @@ define([
 	var SETTINGS_KEY = "editorSettings"; //$NON-NLS-0$
 
 	var defaults = {
-		autoSave: false,
+		//Jon Added, change default settings
+		autoSave: true,
 		autoSaveVisible: true,
 		autoSaveLocalVisible: true,
 		autoSaveTimeout: 250,
@@ -67,9 +68,9 @@ define([
 		foldingRulerVisible: true,
 		overviewRuler: true,
 		overviewRulerVisible: true,
-		zoomRuler: true,
-		zoomRulerVisible: true,
-		zoomRulerLocalVisible: true,
+		zoomRuler: false,
+		zoomRulerVisible: false,
+		zoomRulerLocalVisible: false,
 		showWhitespaces: false,
 		showWhitespacesVisible: true,
 		wordWrap: false,
@@ -80,7 +81,7 @@ define([
 		marginOffsetVisible: true,
 		keyBindings: "Default",
 		keyBindingsVisible: true,
-		keyBindingsLocalVisible: true,
+		keyBindingsLocalVisible: false,
 		diffService: false,
 		diffServiceVisible: false
 	};
