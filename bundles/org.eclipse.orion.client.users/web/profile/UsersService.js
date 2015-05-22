@@ -76,7 +76,6 @@ define(["orion/Deferred", "orion/xhr", 'orion/EventTarget', 'orion/form'], funct
 			return ret;
 		},
 		getUsersList : function(onLoad) {
-			console.log("getting in here?"+ onLoad);
 			var ret = new Deferred();
 			var service = this;
 			xhr("GET", this.api, { //$NON-NLS-1$ //$NON-NLS-0$
@@ -129,8 +128,7 @@ define(["orion/Deferred", "orion/xhr", 'orion/EventTarget', 'orion/form'], funct
 			var formData = {
 				UserName : userInfo.UserName,
 				Password : userInfo.Password,
-				Email: userInfo.Email,
-				HomeWiki: userInfo.homeWiki
+				Email: userInfo.Email
 			};
 			return xhr("POST", this.api, { //$NON-NLS-1$ //$NON-NLS-0$
 				headers : {
@@ -190,7 +188,6 @@ define(["orion/Deferred", "orion/xhr", 'orion/EventTarget', 'orion/form'], funct
 				timeout : 15000,
 				data: JSON.stringify(data)
 			}).then(function(result) {
-				console.log(result);
 				var jsonData = getJSON(result.response);
 				if (onLoad){
 					if(typeof onLoad === "function") //$NON-NLS-0$

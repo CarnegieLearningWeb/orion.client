@@ -139,9 +139,6 @@ eclipse.UsersRenderer = (function() {
 		case 4:
 			h2.textContent = messages["Disk Usage"];
 			return col;
-		case 5:
-			h2.textContent = messages["Home Wiki"];
-			return col;
 		}
 	};
 	
@@ -180,10 +177,6 @@ eclipse.UsersRenderer = (function() {
 				diskUsageTextContent = i18nUtil.formatMessage(messages["A(lastCalculated B)"], diskUsage, diskUsageTimestamp); //$NON-NLS-1$ //$NON-NLS-0$
 			};
 			td.textContent = diskUsageTextContent;
-			return td;
-		case 5:
-			td = document.createElement("td"); //$NON-NLS-0$
-			td.textContent = item.HomeWiki ? item.HomeWiki : " "; //$NON-NLS-0$
 			return td;
 		}
 		
