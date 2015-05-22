@@ -254,6 +254,44 @@ define([
 				this._thumbDown();
 			}
 		},
+		
+		openPreview: function() {
+			
+//			splitEditorViewerNode.innerHTML = '<iframe style="height:100%;width:100%" src="http://'+window.location.hostname+':8080'+currentFile+'"></iframe>';
+			var frameDiv = document.createElement("div");
+			frameDiv.id = 'previewHtml'; //$NON-NLS-0$
+			
+			var iframe = document.createElement("iframe"); //$NON-NLS-0$
+			iframe.id = 'previewFrame'; //$NON-NLS-0$
+			iframe.name = 'HTML Previewer'; //$NON-NLS-0$
+			iframe.type = "text/html"; //$NON-NLS-0$
+			iframe.sandbox = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
+			frameDiv.style.border = "none"; //$NON-NLS-0$
+			frameDiv.style.width = "100%"; //$NON-NLS-0$
+			frameDiv.style.height = "100%"; //$NON-NLS-0$
+			iframe.style.width = "100%"; //$NON-NLS-0$
+			iframe.style.height = "100%"; //$NON-NLS-0$
+			
+			var currentFile = window.location.hash.slice(1,window.location.hash.length);
+			//TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
+			currentFile = currentFile.replace(new RegExp('25', 'g'),'');
+			var port = ":"+window.location.port;
+			if(window.location.port!=='')
+				iframe.src = "http://"+window.location.hostname+port+currentFile;
+			else
+				iframe.src = "http://"+window.location.hostname+currentFile;
+			
+			var reloadButton = document.createElement("button");
+			reloadButton.setAttribute('onClick', 'document.getElementById("previewFrame").contentWindow.location.reload()');
+			reloadButton.textContent = 'Refresh Preview';
+			reloadButton.style.float = 'right';
+
+			frameDiv.appendChild(reloadButton);
+			frameDiv.appendChild(iframe);
+			
+			return frameDiv;
+		},
+		
 		/**
 		 * Adds an event listener for resizing the main and side panels.
 		 * @param {Function} listener The function called when a resize occurs.  The DOM node that has

@@ -110,7 +110,8 @@ define([
 			_self.dependenciesDisplatcher.addEventListener(eventType, _self.dependneciesListener);
 		});
 		
-		this._createRunBar();
+		//Jon added remove Run Bar from nav
+		//this._createRunBar();
 	}
 	ProjectNavExplorer.prototype = Object.create(CommonNavExplorer.prototype);
 	objects.mixin(ProjectNavExplorer.prototype, /** @lends orion.sidebar.ProjectNavExplorer.prototype */ {

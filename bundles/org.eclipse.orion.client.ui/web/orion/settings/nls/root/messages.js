@@ -44,6 +44,10 @@ define({//Default message bundle
 	"Categories": "Categories",
 	"User Name": "User Name:",
 	"Full Name": "Full Name:",
+	
+	//Added by Jon
+	"Home Wiki": "Home Wiki",
+	
 	"Email Address": "Email Address:",
 	"Email Confirmed": "Email Confirmed:",
 	"Account": "Account",

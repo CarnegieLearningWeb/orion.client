@@ -46,6 +46,9 @@ define({//Default message bundle
 	"SplitVertical": "Split Vertical", //$NON-NLS-1$ //$NON-NLS-0$
 	"SplitHorizontal": "Split Horizontal", //$NON-NLS-1$ //$NON-NLS-0$
 	"SplitPipInPip": "Picture in Picture", //$NON-NLS-1$ //$NON-NLS-0$
+	//Added by Jon
+	"SplitPreview": "Preview Page", //$NON-NLS-1$ //$NON-NLS-0$
+	
 	"SplitModeTooltip": "Change split editor mode", //$NON-NLS-1$ //$NON-NLS-0$
 	"SidePanel": "Side Panel", //$NON-NLS-1$ //$NON-NLS-0$
 	"SidePanelTooltip": "Choose what to show in the side panel.", //$NON-NLS-1$ //$NON-NLS-0$
