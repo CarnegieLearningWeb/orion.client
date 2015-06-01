@@ -1,6 +1,6 @@
  /*******************************************************************************
  * @license
- * Copyright (c) 2014 IBM Corporation and others.
+ * Copyright (c) 2014, 2015 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -14,31 +14,27 @@
 define([
 'orion/objects', 
 'javascript/finder', 
-'javascript/signatures',
-'javascript/compilationUnit',  
 'orion/URITemplate',
 'orion/Deferred',
 'doctrine' //last, exports into global
-], function(Objects, Finder, Signatures, CU, URITemplate, Deferred) {
+], function(Objects, Finder, URITemplate, Deferred) {
 	
 	/**
 	 * @description Formats the hover info as markdown text
-	 * @param {Object} node The AST node or {@link Definition}
+	 * @param {String} node The text to format
 	 * @returns returns
 	 */
-	function formatMarkdownHover(node, offsetRange) {
-	    if(!node) {
+	function formatMarkdownHover(comment, offsetRange) {
+	    if(!comment) {
 	        return null;
 	    }
 	    try {
 	        var format = Object.create(null);
-	        var comment = Finder.findCommentForNode(node);
-	        if(typeof node === "string") {
-	           comment.value = node;
-	        }
 	        if(comment) {
-		        var doc = doctrine.parse(comment.value, {recoverable:true, unwrap : true});
+		        var doc = doctrine.parse(comment, {recoverable:true, unwrap : true});
 		        format.params = [];
+		        format.throws = [];
+		        format.see = [];
 		        format.desc = (doc.description ? doc.description : '');
 		        if(doc.tags) {
 		            var len = doc.tags.length;
@@ -75,48 +71,68 @@ define([
 		                        }
 		                        break;
 		                    }
-		                    case 'function': {
-		                        format.isfunc = true;
-		                        break;
+		                    case 'callback': {
+		                    	if(tag.description) {
+		                          format.callback = tag.description;
+		                        } else {
+		                        	format.callback = 'This function is used as a callback';
+		                        }
+		                    	break;
 		                    }
-		                    case 'constructor': {
-		                        format.iscon = true;
-		                        break;
+		                    case 'throws': {
+		                    	format.throws.push(_convertTagType(tag.type) + (tag.description ? tag.description+'\n' : '')); //$NON-NLS-1$
+		                    	break;
 		                    }
-		                    case 'private': {
-		                        format.isprivate = true;
-		                        break; 
+		                    case 'see': {
+		                    	format.see.push(_convertTagType(tag.type) + (tag.description ? tag.description+'\n' : '')); //$NON-NLS-1$
+		                    	break;
 		                    }
-	                }
+		                    case 'deprecated': {
+		                    	format.deprecated = tag.description ? tag.description+'\n' : ''; //$NON-NLS-1$
+		                    }
+	                	}
 		            }
 		        }
 	        }
-	        if(comment.node && typeof(comment.node) !== 'string') {
-    	        var name = Signatures.computeSignature(comment.node);
-    	        var title = '###';
-    	        if(format.isprivate) {
-    	            title += 'private ';
-    	        }
-    	        if(format.iscon) {
-    	            title += 'constructor ';
-    	        }
-    	        title += name.sig+'###';
-	        }
 	        var hover = '';
+	        if(typeof(format.deprecated) !== 'undefined') {
+	        	hover += '__Deprecated.__ '+format.deprecated+'\n\n'; //$NON-NLS-2$
+	        }
 	        if(format.desc !== '') {
-	            hover += format.desc+'\n\n';
+	            hover += format.desc+'\n\n'; //$NON-NLS-1$
 	        }
 	        if(format.params.length > 0) {
 	            hover += '__Parameters:__\n\n';
 	            for(i = 0; i < format.params.length; i++) {
-	                hover += '>'+format.params[i] + '\n\n';
+	                hover += '>'+format.params[i] + '\n\n'; //$NON-NLS-1$
 	            }
 	        }
 	        if(format.returns) {
-	            hover += '__Returns:__\n\n>' + format.returns + '\n\n';
+	            hover += '__Returns:__\n\n>' + format.returns + '\n\n'; //$NON-NLS-2$
+	        }
+	        if(format.throws.length > 0) {
+	        	hover += '__Throws:__\n\n';
+	        	for(i = 0; i < format.throws.length; i++) {
+	        		hover += '>'+format.throws[i]+'\n\n'; //$NON-NLS-1$
+	        	}
+	        }
+	        if(format.callback) {
+				hover += '__Callback:__\n\n>' + format.callback + '\n\n'; //$NON-NLS-2$
 	        }
 	        if(format.since) {
-	            hover += '__Since:__\n\n>'+format.since;
+	            hover += '__Since:__\n\n>'+format.since+'\n\n'; //$NON-NLS-2$
+	        }
+	        if(format.see.length > 0) {
+	        	hover += '__See Also:__\n\n';
+	        	for(i = 0; i < format.see.length; i++) {
+	        		hover += '>'+format.see[i]; //$NON-NLS-1$
+	        		if(i < format.see.length-1) {
+	        			hover += '\n\n'; //$NON-NLS-1$
+	        		}
+	        	}
+	        }
+	        if(hover === '') {
+	        	return null;
 	        }
 	        //TODO scope this to not show when you are on a decl
 	        /**var href = new URITemplate("#{,resource,params*}").expand(
@@ -129,7 +145,7 @@ define([
 	    catch(e) {
 	        //do nothing, show what we have
 	    }
-	    var result = {content: hover, title: title, type:'markdown'};
+	    var result = {content: hover, type:'markdown'}; //$NON-NLS-1$
 	    if (offsetRange){
 	    	result.offsetStart = offsetRange[0];
 	    	result.offsetEnd = offsetRange[1];
@@ -210,12 +226,15 @@ define([
 	 * @public
 	 * @param {javascript.ASTManager} astManager
 	 * @param {javascript.ScriptResolver} resolver
+	 * @param {javascript.TernWorkerCore} ternWorker
+	 * @param {javascript.CUProvider} cuProvider 
 	 * @since 7.0
 	 */
-	function JavaScriptHover(astManager, resolver, ternWorker) {
+	function JavaScriptHover(astManager, resolver, ternWorker, cuProvider) {
 		this.astManager = astManager;
 		this.resolver = resolver;
 		this.ternworker = ternWorker;
+		this.cuprovider = cuProvider;
 		this.ternworker.addEventListener('message', function(evnt) {
 			if(typeof(evnt.data) === 'object') {
 				var _d = evnt.data;
@@ -257,7 +276,7 @@ define([
 		        return editorContext.getText().then(function(text) {
 		            var blocks = Finder.findScriptBlocks(text);
 		            if(blocks && blocks.length > 0) {
-    		            var cu = new CU(blocks, meta);
+		            	var cu = that.cuprovider.getCompilationUnit(blocks, meta);
     		            if(cu.validOffset(ctxt.offset)) {
         		            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
                 				return that._doHover(ast, ctxt, meta);
@@ -283,7 +302,7 @@ define([
                 var that = this;
                 if(parent.type === 'ArrayExpression') {
                     parent = parents.pop();
-                    if(parent.type === 'CallExpression' && parent.callee.name === 'define') {
+                    if(parent.type === 'CallExpression' && (parent.callee.name === 'define' || parent.callee.name === 'require')) {
                         var path = node.value;
 	                    return that.resolver.getWorkspaceFile(path).then(function(files) {
 		                    return that._formatFilesHover(path, files);
@@ -305,7 +324,7 @@ define([
                             var path = node.value;
 	                        return that.resolver.getWorkspaceFile(path).then(function(files) {
 	                            if(!/\.js$/.test(path)) {
-	                                path += '.js';
+	                                path += '.js'; //$NON-NLS-1$
 	                            }
 	                            var rels = that.resolver.resolveRelativeFiles(path, files, meta);
 	                            if(rels && rels.length > 0) {
@@ -318,8 +337,8 @@ define([
                 return null;
 		    } 
 			deferred = new Deferred();
-			var files = [{type: 'full', name: meta.location, text: ast.source}];
-			this.ternworker.postMessage({request:'documentation', args:{params:{offset: ctxt.offset}, files: files, meta:{location: meta.location}}});
+			var files = [{type: 'full', name: meta.location, text: ast.source}]; //$NON-NLS-1$
+			this.ternworker.postMessage({request:'documentation', args:{params:{offset: ctxt.offset}, files: files, meta:{location: meta.location}}}); //$NON-NLS-1$
 			return deferred;
 		},
 		
@@ -343,18 +362,18 @@ define([
 		            if(file.name && file.path && file.contentType) {
 		                hover += '[';
 		                if(file.contentType.icon) {
-		                    hover += '!['+file.contentType.name+']('+file.contentType.icon+')';
+		                    hover += '!['+file.contentType.name+']('+file.contentType.icon+')'; //$NON-NLS-1$ //$NON-NLS-2$
 		                }
-		                var href = new URITemplate("#{,resource,params*}").expand(
+		                var href = new URITemplate("#{,resource,params*}").expand( //$NON-NLS-1$
     		                      {
     		                      resource: file.location, 
     		                      params: {}
     		                      }); //$NON-NLS-0$
-		                hover += file.name + ']('+href+') - '+file.path+'\n\n';
+		                hover += file.name + ']('+href+') - '+file.path+'\n\n'; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
 		            }
 		            
 		        }
-		        return {title: title, content: hover, type:'markdown'};
+		        return {title: title, content: hover, type:'markdown', allowFullWidth: true}; //$NON-NLS-1$
 		    }
 		    return null;
 		}

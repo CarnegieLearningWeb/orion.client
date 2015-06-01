@@ -63,6 +63,14 @@ define([
 			Deferred.all([this.preferences.getPreferences('/settingsContainer')]).then(function(results){
 				var prefs = results[0];
 				var categories = prefs.get( 'categories' ) || {};
+				
+				//Added by Jon
+//				categories.showUserSettings = false;
+//				categories.showGitSettings = false;
+//				categories.showPluginSettings = false;
+//				categories.showThemeSettings = false;
+				//end of edit
+				
 				if (categories.showUserSettings === undefined || categories.showUserSettings) {
 					_self.settingsCategories.push({
 						id: "userSettings", //$NON-NLS-0$
@@ -106,7 +114,7 @@ define([
 				if (categories.showTernSettings === undefined || categories.showTernSettings) {
 					_self.settingsCategories.push({
 						id: "ternSettings", //$NON-NLS-0$
-						textContent: messages["Tern"],
+						textContent: messages["JavascriptAssist"],
 						show: _self.showTernSettings
 					});
 				}
@@ -117,13 +125,28 @@ define([
 
 				// Add plugin-contributed extension categories
 				var settingsRegistry = _self.settingsRegistry;
-				var pluginCategories = settingsRegistry.getCategories().map(function(category) {
-					return {
+				
+				//Added by Jon
+				var pluginCategories = [];
+				for (var i = 0; i < settingsRegistry.getCategories().length; i++) {
+					var category = settingsRegistry.getCategories()[i];
+					if(category=='cloud')
+						continue;
+					pluginCategories.push({
 						id: category,
 						textContent: settingsRegistry.getCategoryLabel(category) || messages[category] || category,
 						show: _self.showPluginSettings.bind(_self, category)
-					};
-				});
+					});
+				}
+//				var pluginCategories = settingsRegistry.getCategories().map(function(category) {					
+//					return {
+//						id: category,
+//						textContent: settingsRegistry.getCategoryLabel(category) || messages[category] || category,
+//						show: _self.showPluginSettings.bind(_self, category)
+//					};
+//				});
+				//end edit
+				
 				_self.settingsCategories = _self.settingsCategories.concat(pluginCategories);
 				
 				// Sort all categories alphabetically by their title

@@ -17,6 +17,7 @@
 define([
 'orion/plugin',
 'orion/bootstrap',
+'orion/Deferred',
 'orion/fileClient',
 'orion/metrics',
 'esprima',
@@ -29,6 +30,7 @@ define([
 'javascript/occurrences',
 'javascript/hover',
 'javascript/outliner',
+'javascript/cuProvider',
 'orion/util',
 'logger',
 'javascript/commands/generateDocCommand',
@@ -39,8 +41,8 @@ define([
 'orion/editor/stylers/application_schema_json/syntax',
 'orion/editor/stylers/application_x-ejs/syntax',
 'i18n!javascript/nls/messages'
-], function(PluginProvider, Bootstrap, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist, 
-			EslintValidator, Occurrences, Hover, Outliner,	Util, Logger, GenerateDocCommand, OpenDeclCommand, RenameCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
+], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist, 
+			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, RenameCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
 
     var provider = new PluginProvider({
 		name: javascriptMessages['pluginName'], //$NON-NLS-0$
@@ -128,7 +130,7 @@ define([
     		this.worker.addEventListener(msg, handler);	
     	};
     	
-    	var prefService = core.serviceRegistry.getService("orion.core.preference");
+    	var prefService = core.serviceRegistry.getService("orion.core.preference"); //$NON-NLS-1$
     	
     	// Start the worker
     	var ternWorker = new WrappedWorker("ternWorker.js",  //$NON-NLS-1$
@@ -172,18 +174,16 @@ define([
     			var _d  = evnt.data;
     			switch(_d.request) {
     				case 'installed_plugins': {
-    					//TODO forward to prefs
     					var plugins = _d.plugins;
-    					
-    					return prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
+    					return prefService ? prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
 							var props = prefs.get("tern"); //$NON-NLS-1$
-							// Check if props is an object
-							if (!props){
-								props = {};
+							if (!props) {
+								props = Object.create(null);
 							}
 							props["plugins"] = plugins;
 							prefs.put("tern", props); //$NON-NLS-1$
-						});
+							prefs.sync(true);
+						}) : new Deferred().resolve();
     				}
     			}
 	    	} else if(typeof(evnt.data) === 'string') {
@@ -216,7 +216,7 @@ define([
     	/**
     	 * Register the mark occurrences support
     	 */
-    	provider.registerService("orion.edit.occurrences", new Occurrences.JavaScriptOccurrences(astManager),  //$NON-NLS-0$
+    	provider.registerService("orion.edit.occurrences", new Occurrences.JavaScriptOccurrences(astManager, CUProvider),  //$NON-NLS-0$
     			{
     		contentType: ["application/javascript", "text/html"]	//$NON-NLS-0$ //$NON-NLS-2$
     			});
@@ -224,13 +224,13 @@ define([
     	/**
     	 * Register the hover support
     	 */
-    	provider.registerService("orion.edit.hover", new Hover.JavaScriptHover(astManager, scriptresolver, ternWorker),  //$NON-NLS-0$
+    	provider.registerService("orion.edit.hover", new Hover.JavaScriptHover(astManager, scriptresolver, ternWorker, CUProvider),  //$NON-NLS-0$
     			{
     		name: javascriptMessages['jsHover'],
     		contentType: ["application/javascript", "text/html"]	//$NON-NLS-0$ //$NON-NLS-2$
     			});
 
-    	var validator = new EslintValidator(astManager);
+    	var validator = new EslintValidator(astManager, CUProvider);
     	
     	/**
     	 * Register the ESLint validator
@@ -250,7 +250,19 @@ define([
     	},
     	{
     		contentType: ["application/javascript", "text/html"],  //$NON-NLS-0$ //$NON-NLS-2$
-    		types: ["ModelChanging", 'Destroy', 'onSaving', 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+    		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+    	});
+    	
+    	/**
+    	 * register the compilation unit provider as a listener
+    	 */
+    	provider.registerService("orion.edit.model", {  //$NON-NLS-0$
+    		onModelChanging: CUProvider.onModelChanging.bind(CUProvider),
+    		onInputChanged: CUProvider.onInputChanged.bind(CUProvider)
+    	},
+    	{
+    		contentType: ["text/html"],  //$NON-NLS-0$ //$NON-NLS-2$
+    		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
     	
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-0$
@@ -548,11 +560,12 @@ define([
     			{	settings: [
     			 	           {   pid: "eslint.config.potential",  //$NON-NLS-0$
     			 	           	   order: 1,
-				 	        	   name: javascriptMessages['prefPotentialProblems'],  //$NON-NLS-0$
+				 	        	   name: javascriptMessages['prefPotentialProblems'],
  				 	        	   tags: "validation javascript js eslint".split(" "),  //$NON-NLS-0$  //$NON-NLS-1$
- 				 	        	   category: "javascript",  //$NON-NLS-0$
+ 				 	        	   category: 'javascript', //$NON-NLS-1$
+ 				 	        	   categoryLabel: javascriptMessages['javascriptValidation'],
  				 	        	   properties: [{	id: "no-cond-assign",  //$NON-NLS-0$ 
-    			 	        	                	name: javascriptMessages["noCondAssign"], //$NON-NLS-0$
+    			 	        	                	name: javascriptMessages["noCondAssign"],
     			 	        	                	type: "number", //$NON-NLS-0$
     			 	        	                	defaultValue: error, //$NON-NLS-0$
     			 	        	                	options: severities //$NON-NLS-0$
@@ -646,7 +659,8 @@ define([
 				 	        	   order: 2,
 				 	        	   name: javascriptMessages['prefBestPractices'],  //$NON-NLS-0$
 				 	        	   tags: "validation javascript js eslint".split(" "),  //$NON-NLS-0$  //$NON-NLS-1$
-				 	        	   category: "javascript",  //$NON-NLS-0$
+				 	        	   category: 'javascript', //$NON-NLS-1$
+ 				 	        	   categoryLabel: javascriptMessages['javascriptValidation'],
 				 	        	   properties: [
 				 	        	   				{	id: "no-caller",  //$NON-NLS-0$
 				 	        	                	name: javascriptMessages["noCaller"], //$NON-NLS-0$
@@ -791,7 +805,8 @@ define([
 				 	        	   order: 3,
 				 	        	   name: javascriptMessages['prefCodeStyle'],  //$NON-NLS-0$
 				 	        	   tags: "validation javascript js eslint".split(" "),  //$NON-NLS-0$  //$NON-NLS-1$
-				 	        	   category: "javascript",  //$NON-NLS-0$
+				 	        	   category: 'javascript', //$NON-NLS-1$
+ 				 	        	   categoryLabel: javascriptMessages['javascriptValidation'],
 				 	        	   properties: [{	id: "missing-doc", //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["missingDoc"],  //$NON-NLS-0$
 				 	        	                	type: "number",  //$NON-NLS-0$

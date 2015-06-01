@@ -101,7 +101,7 @@ define(['domReady', 'orion/xhr', 'orion/xsrfUtils', './common'], function(domRea
 			document.getElementById("passwordContainer").style.display = "none";
 			document.getElementById("repeatPasswordContainer").style.display = "none";
 			document.getElementById("rightSection").style.display = "none";
-			document.getElementById("description").innerHTML = "Almost there! This account will be associated with your Google or Github account in the future.";
+			document.getElementById("description").innerHTML = "Almost there! This account will be associated with your Globaloria Google account in the future.";
 			document.getElementById("username").value = username;
 			document.getElementById("email").value = email;
 			document.getElementById("signUpBtn").addEventListener("click", confirmCreateUser, false);
@@ -121,7 +121,9 @@ define(['domReady', 'orion/xhr', 'orion/xsrfUtils', './common'], function(domRea
 
 		// FIX the hrefs of the various forms here.
 		document.getElementById("signInWithGoogle").href = common.createOAuthLink("google");
-		document.getElementById("signInWithGitHub").href = common.createOAuthLink("github");
+		
+		//Added by Jon
+		//document.getElementById("signInWithGitHub").href = common.createOAuthLink("github");
 	}
 
 	domReady(function() {

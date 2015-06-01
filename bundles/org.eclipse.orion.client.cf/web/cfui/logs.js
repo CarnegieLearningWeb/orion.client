@@ -12,11 +12,11 @@
 define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'orion/status', 'orion/progress', 'orion/commandRegistry',  'orion/keyBinding', 'orion/dialogs', 'orion/selection',
 	'orion/contentTypes','orion/fileClient', 'orion/operationsClient', 'orion/searchClient', 'orion/globalCommands', 'orion/editorCommands', 'orion/links', 'orion/cfui/cFClient',
 	'orion/PageUtil', 'orion/cfui/logView', 'orion/section', 'orion/metrics', 'orion/cfui/widgets/CfLoginDialog', 'orion/i18nUtil', 'orion/projectClient', 'orion/webui/RichDropdown',
-	'orion/PageLinks', 'orion/URITemplate'], 
+	'orion/PageLinks', 'orion/URITemplate', 'orion/commands'],
 	function(messages, lib, mBootstrap, mStatus, mProgress, CommandRegistry, KeyBinding, mDialogs, mSelection,
 	mContentTypes, mFileClient, mOperationsClient, mSearchClient, mGlobalCommands, mEditorCommands, mLinks,
 	mCFClient, PageUtil, mLogView, mSection, mMetrics, CfLoginDialog, i18Util, mProjectClient, mRichDropdown,
-	PageLinks, URITemplate) {
+	PageLinks, URITemplate, mCommands) {
 	mBootstrap.startup().then(
 		function(core) {
 			var serviceRegistry = core.serviceRegistry;
@@ -109,6 +109,9 @@ define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'o
 			function reloadLogs(applicationInfo){
 				var that = this;
 				setTimeout(function(){
+					if (lastLogsInfo !== applicationInfo) {
+						return;
+					}
 					if (document.visibilityState === 'visible'){
 						progressService.showWhile(cFClient.getLogz(applicationInfo.Target, applicationInfo.Application, applicationInfo.logsTimestamp)).then(
 							function(newLogs){
@@ -117,14 +120,18 @@ define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'o
 									currentLogs = currentLogs.concat(newLogs.Messages);
 									applicationInfo.logs = currentLogs;
 									applicationInfo.logsTimestamp = newLogs.Timestamp;
-									
+
+									if (lastLogsInfo !== applicationInfo) {
+										return;
+									}
+
 									logEditorView.inputManager.setApplicationInfo(applicationInfo);
 	
 									logEditorView.inputManager.setInput("logs for " + applicationInfo.Application);
 									logEditorView.inputManager.load();
 								}
 								reloadLogs(applicationInfo);
-							}, function(error){
+							}, function(error) {
 								var oldLogs = applicationInfo.logs;
 								oldLogs.push("");
 								oldLogs.push(messages["refreshLogsPage"]);
@@ -166,7 +173,7 @@ define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'o
 							logs: logs.Messages,
 							logsTimestamp: logs.Timestamp
 						};
-						this.lastLogsInfo = logsInfo;
+						lastLogsInfo = logsInfo;
 						logEditorView.create();
 						logEditorView.inputManager.setApplicationInfo(logsInfo);
 
@@ -309,12 +316,66 @@ define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'o
 				}
 			}
 
+			function addScrollLockSwitch() {
+				var toolbarNode = lib.node('pageToolbar');
+				var actionsNode = lib.node('statusPane');
+				var scrollLockLabel = document.createElement("div");
+				scrollLockLabel.className = "scrollLockLabel";
+				scrollLockLabel.textContent = messages["scrollLockLabel"];
+				toolbarNode.insertBefore(scrollLockLabel, actionsNode);
+
+				var scrollLockWrapper = document.createElement("div");
+				scrollLockWrapper.id = "scrollLockWrapper";
+				toolbarNode.insertBefore(scrollLockWrapper, actionsNode);
+
+				var switchScrollLockCommand = new mCommands.Command({
+					id: "orion.projects.switchScrollLock",
+					imageClass : "sprite-switch-liveUpdate",
+					type: "switch",
+					visibleWhen: function() {
+						return true;
+					},
+					callback: function(data) {
+						logEditorView.inputManager.setScrollLock(data.command.checked);
+					}
+				});
+				commandRegistry.addCommand(switchScrollLockCommand);
+				commandRegistry.registerCommandContribution("scrollLockWrapper", "orion.projects.switchScrollLock", 0);
+				commandRegistry.renderCommands("scrollLockWrapper", "scrollLockWrapper");
+			}
+			
+			function addClearLogsButton() {
+				var toolbarNode = lib.node('pageToolbar');
+				var actionsNode = lib.node('statusPane');
+				var clearLogsWrapper = document.createElement("div");
+				
+				clearLogsWrapper.id = "clearLogsWrapper";
+				toolbarNode.insertBefore(clearLogsWrapper, actionsNode);
+				
+				var clearLogsCommand = new mCommands.Command({
+					name:  messages["clearLogs"],
+					id: "orion.projects.clearLogs",
+					visibleWhen: function() {
+						return true;
+					},
+					callback: function(data) {
+						lastLogsInfo.logs = [];
+						logEditorView.inputManager.load();
+					}
+				});
+				commandRegistry.addCommand(clearLogsCommand);
+				commandRegistry.registerCommandContribution("clearLogsWrapper", "orion.projects.clearLogs", 0);
+				commandRegistry.renderCommands("clearLogsWrapper", "clearLogsWrapper");
+			}
+
 			window.addEventListener("hashchange", function() {
 				getParamsAndLoadLogs();
 			}.bind(this));
 
-			this.lastLogsInfo = {};
-			launchConfDropdown = null;
+			var lastLogsInfo = {};
+			var launchConfDropdown = null;
+			addScrollLockSwitch();
+			addClearLogsButton();
 			mainLogView.classList.add("toolbarTarget");
 
 			getParamsAndLoadLogs();

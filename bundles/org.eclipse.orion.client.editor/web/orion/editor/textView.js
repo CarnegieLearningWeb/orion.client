@@ -2163,15 +2163,32 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 			return this._getLineIndex(y);
 		},
 		/**
-		 * @name isValidLineIndex
-		 * @description Return whether the given line pixel position, relative to the document, is inside a line of the document
+		 * @name isValidTextPosition
+		 * @description Return whether the given x/y pixel position, relative to the document, is inside of document text. 
+		 * 				This tests both whether the y position is below the text lines of the document as we as whether the
+		 * 				x position is within the text of the line.
 		 * @function
-		 * @param y {Number} [y] the line pixel
-		 * @returns returns {Boolean} true if the pixel position is within a line of the document
+		 * @param x {Number} [x] the x pixel position
+		 * @param y {Number} [y] the line pixel position
+		 * @returns returns {Boolean} true if the pixel position is over text content
 		 */
-		isValidLineIndex: function(y){
+		isValidTextPosition: function(x, y){
 			if (!this._clientDiv) { return false; }
-			return this._getLineIndex(y, true) >= 0;
+			// Check if we are within a valid line
+			var lineIndex = this._getLineIndex(y, true);
+			if (lineIndex < 0){
+				return false;
+			}
+			// Get the closest offset to the position
+			var line = this._getLine(lineIndex);
+			var offset = this.getOffsetAtLocation(x, y);
+			// If the closest offset is to the left of the character's bounds then position is outside the text on the line
+			var bounds = line.getBoundingClientRect(offset);
+			line.destroy();
+			if (x > bounds.right){
+				return false;
+			}
+			return true;
 		},
 		/**
 		 * Returns the top pixel position of a given line index relative to the beginning
@@ -3257,10 +3274,18 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 		 * @param {String} text the new text.
 		 * @param {Number} [start=0] the start offset of text range.
 		 * @param {Number} [end=char count] the end offset of text range.
+		 * @param {Boolean|Number|orion.editor.TextViewShowOptions} [show=true]
+		 * 					if <code>true</code>, the view will scroll the minimum amount necessary to show the caret location. If
+		 *					<code>show</code> is a <code>Number</code>, the view will scroll the minimum amount necessary to show the caret location plus a
+		 *					percentage of the client area height. The parameter is clamped to the [0,1] range.  In either case, the view will only scroll
+		 *					if the new caret location is not visible already.  The <code>show</code> parameter can also be a <code>orion.editor.TextViewShowOptions</code> object. See
+		 * 					{@link orion.editor.TextViewShowOptions} for further information in how the options can be used to control the scrolling behavior.
+		 * @param {Function} [callback] if callback is specified and <code>scrollAnimation</code> is not zero, view scrolling is animated and
+		 *					the callback is called when the animation is done. Otherwise, callback is callback right away.
 		 *
 		 * @see orion.editor.TextView#getText
 		 */
-		setText: function (text, start, end) {
+		setText: function (text, start, end, show, callback) {
 			var isSingle = typeof text === "string"; //$NON-NLS-0$
 			var reset = start === undefined && end === undefined && isSingle;
 			var edit;
@@ -3276,7 +3301,7 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 			if (reset) {
 				this._variableLineHeight = false;
 			}
-			this._modifyContent(edit, !reset);
+			this._modifyContent(edit, !reset, show === undefined || show, callback);
 			if (reset) {
 				/*
 				* Bug in Firefox.  For some reason, the caret does not show after the
@@ -6462,7 +6487,7 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 				this._undoStack.endCompoundChange();
 			}
 		},
-		_modifyContent: function(e, caretAtEnd) {
+		_modifyContent: function(e, caretAtEnd, show, callback) {
 			if (this._readonly && !e._code) {
 				return false;
 			}
@@ -6503,7 +6528,7 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 			} finally {
 				if (e._ignoreDOMSelection) { this._ignoreDOMSelection = false; }
 			}
-			this._setSelection(e.selection, true);
+			this._setSelection(e.selection, show, true, callback);
 			
 			undo = this._compoundChange;
 			if (undo) undo.owner.selection = e.selection;

@@ -18,7 +18,7 @@ define({//Default message bundle
 	"User Profile": "User Profile",
 	"Git": "Git",
 	"Git Settings": "Git Settings",
-	"Tern": "Tern",
+	"JavascriptAssist": "Tern",
 	"Theme":"Editor Styles",
 	"Editor Theme":"Editor Styles:",
 	"Theme Settings": "Theme Settings",
@@ -53,6 +53,10 @@ define({//Default message bundle
 	"Categories": "Categories",
 	"User Name": "User Name:",
 	"Full Name": "Full Name:",
+	
+	//Added by Jon
+	"Home Wiki": "Home Wiki",
+	
 	"Email Address": "Email Address:",
 	"Email Confirmed": "Email Confirmed:",
 	"Account": "Account",
@@ -274,5 +278,6 @@ define({//Default message bundle
     "Display Language : " : "Display Language : ",
     "cannotDeleteMsg" : " is a default theme that cannot be deleted",
     "confirmDeleteMsg" : "Are you sure you want to delete this theme?",
-    "cannotModifyMsg" : "${0} is a default theme that cannot be modified. Please use another name."
+    "cannotModifyMsg" : "${0} is a default theme that cannot be modified. Please use another name.",
+    "settingsRestored" : "Settings restored."
 });

@@ -11,7 +11,6 @@
 
 /*eslint-env browser, amd*/
 define([
-	"orion/plugin",
 	"plugins/fileClientPlugin",
 	"plugins/authenticationPlugin",
 	"plugins/jslintPlugin",
@@ -20,23 +19,24 @@ define([
 	"plugins/preferencesPlugin",
 	"plugins/pageLinksPlugin",
 	"plugins/taskPlugin",
-	"plugins/webEditingPlugin"
-], function(PluginProvider) {
+	"plugins/webEditingPlugin",
+	"profile/userservicePlugin",
+	"plugins/helpPlugin",
+	"shell/plugins/shellPagePlugin",
+	"plugins/site/sitePlugin"
+], function() {
 	
 	var plugins = Array.prototype.slice.call(arguments);
-	plugins.shift();
 
-	function connect() {
-		var temp = document.createElement('a');
-		temp.href = "../mixloginstatic/LoginWindow.html";
-		var login = temp.href;
+	function connect(pluginProvider) {
+		var login = new URL("../mixloginstatic/LoginWindow.html", self.location.href).href;
 		var headers = {
 			name: "Orion Core Support",
 			version: "1.0",
 			description: "This plugin provides the core Orion support.",
 			login: login
 		};
-		var pluginProvider = new PluginProvider(headers);
+		pluginProvider.updateHeaders(headers);
 		registerServiceProviders(pluginProvider);
 		pluginProvider.connect();
 	}

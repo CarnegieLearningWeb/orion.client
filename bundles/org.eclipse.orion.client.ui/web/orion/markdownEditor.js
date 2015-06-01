@@ -823,6 +823,7 @@ define([
 				} else {
 					/* a child block with its own content tokens */
 
+					
 					/* first flush accumulated parent tokens */
 					if (accumulatedParentTokens.length) {
 						processParentTokens(accumulatedParentTokens);
@@ -832,6 +833,7 @@ define([
 					/* now process the child block */
 					var newElement = document.createElement("div"); //$NON-NLS-0$
 					this._generateHTML(newElement, current);
+					console.log(current);
 					newElement = newElement.children[0] || newElement;
 					this._setElementIdentifier(newElement, current.elementId);
 					rootElement.children[0].appendChild(newElement);
@@ -958,6 +960,8 @@ define([
 
 			for (key in refChanges) {
 				current = refChanges[key];
+
+				console.log("getting here"+current);
 				if (!current[1]) {
 					/* deletion */
 					if (current[0].start === this._linkDefs[key].block.start) {
@@ -1214,7 +1218,7 @@ define([
 		_TYPEID_LISTITEM: "markup.list.item.markdown", //$NON-NLS-0$
 		_TYPEID_PARAGRAPH: "markup.other.paragraph.markdown", //$NON-NLS-0$
 		_TYPEID_DEF: "meta.link.reference.def.markdown", //$NON-NLS-0$
-		_atxDetectRegex: /\s*#/g,
+		_atxDetectRegex: /[>\s]*#/g,
 		_blockquoteRemoveMarkersRegex: /^[ \t]*>[ \t]?/gm,
 		_blockquoteStartRegex: /[ \t]*>[ \t]?/g,
 		_elementCounter: 0,
@@ -1605,8 +1609,14 @@ define([
 			this._previewWrapperDiv.style.overflowY = "auto"; //$NON-NLS-0$
 			this._rootDiv.appendChild(this._previewWrapperDiv);
 
-			previewDiv = document.createElement("div"); //$NON-NLS-0$
-			previewDiv.classList.add("orionMarkdown"); //$NON-NLS-0$
+			if(window.location.href.indexOf(".html")){
+				previewDiv = document.createElement("div");
+//				previewDiv.classList.add("orionMarkdown"); //$NON-NLS-0$
+				previewDiv.innerHTML = "<h2>hi</h2>";
+			}else{
+				previewDiv = document.createElement("div"); //$NON-NLS-0$
+				previewDiv.classList.add("orionMarkdown"); //$NON-NLS-0$
+			}
 			this._previewWrapperDiv.appendChild(previewDiv);
 
 			this._editorView.addEventListener("Settings", this._settingsListener); //$NON-NLS-0$

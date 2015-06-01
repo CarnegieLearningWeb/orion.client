@@ -153,6 +153,8 @@ function(messages, mBootstrap, objects, Deferred, CFClient, mCfUtil, mFileClient
 
 		_findManifest: function(location){
 			
+			location = location.replace("//", "/");
+			
 			var manifestFile = location.substring(location.lastIndexOf("/") + 1);
 			var pathToFile = location.substring(0, location.lastIndexOf("/") + 1);
 			
@@ -423,7 +425,7 @@ function(messages, mBootstrap, objects, Deferred, CFClient, mCfUtil, mFileClient
 		},
 
 		getState: function(launchConf) {
-			var params = launchConf.Params || {};
+			var params = launchConf.Params || launchConf.Parameters || {};
 			return this._retryWithLogin(params, this._getStateCF.bind(this));
 		},
 

@@ -91,6 +91,8 @@ define({//Default message bundle
 	"noResponse": "No response",
 	"gettingLogs": "Fetching logs. This may take a few minutes.  You can continue to work in other pages while we collect the logs.",
 	"launchConfDropdownLabel": "Launch Configuration:",
+	"scrollLockLabel": "Scroll Lock:",
+	"clearLogs": "Clear",
 	"loginTo": "Login to ",
 	"loggingInTo${0}": "Logging in to ${0}",
 	"thisPluginIntegratesWithCloud": "This plugin integrates with Cloud Foundry.",

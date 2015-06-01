@@ -80,11 +80,21 @@ function Tooltip (view) {
 			}, true);
 			textUtil.addEventListener(tooltipDiv, "focus", /* @callback */ function(event) { //$NON-NLS-0$
 				if (!self._locked){
-					self._tooltipDiv.classList.add('textViewTooltipAllowResize'); //$NON-NLS-0$
+					self._tooltipDiv.classList.add('textViewTooltipOnFocus'); //$NON-NLS-0$
 				}
 			}, false);
 			textUtil.addEventListener(tooltipDiv, "blur", /* @callback */ function(event) { //$NON-NLS-0$
-				self._tooltipDiv.classList.remove('textViewTooltipAllowResize'); //$NON-NLS-0$
+				self._tooltipDiv.classList.remove('textViewTooltipOnFocus'); //$NON-NLS-0$
+			}, false);
+			textUtil.addEventListener(tooltipDiv, "mouseenter", /* @callback */ function(event) { //$NON-NLS-0$
+				if (!self._locked){
+					self._tooltipDiv.classList.add('textViewTooltipOnHover'); //$NON-NLS-0$
+				}
+			}, false);
+			textUtil.addEventListener(tooltipDiv, "mouseleave", /* @callback */ function(event) { //$NON-NLS-0$
+				if (!self._hasFocus()){
+					self._tooltipDiv.classList.remove('textViewTooltipOnHover'); //$NON-NLS-0$
+				}
 			}, false);
 			textUtil.addEventListener(tooltipDiv, "keydown", function(event) { //$NON-NLS-0$
 				if (event.keyCode === 27) {
@@ -189,6 +199,8 @@ function Tooltip (view) {
 			
 			// Code projections are displayed using the editor theme colors
 			this._tooltipDiv.classList.remove("textviewTooltipCodeProjection"); //$NON-NLS-0$
+			this._tooltipDiv.classList.remove("textviewTooltipOnHover"); //$NON-NLS-0$
+			this._tooltipDiv.classList.remove("textviewTooltipOnFocus"); //$NON-NLS-0$
 			
 			this._tooltipDiv.style.visibility = "hidden"; //$NON-NLS-0$
 			this._tooltipDiv.style.left = "";
@@ -249,6 +261,7 @@ function Tooltip (view) {
 		 * 5) TooltipArea x, y, width, height
 		 * 6) TooltipOffsetX
 		 * 7) TooltipOffsetY
+		 * 8) AllowFullWidth
 		 * 
 		 * @param update Whether to update the existing tooltip contents or open a new tooltip
 		 */
@@ -265,17 +278,6 @@ function Tooltip (view) {
  				newTooltipContents = util.createElement(this._tooltipDiv.ownerDocument, "div"); //$NON-NLS-0$
  			}
  			
-			/*
-			 * Info:
-			 * 1) Contents
-			 * 2) Context
-			 * 3) Position string left, right, top, bottom
-			 * 4) AnchorArea x, y, width, height
-			 * 5) TooltipArea x, y, width, height
-			 * 6) TooltipOffsetX
-			 * 7) TooltipOffsetY
-			 */
-			
 			if (info) {
 				// Render provided content
 				if (info.contents) {
@@ -308,6 +310,9 @@ function Tooltip (view) {
 										if (data.offsetEnd){
 											info.context.offsetEnd = data.offsetEnd;
 										}
+										if (data.allowFullWidth){
+											info.allowFullWidth = data.allowFullWidth;
+										}
 										self._showContents(newTooltipContents, info, update);
 									}
 								}
@@ -335,6 +340,16 @@ function Tooltip (view) {
 		_showContents: function _showContents(newContentsDiv, info, update) {
 			if (!update){
 				this.hide();
+			} else {
+				// If update is called but the set tooltip area is different, recreate the tooltip with the new sizing (ex: content assist resizing)
+				// We could also check if the set anchor area is different, but no one would be using it
+				if (this._tooltipArea && info.tooltipArea){
+					if (this._tooltipArea.left !== info.tooltipArea.left || this._tooltipArea.top !== info.tooltipArea.top || this._tooltipArea.width !== info.tooltipArea.width || this._tooltipArea.height !== info.tooltipArea.height){
+						this._anchorArea = null;
+						this._tooltipArea = null;
+						this._outerArea = null;
+					}
+				}
 			}
 			
 			this._tooltipContents = newContentsDiv;
@@ -359,11 +374,6 @@ function Tooltip (view) {
 			}
 		},
 		
-		/**
-		 * @name computeAnchorArea
-		 * @description Returns the rectangle that the tooltip is anchored to, for example the text of the current annotation range
-		 * @function
-		 */
 		/**
 		 * @name _computeAnchorArea
 		 * @description Computes and returns the rectangle that the tooltip is anchored to.  For example the anchor for an annotation 
@@ -410,14 +420,17 @@ function Tooltip (view) {
 		_computeTooltipArea: function _computeTooltipArea(info, anchorArea, tooltipDiv){
 			var documentElement = tooltipDiv.ownerDocument.documentElement;
 			
+			// TODO This padding must match what is in tooltip.css
+			var padding = 16;
+			
 			// Callers can specify the exact placement of the tooltip
 			if (info.tooltipArea && info.tooltipArea.top && info.tooltipArea.left && info.tooltipArea.height && info.tooltipArea.width){										 
 					tooltipDiv.style.overflowY = "auto"; //$NON-NLS-0$ // If caller specifies a height, allow scrolling
 					tooltipDiv.style.resize = "none"; //$NON-NLS-0$
 					tooltipDiv.style.top = (info.tooltipArea.top) + "px"; //$NON-NLS-0$
 					tooltipDiv.style.left = (info.tooltipArea.left) + "px"; //$NON-NLS-0$
-					tooltipDiv.style.height = (info.tooltipArea.height) + "px"; //$NON-NLS-0$
-					tooltipDiv.style.width = (info.tooltipArea.width) + "px"; //$NON-NLS-0$
+					tooltipDiv.style.height = (info.tooltipArea.height - padding) + "px"; //$NON-NLS-0$
+					tooltipDiv.style.width = (info.tooltipArea.width - padding) + "px"; //$NON-NLS-0$
 					return info.tooltipArea;
 			}
 			
@@ -427,10 +440,6 @@ function Tooltip (view) {
 				height: divBounds.height
 			};
 			
-			// Adjust the tooltip size for the default padding
-			tipRect.width += 16;
-			tipRect.height += 16;
-			
 			var position = info.position ? info.position : "below"; //$NON-NLS-0$
 			
 			var viewBounds = (this._view._rootDiv ? this._view._rootDiv : documentElement).getBoundingClientRect();
@@ -439,12 +448,20 @@ function Tooltip (view) {
 			var viewportWidth = viewBounds.width;
 			var viewportHeight = viewBounds.height;
 			
-			//ensure sizes are sane
-			if(tipRect.width > viewportWidth/2) {
-				tipRect.width = viewportWidth/2;
+			// Set a default size for the tooltip
+			var defWidth = viewportWidth;
+			if (!info.allowFullWidth){
+				defWidth = Math.min(viewportWidth/2, 600);
+				var defHeight = Math.min(viewportHeight/2, 250);
+				tipRect.width = Math.min(tipRect.width, defWidth);
+				tipRect.height = Math.min(tipRect.height, defHeight);
 			}
-			if(tipRect.height > viewportHeight/2) {
-				tipRect.height = viewportHeight/2;
+			
+			// Hack for single line tooltips that wrap, set a minimum height to make them show 2 lines without scrolling
+			// The largest line height was MacOS Chrome with 20px+padding.  So 25 is the minimum height we are sure we are one two lines
+			// Similarly, the minimum height for the tooltip is two lines (20px x 2 + padding) (this will actually show three lines on Win7 Chrome)
+			if ((25+padding) > tipRect.height && tipRect.width > (defWidth-padding)){
+				tipRect.height = 40+padding;
 			}
 
 			var spaceBelow = viewportHeight - (anchorArea.top + anchorArea.height - viewportTop);
@@ -508,15 +525,14 @@ function Tooltip (view) {
 				break;
 			}
 			
-			tipRect.maxWidth = Math.min(viewportWidth + viewportLeft - tipRect.left, viewportWidth/2);
-			tipRect.maxHeight = Math.min(viewportHeight + viewportTop - tipRect.top, viewportHeight/2);
+			tipRect.maxWidth = Math.min(viewportWidth + viewportLeft - tipRect.left, viewportWidth);
+			tipRect.maxHeight = Math.min(viewportHeight + viewportTop - tipRect.top, viewportHeight);
 			
-			// Adjust max sizes for the border and padding
-			tipRect.maxWidth -= 16;
-			tipRect.maxHeight -= 16;
-			
-			tooltipDiv.style.maxWidth = tipRect.maxWidth + "px"; //$NON-NLS-0$
-			tooltipDiv.style.maxHeight = tipRect.maxHeight + "px"; //$NON-NLS-0$
+			// Adjust sizes for div padding, but not the actual tooltip box.
+			tooltipDiv.style.maxWidth = (tipRect.maxWidth - padding) + "px"; //$NON-NLS-0$
+			tooltipDiv.style.maxHeight = (tipRect.maxHeight - padding) + "px"; //$NON-NLS-0$
+			tooltipDiv.style.width = (tipRect.width - padding) + "px"; //$NON-NLS-1$
+			tooltipDiv.style.height = (tipRect.height - padding) + "px"; //$NON-NLS-1$
 			tooltipDiv.style.left = tipRect.left + "px"; //$NON-NLS-0$
 			tooltipDiv.style.top = tipRect.top + "px"; //$NON-NLS-0$
 			return tipRect;

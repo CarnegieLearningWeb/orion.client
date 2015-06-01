@@ -11,15 +11,14 @@
 /*eslint-env browser, amd*/
 /* This widget provides a list of Tern plug-in entries */
 
-define(['i18n!orion/settings/nls/messages',
-		'javascript/handlers/ternPluginsHandler',
-		'orion/commands', 
-		'orion/commandRegistry',
-		'orion/objects',
-		'orion/webui/littlelib',
-		'orion/widgets/plugin/PluginEntry',
-		'orion/explorers/explorer'
-		], function(messages, ternHandler, mCommands, mCommandRegistry, objects, lib, PluginEntry, mExplorer) {
+define([
+'i18n!javascript/nls/messages',
+'orion/commands', 
+'orion/commandRegistry',
+'orion/objects',
+'orion/webui/littlelib',
+'orion/explorers/explorer'
+], function(messages, mCommands, mCommandRegistry, objects, lib, mExplorer) {
 
 	var Explorer = mExplorer.Explorer;
 	var SelectionRenderer = mExplorer.SelectionRenderer;
@@ -32,30 +31,38 @@ define(['i18n!orion/settings/nls/messages',
 		this.commandService = commandService;
 	}
 	PluginListRenderer.prototype = Object.create(SelectionRenderer.prototype);
-	PluginListRenderer.prototype.getCellElement = function(col_no, item, tableRow) {
+	PluginListRenderer.prototype.getCellElement = /* @callback */ function(col_no, item, tableRow) {
 		if (col_no === 0) {
+			var node = document.createElement("div"); //$NON-NLS-1$
+			var entryNode = document.createElement("div"); //$NON-NLS-1$
+			entryNode.classList.add("plugin-entry"); //$NON-NLS-1$
 			
-//			var pluginEntry = new PluginEntry( {plugin: item, commandService: this.commandService}  );
-			var node = document.createElement("div");
-			
-			
-			// TODO Remove when we are no longer showing Orion plug-ins
-			if (item.getHeaders){
-				item = item.getHeaders();
-			}
+			var cmdNode = document.createElement("span");
+			cmdNode.classList.add("plugin-commands");
+			var reloadPluginsCommand = new mCommands.Command({
+				name: messages["reloadPluginCmd"],
+				tooltip: messages["reloadPluginCmdTooltip"],
+				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
+				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
+			});
+			this.commandService.addCommand(reloadPluginsCommand);
+			this.commandService.registerCommandContribution("ternPluginCommands", "javascript.reloadTernPlugin", 2); //$NON-NLS-1$ //$NON-NLS-0$
+			this.commandService.renderCommands("ternPluginCommands", cmdNode, this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			entryNode.appendChild(cmdNode);
 			
 			if (item.name){
-				var nameNode = document.createElement("h2");
+				var nameNode = document.createElement("div"); //$NON-NLS-1$
+				nameNode.classList.add("plugin-title"); //$NON-NLS-1$
 				nameNode.textContent = item.name;
-				node.appendChild(nameNode);
+				entryNode.appendChild(nameNode);
 			}
-			
 			if (item.description){
-				var descNode = document.createElement("div");
+				var descNode = document.createElement("div"); //$NON-NLS-1$
 				descNode.textContent = item.description;
-				node.appendChild(descNode);
+				entryNode.appendChild(descNode);
 			}
 			
+			node.appendChild(entryNode);
 			return node;
 		}
 	};
@@ -81,7 +88,7 @@ define(['i18n!orion/settings/nls/messages',
 						'<div id="pluginSectionHeader" class="pluginSectionHeader sectionWrapper toolComposite">' +  /* pluginSectionHeader */ //$NON-NLS-0$
 							'<div class="sectionAnchor sectionTitle layoutLeft"></div>' + /* pluginTitle */ //$NON-NLS-0$
 							'<div class="sectionItemCount layoutLeft">0</div>' + /* pluginCount */ //$NON-NLS-0$
-							'<div id="pluginCommands" class="pluginCommands layoutRight sectionActions"></div>' + /* pluginCommands */ //$NON-NLS-0$
+							'<div id="ternPluginCommands" class="pluginCommands layoutRight sectionActions"></div>' + /* pluginCommands */ //$NON-NLS-0$
 						'</div>' + //$NON-NLS-0$
 
 				        '<div class="displaytable layoutBlock sectionTable">' + //$NON-NLS-0$
@@ -101,7 +108,7 @@ define(['i18n!orion/settings/nls/messages',
 			this.pluginSectionHeader = lib.$(".pluginSectionHeader", this.node); //$NON-NLS-0$
 			this.pluginTitle = lib.$(".sectionAnchor", this.node); //$NON-NLS-0$
 			this.pluginCount = lib.$(".sectionItemCount", this.node); //$NON-NLS-0$
-			this.pluginCommands = lib.$(".pluginCommands", this.node); //$NON-NLS-0$	
+			this.pluginCommands = lib.$(".ternPluginCommands", this.node); //$NON-NLS-0$	
 			this.pluginList = lib.$(".plugin-list", this.node); //$NON-NLS-0$
 			this.postCreate();
 		},
@@ -114,10 +121,12 @@ define(['i18n!orion/settings/nls/messages',
 		},
 				
 		postCreate: function(){
-			var _this = this;
 			this.render();
 		},
 
+		/**
+		 * @callback
+		 */
 		updateToolbar: function(id){
 			if(this.pluginCommands) {
 				this.commandService.destroy(this.pluginCommands);
@@ -126,10 +135,9 @@ define(['i18n!orion/settings/nls/messages',
 				
 		show: function(){
 			this.createElements();
-
 			this.updateToolbar();
 			
-//			// set up the toolbar level commands	
+			// set up the toolbar level commands	
 //			var installPluginCommand = new mCommands.Command({
 //				name: messages["Install"],
 //				tooltip: messages["PlugInstallByURL"],
@@ -146,71 +154,64 @@ define(['i18n!orion/settings/nls/messages',
 //			});
 //			
 //			this.commandService.addCommand(installPluginCommand);
-//			
-//			this.commandService.registerCommandContribution("pluginCommands", "orion.installPlugin", 2, /* not grouped */ null, false, /* no key binding yet */ null, new mCommandRegistry.URLBinding("installPlugin", "url")); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-//			var reloadAllPluginsCommand = new mCommands.Command({
-//				name: messages["Reload all"],
-//				tooltip: messages["ReloadAllPlugs"],
-//				id: "orion.reloadAllPlugins", //$NON-NLS-0$
-//				callback: this.reloadPlugins.bind(this)
-//			});
+			
+//			this.commandService.registerCommandContribution("ternPluginCommands", "orion.installPlugin", 2, /* not grouped */ null, false, /* no key binding yet */ null, new mCommandRegistry.URLBinding("installPlugin", "url")); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			var reloadAllPluginsCommand = new mCommands.Command({
+				name: messages["reloadAllPluginsCmd"],
+				tooltip: messages["reloadAllPluginsCmdTooltip"],
+				id: "javascript.reloadAllTernPlugins", //$NON-NLS-0$
+				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
+			});
+
+			this.commandService.addCommand(reloadAllPluginsCommand);
+			// register these with the toolbar
+			this.commandService.registerCommandContribution("ternPluginsCommands", "javascript.reloadAllTernPlugins", 3); //$NON-NLS-1$ //$NON-NLS-0$
 
 			// Render the commands in the heading, emptying any old ones.
-//			this.commandService.renderCommands("pluginCommands", "pluginCommands", this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			this.commandService.renderCommands("ternPluginsCommands", "ternPluginCommands", this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 		},
 	
 		render: function(referenceplugin){
-		
-//			// Declare row-level commands so they will be rendered when the rows are added.
-//			var reloadPluginCommand = new mCommands.Command({
-//				name: messages["Reload"],
-//				tooltip: messages["ReloadPlug"],
-//				id: "orion.reloadPlugin", //$NON-NLS-0$
-//				imageClass: "core-sprite-refresh", //$NON-NLS-0$
-//				visibleWhen: function(items) {  // we expect a URL
+		 
+			// Declare row-level commands so they will be rendered when the rows are added.
+			var reloadPluginCommand = new mCommands.Command({
+				name: messages["reloadPluginCmd"],
+				tooltip: messages["reloadPluginCmdTooltip"],
+				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
+				imageClass: "core-sprite-refresh", //$NON-NLS-0$
+				visibleWhen: function(items) {
+					// TODO Fix reload command
 //					return typeof items === "string"; //$NON-NLS-0$
-//				},
-//				callback: function(data) {
+					return true;
+				},
+				callback: function(data) {
 //					this.reloadPlugin(data.items);
-//				}.bind(this)
-//			});			
-//			this.commandService.addCommand(reloadPluginCommand);
-//			this.commandService.registerCommandContribution("pluginCommand", "orion.reloadPlugin", 1); //$NON-NLS-1$ //$NON-NLS-0$
+					console.log("Reloading plug-in");
+				}.bind(this)
+			});			
+			this.commandService.addCommand(reloadPluginCommand);
+			this.commandService.registerCommandContribution("ternPluginCommand", "javascript.reloadTernPlugin", 1); //$NON-NLS-1$ //$NON-NLS-2$
 
-			var self = this;
+			var _self = this;
 			return this.preferences.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
 					var props = prefs.get("tern"); //$NON-NLS-1$
 					var plugins;
 					if (props && props["plugins"] !== "undefined"){
 						plugins = props["plugins"];
 					} else {
-						plugins = {};
+						plugins = Object.create(null);
 					}
 					
 					var pluginArray = [];
-					for (var property in plugins) {
-    					if (plugins.hasOwnProperty(property)) {
-    						pluginArray.push(plugins[property]);
-					    }
-					}	
-					
-					// TODO NLS
-					self.pluginTitle.textContent = "Tern Plugins";/*messages['Plugins'];*/
-					self.pluginCount.textContent = pluginArray.length;
-					
-					// TODO Mark some as default?
-					//			for (var i=0; i<plugins.length; i++) {
-					//				if (defaultPluginURLs[plugins[i].getLocation()]) {
-					//					plugins[i].isDefaultPlugin = true;
-					//				}
-					//			}			
-								
-					// TODO Re-enable sorting?
-					//			plugins.sort(this._sortPlugins); 
-					
-					
-					self.explorer = new PluginListExplorer(self.commandService);
-					self.pluginListTree = self.explorer.createTree(self.pluginList.id, new mExplorer.SimpleFlatModel(pluginArray, "plugin", function(item) { //$NON-NLS-1$ //$NON-NLS-0$
+					var keys = Object.keys(plugins);
+					for (var i=0; i<keys.length; i++) {
+						pluginArray.push(plugins[keys[i]]);
+					}
+					_self.pluginTitle.textContent = messages["ternPlugins"];
+					_self.pluginCount.textContent = pluginArray.length;
+					pluginArray.sort(this._sortPlugins); 
+					_self.explorer = new PluginListExplorer(_self.commandService);
+					_self.pluginListTree = _self.explorer.createTree(_self.pluginList.id, new mExplorer.SimpleFlatModel(pluginArray, "plugin", function(item) { //$NON-NLS-1$ //$NON-NLS-0$
 						return item.name;
 					}), { /*setFocus: false,*/ noSelection: true});
 			});
@@ -226,33 +227,14 @@ define(['i18n!orion/settings/nls/messages',
 		 * @returns -1 for a first, 1 for b first, 0 if equals
 		 */
 		_sortPlugins: function(a, b) {
-			var aState = a.getState();
-			var bState = b.getState();
-			var aHeaders = a.getHeaders();
-			var bHeaders = b.getHeaders();
-
-			if (a.getProblemLoading() && !b.getProblemLoading()){
+			if (b.removable && !a.removeable){
 				return -1;
 			}
-			if (b.getProblemLoading() && !a.getProblemLoading()){
+			if (a.removable && !b.removable){
 				return 1;
 			}
-			
-			if (b.isDefaultPlugin && !a.isDefaultPlugin){
-				return -1;
-			}
-			if (a.isDefaultPlugin && !b.isDefaultPlugin){
-				return 1;
-			}
-			
-			if (!aHeaders || !aHeaders.name){
-				return -1;
-			}
-			if (!bHeaders || !bHeaders.name){
-				return 1;
-			}
-			var n1 = aHeaders.name && aHeaders.name.toLowerCase();
-			var n2 = bHeaders.name && bHeaders.name.toLowerCase();
+			var n1 = a.name.toLowerCase();
+			var n2 = b.name.toLowerCase();
 			if (n1 < n2) { return -1; }
 			if (n1 > n2) { return 1; }
 			return 0;

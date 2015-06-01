@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	<script type="text/javascript" src="plugin.js"></script>
+	<script type="text/javascript" src="jsbeautify.js"></script>
+	<script type="text/javascript">
+	/*jslint onevar: false, plusplus: false */
+	/*global eclipse js_beautify console*/
+
+
+	// The following registers the JS Beautifier with the Orion text editor:
+	window.onload = function() {
+		var provider = new eclipse.PluginProvider();
+		var indent_size = 4;
+		var indent_char = ' ';
+		provider.registerServiceProvider(["orion.edit.command", "orion.cm.managedservice"], {
+			// ManagedService
+			updated: function(properties) {
+				console.log('JS Beautifier updated...');
+				if (properties) {
+					var value = JSON.parse(properties.indent_style);
+					indent_size = value.indent_size;
+					indent_char = value.indent_char;
+				}
+			},
+			run: function(selectedText, text, selection) {
+				var toFormat;
+				var selectionEmpty = selection.start === selection.end;
+				if (selectionEmpty) {
+					toFormat = text;
+				} else {
+					toFormat = selectedText;
+				}
+				var formatted = js_beautify(toFormat, {
+					indent_size: indent_size,
+					indent_char: indent_char
+				});
+				if (selectionEmpty) {
+					return {
+						text: formatted
+					};
+				} else {
+					return formatted;
+				}
+			}
+		}, {
+			name: "Format JS",
+			img: "http://www.jsbeautifier.org/favicon.ico",
+			key: ["f", false, false, true], // alt+f
+			//				contentType: ["application/javascript"]
+			contentType: ["application/javascript", "text/html", "application/json"],
+			pid: "jsbeautify.config"
+		});
+
+		var PREF_VALUE_4_SPACES = '{"indent_size": 4, "indent_char": "\\u0020"}',
+		    PREF_VALUE_1_TAB    = '{"indent_size": 1, "indent_char": "\\t"}';
+		provider.registerServiceProvider("orion.core.setting", {}, {
+			settings: [{
+				pid: 'jsbeautify.config',
+				name: 'Format JS',
+				tags: 'beautify javascript js jsbeautify formatting'.split(' '),
+				category: 'Formatting',
+				properties: [{
+					id: 'indent_style',
+					name: 'Indent Style',
+					defaultValue: PREF_VALUE_4_SPACES,
+					options: [{
+						label: "1 Tab",
+						value: PREF_VALUE_1_TAB
+					}, {
+						label: "4 Spaces",
+						// Make sure the space character stay a space character.
+						value: PREF_VALUE_4_SPACES
+					}],
+					type: 'string'
+				}]
+			}]
+		});
+		provider.connect();
+	};
+	
+	</script>
+</head>
+<body>
+<h2>This is a <a href="http://wiki.eclipse.org/Orion/How_Tos/Installing_A_Plugin">plugin</a> for the <a href="http://wiki.eclipse.org/Orion">Orion</a> code editor.</h2>
+
+</body>
+</html>

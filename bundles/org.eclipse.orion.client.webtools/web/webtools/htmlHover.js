@@ -103,6 +103,9 @@ define([
 					if(node.range[0] <= offset) {
 						found = node;
 					} else {
+						if (offset > found.range[1]){
+							found = null;
+						}
 					    return Visitor.BREAK;
 					}      
 	            }
@@ -203,7 +206,7 @@ define([
 	                }
     	        }
     	        if(hover !== '') {
-    	           return {title: title, content: hover, type:'markdown'};
+    	           return {title: title, content: hover, type:'markdown', allowFullWidth: true};
     	        }
     	    }
     	    return null;

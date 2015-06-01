@@ -12,8 +12,8 @@
 
 /*eslint-env browser, amd*/
 /*global URL*/
-define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Deferred, EventTarget) {
-	
+define(["orion/Deferred", "orion/EventTarget", 'orion/splash', "orion/URL-shim"], function(Deferred, EventTarget, splash) {
+    
     function _equal(obj1, obj2) {
         var keys1 = Object.keys(obj1);
         var keys2 = Object.keys(obj2);
@@ -367,14 +367,14 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                         _channel.loading();
                     } else {
                         if ("plugin" === message.method) { //$NON-NLS-0$
-                        	_channel.connected();
+                            _channel.connected();
                             var manifest = message.params[0];
                             _update({
                                 headers: manifest.headers,
                                 services: manifest.services
                             }).then(function() {
-                            	if (_deferredLoad) {
-                                	_deferredLoad.resolve(_this);
+                                if (_deferredLoad) {
+                                    _deferredLoad.resolve(_this);
                                 }
                             });
                         } else if ("timeout" === message.method) {
@@ -560,24 +560,24 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
          * @function 
          */
         this.setParent = function(parent) {
-        	if (_parent !== parent) {
-        		_parent = parent;
-        		return _this.stop({
+            if (_parent !== parent) {
+                _parent = parent;
+                return _this.stop({
                     "transient": true
                 }).then(function() {
-					if ("started" === _autostart) {
-		                return _this.start({
-		                    "transient": true
-		                });
-					} else if ("lazy" === _autostart) {
-                		return _this.start({	
-                    		"lazy": true,
-							"transient": true
-						});
-            		}
-				});	
-			}
-			return new Deferred().resolve();
+                    if ("started" === _autostart) {
+                        return _this.start({
+                            "transient": true
+                        });
+                    } else if ("lazy" === _autostart) {
+                        return _this.start({    
+                            "lazy": true,
+                            "transient": true
+                        });
+                    }
+                });    
+            }
+            return new Deferred().resolve();
         };
 
         /**
@@ -599,7 +599,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
          */
         this.getProblemLoading = function() {
             if (_this._problemLoading){
-            	return true;
+                return true;
             }
             return false;
         };
@@ -684,8 +684,8 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                 _this._problemLoading = true;
                 deferredStateChange.reject(new Error("Failed to load plugin: " + _url));
                 if (_this._default) {
-                	_lastModified = 0;
-                	_persist();
+                    _lastModified = 0;
+                    _persist();
                 }
             });
             return deferredStateChange.promise;
@@ -733,8 +733,8 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
         };
 
         _update = function(input) {
-        	_this.problemLoading = null;
-        	
+            _this.problemLoading = null;
+            
             if (_state === "uninstalled") {
                 return new Deferred().reject(new Error("Plugin is uninstalled"));
             }
@@ -745,12 +745,12 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                     _persist();
                 }
                 return _internalRegistry.loadManifest(_url).then(_update, function() {
-                	_this._problemLoading = true;
-                	if (_this._default) {
-                		_lastModified = 0;
-                		_persist();
-                	}
-                	console.log("Failed to load plugin: " + _url);
+                    _this._problemLoading = true;
+                    if (_this._default) {
+                        _lastModified = 0;
+                        _persist();
+                    }
+                    console.log("Failed to load plugin: " + _url);
                 });
             }
 
@@ -854,6 +854,11 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
             return new Deferred().resolve();
         };
     }
+
+    var workerRegex = /Worker\.js$/;
+    var sharedWorkerRegex = /SharedWorker\.js$/;
+    var pluginHtml = "Plugin.html"; //$NON-NLS-0$
+    var workerJS = "Worker.js"; //$NON-NLS-0$
 
     /**
      * Dispatched when a plugin has been installed. The type of this event is <code>"installed"</code>.
@@ -979,25 +984,75 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                     if (newTimeout) this._loadTimeout = setTimeout(sendTimeout.bind(null, message), newTimeout);
                 };
 
+                var isWorker = !!(url.match(workerRegex) && typeof(Worker) !== "undefined");
+                var isSharedWorker = !!(url.match(sharedWorkerRegex) && typeof(SharedWorker) !== "undefined");
+                if ((!localStorage.useSharedWorkers || !isSharedWorker) && url.match(sharedWorkerRegex)) {
+                    url = url.replace(sharedWorkerRegex, workerJS);
+                    isSharedWorker = false;
+                }
+                if ((!localStorage.useWorkers || !isWorker) && url.match(workerRegex)) {
+                    url = url.replace(workerRegex, pluginHtml);
+                    isWorker = isSharedWorker = false;
+                }
+
+                channel.url = url;
                 channel._updateTimeout();
                 channel._startTime = new Date().getTime();
-                var iframe = document.createElement("iframe"); //$NON-NLS-0$
-                iframe.name = url + "_" + channel._startTime;
-                iframe.src = url;
-                iframe.onload = function() {
-                    log("handshake"); //$NON-NLS-0$
-                    channel._handshake = true;
-                    channel._updateTimeout();
-                };
-                iframe.sandbox = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
-                iframe.style.width = iframe.style.height = "100%"; //$NON-NLS-0$
-                iframe.frameBorder = 0;
-                (parent || _parent).appendChild(iframe);
-                channel.target = iframe.contentWindow;
+                if (isWorker) {
+                    var worker;
+                    if (isSharedWorker) {
+                        worker = new SharedWorker(url);
+                        channel.target = worker.port;
+                        worker.port.start();
+                        channel._close = function() {
+                            worker.port.close();
+                        };
+                    } else {
+                        worker = new Worker(url);
+                        channel.target = worker;
+                        channel._close = function() {
+                            worker.terminate();
+                        };
+                    }
+                    channel.postMessage = function(message) {
+                        this.target.postMessage((this.useStructuredClone ? message : JSON.stringify(message)), []);
+                    };
+                    channel.target.addEventListener("message", function(evt) {
+                    	_channelHandler(channel, evt);
+                    });
+                } else {
+                    var iframe = document.createElement("iframe"); //$NON-NLS-0$
+                    iframe.name = url + "_" + channel._startTime;
+                    iframe.src = url;
+                    iframe.onload = function() {
+                        splash.progress("Loading " + url);
+                        log("handshake"); //$NON-NLS-0$
+                        channel._handshake = true;
+                        channel._updateTimeout();
+                    };
+                    iframe.sandbox = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
+                    iframe.style.width = iframe.style.height = "100%"; //$NON-NLS-0$
+                    iframe.frameBorder = 0;
+                    (parent || _parent).appendChild(iframe);
+                    channel.target = iframe.contentWindow;
+                    channel.postMessage = function(message) {
+                        this.target.postMessage((this.useStructuredClone ? message : JSON.stringify(message)), this.url);
+                    };
+                    channel._close = function() {
+                        if (iframe) {
+                            var frameParent = iframe.parentNode;
+                            if (frameParent) {
+                                frameParent.removeChild(iframe);
+                            }
+                            iframe = null;
+                        }
+                    };
+                }
                 channel.connected = function() {
                     log("connected"); //$NON-NLS-0$
                     this._connected = true;
                     this._updateTimeout();
+                    splash.progress("Loaded " + url);
                 };
                 channel.loading = function() {
                     log("loading"); //$NON-NLS-0$
@@ -1008,13 +1063,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                     log("closed"); //$NON-NLS-0$
                     this._closed = true;
                     this._updateTimeout();
-                    if (iframe) {
-                        var frameParent = iframe.parentNode;
-                        if (frameParent) {
-                            frameParent.removeChild(iframe);
-                        }
-                        iframe = null;
-                    }
+                    this._close();
                 };
                 _channels.push(channel);
                 return channel;
@@ -1045,7 +1094,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                 _storage.setItem("plugin." + url, JSON.stringify(manifest)); //$NON-NLS-0$
             },
             postMessage: function(message, channel) {
-                channel.target.postMessage((channel.useStructuredClone ? message : JSON.stringify(message)), channel.url);
+                channel.postMessage(message);
             },
             dispatchEvent: function(event) {
                 try {
@@ -1140,24 +1189,27 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
 
         this.getState = internalRegistry.getState;
 
+		function _channelHandler(channel, event) {
+			try {
+                var message;
+                if (typeof channel.useStructuredClone === "undefined") {
+                    var useStructuredClone = typeof event.data !== "string"; //$NON-NLS-0$
+                    message = useStructuredClone ? event.data : JSON.parse(event.data);
+                    channel.useStructuredClone = useStructuredClone;
+                } else {
+                    message = channel.useStructuredClone ? event.data : JSON.parse(event.data);
+                }
+                channel.handler(message);
+            } catch (e) {
+                // not a valid message -- ignore it
+            }
+		}
 
-        function _messageHandler(event) { //$NON-NLS-0$
+        function _messageHandler(event) {
             var source = event.source;
             _channels.some(function(channel) {
                 if (source === channel.target) {
-                    try {
-                        var message;
-                        if (typeof channel.useStructuredClone === "undefined") {
-                            var useStructuredClone = typeof event.data !== "string"; //$NON-NLS-0$
-                            message = useStructuredClone ? event.data : JSON.parse(event.data);
-                            channel.useStructuredClone = useStructuredClone;
-                        } else {
-                            message = channel.useStructuredClone ? event.data : JSON.parse(event.data);
-                        }
-                        channel.handler(message);
-                    } catch (e) {
-                        // not a valid message -- ignore it
-                    }
+                    _channelHandler(channel, event);
                     return true; // e.g. break
                 }
             });
@@ -1187,35 +1239,35 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
             });
             
             if (configuration.parent) {
-            	_parent = configuration.parent;
+                _parent = configuration.parent;
             } else {
-	            _parent = document.createElement("div"); //$NON-NLS-0$
-	            if (!configuration.visible) {
+                _parent = document.createElement("div"); //$NON-NLS-0$
+                if (!configuration.visible) {
                     _parent.style.display = "none"; //$NON-NLS-0$
                     _parent.style.visibility = "hidden"; //$NON-NLS-0$
                 }
-	            document.body.appendChild(_parent);
+                document.body.appendChild(_parent);
             }
 
             if (configuration.plugins) {
                 Object.keys(configuration.plugins).forEach(function(url) {
                     url = _normalizeURL(url);
-                    //					if (!httpOrHttps.test(url)) {
-                    //						console.log("Illegal Plugin URL: " + url);
-                    //						return;
-                    //					}
+                    //                    if (!httpOrHttps.test(url)) {
+                    //                        console.log("Illegal Plugin URL: " + url);
+                    //                        return;
+                    //                    }
                     var plugin = this.getPlugin(url);
                     if (!plugin) {
                         var manifest = configuration.plugins[url];
                         if (typeof manifest !== "object") {
-                        	manifest = {};
+                            manifest = {};
                         }
                         manifest.autostart = manifest.autostart || configuration.defaultAutostart || "lazy";
                         plugin = new Plugin(url, manifest, internalRegistry);
                         plugin._default = true;
                         _plugins.push(plugin);
                     } else {
-                    	plugin._default = true;
+                        plugin._default = true;
                     }
                 }.bind(this));
             }
@@ -1300,13 +1352,13 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
             return Deferred.all(deferreds, function(e) {
                 console.log("PluginRegistry.stop " + e);
             }).then(function() {
-				if (!configuration.parent) {
-            		var parentNode = _parent.parentNode;
-            		if (parentNode) {
-		            	parentNode.removeChild(_parent);
-            		}
-            	}
-            	_parent = null;
+                if (!configuration.parent) {
+                    var parentNode = _parent.parentNode;
+                    if (parentNode) {
+                        parentNode.removeChild(_parent);
+                    }
+                }
+                _parent = null;
                 removeEventListener("message", _messageHandler);
                 _state = "resolved";
             });
@@ -1331,9 +1383,9 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
          */
         this.installPlugin = function(url, optManifest) {
             url = _normalizeURL(url);
-            //			if (!httpOrHttps.test(url)) {
-            //				return new Deferred().reject("Illegal Plugin URL: " + url);
-            //			}
+            //            if (!httpOrHttps.test(url)) {
+            //                return new Deferred().reject("Illegal Plugin URL: " + url);
+            //            }
             var plugin = this.getPlugin(url);
             if (plugin) {
                 return new Deferred().resolve(plugin);

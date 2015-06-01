@@ -618,10 +618,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			textView.setCaretOffset(caretOffset, show, callback);
 		},
 
-		/**
-		 * @private
-		 */
-		setText: function(text, start, end) {
+		setText: function(text, start, end, show, callback) {
 			var textView = this._textView;
 			var model = textView.getModel();
 			if (model.getBaseModel) {
@@ -634,7 +631,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 					end = model.mapOffset(end, true);
 				}
 			}
-			textView.setText(text, start, end);
+			textView.setText(text, start, end, show, callback);
 		},
 
 		setSelection: function(start, end, show, callback) {
@@ -695,7 +692,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			if (!annotationModel) { return null; }
 			var annotationStyler = this._annotationStyler;
 			if (!annotationStyler) { return null; }
-			if (!textView.isValidLineIndex(y)) { return null; }
+			if (!textView.isValidTextPosition(x, y)) { return null; }
 			var offset = textView.getOffsetAtLocation(x, y);
 			if (offset === -1) { return null; }
 			offset = this.mapOffset(offset);
