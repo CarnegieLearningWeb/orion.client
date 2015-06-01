@@ -37,45 +37,30 @@ define([
 			var entryNode = document.createElement("div"); //$NON-NLS-1$
 			entryNode.classList.add("plugin-entry"); //$NON-NLS-1$
 			
-//			var cmdNode = document.createElement("span"); //$NON-NLS-1$
-//			cmdNode.classList.add("plugin-commands"); //$NON-NLS-1$
-//			var reloadPluginsCommand = new mCommands.Command({
-//				name: messages["reloadPluginCmd"],
-//				tooltip: messages["reloadPluginCmdTooltip"],
-//				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
-//				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
-//			});
-//			this.commandService.addCommand(reloadPluginsCommand);
-//			this.commandService.registerCommandContribution("ternPluginCommands", "javascript.reloadTernPlugin", 2); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
-//			this.commandService.renderCommands("ternPluginCommands", cmdNode, this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			// TODO entryNode.appendChild(cmdNode);
+			var cmdNode = document.createElement("span");
+			cmdNode.classList.add("plugin-commands");
+			var reloadPluginsCommand = new mCommands.Command({
+				name: messages["reloadPluginCmd"],
+				tooltip: messages["reloadPluginCmdTooltip"],
+				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
+				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
+			});
+			this.commandService.addCommand(reloadPluginsCommand);
+			this.commandService.registerCommandContribution("ternPluginCommands", "javascript.reloadTernPlugin", 2); //$NON-NLS-1$ //$NON-NLS-0$
+			this.commandService.renderCommands("ternPluginCommands", cmdNode, this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			entryNode.appendChild(cmdNode);
 			
-			// TODO NLS Version and Removeable or replace with icons
 			if (item.name){
 				var nameNode = document.createElement("div"); //$NON-NLS-1$
 				nameNode.classList.add("plugin-title"); //$NON-NLS-1$
 				nameNode.textContent = item.name;
-				
-				if (item.version){
-					var versionNode = document.createElement("span"); //$NON-NLS-1$
-					versionNode.textContent = 'v'+item.version; //$NON-NLS-1$
-					versionNode.style.marginLeft = "10px"; //$NON-NLS-1$
-					nameNode.appendChild(versionNode);
-				}
-				
 				entryNode.appendChild(nameNode);
 			}
-			
 			if (item.description){
 				var descNode = document.createElement("div"); //$NON-NLS-1$
 				descNode.textContent = item.description;
-				// TODO Show to the user that the plug-in is added by the platform and can't be removed
-//				if (item.removable){
-//					descNode.textContent += " (Removable)";
-//				}
 				entryNode.appendChild(descNode);
 			}
-			
 			
 			node.appendChild(entryNode);
 			return node;
@@ -171,19 +156,19 @@ define([
 //			this.commandService.addCommand(installPluginCommand);
 			
 //			this.commandService.registerCommandContribution("ternPluginCommands", "orion.installPlugin", 2, /* not grouped */ null, false, /* no key binding yet */ null, new mCommandRegistry.URLBinding("installPlugin", "url")); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-//			var reloadAllPluginsCommand = new mCommands.Command({
-//				name: messages["reloadAllPluginsCmd"],
-//				tooltip: messages["reloadAllPluginsCmdTooltip"],
-//				id: "javascript.reloadAllTernPlugins", //$NON-NLS-0$
-//				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
-//			});
-//
-//			this.commandService.addCommand(reloadAllPluginsCommand);
-//			// register these with the toolbar
-//			this.commandService.registerCommandContribution("ternPluginsCommands", "javascript.reloadAllTernPlugins", 3); //$NON-NLS-1$ //$NON-NLS-2$
-//
-//			// Render the commands in the heading, emptying any old ones.
-//			this.commandService.renderCommands("ternPluginsCommands", "ternPluginCommands", this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
+			var reloadAllPluginsCommand = new mCommands.Command({
+				name: messages["reloadAllPluginsCmd"],
+				tooltip: messages["reloadAllPluginsCmdTooltip"],
+				id: "javascript.reloadAllTernPlugins", //$NON-NLS-0$
+				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
+			});
+
+			this.commandService.addCommand(reloadAllPluginsCommand);
+			// register these with the toolbar
+			this.commandService.registerCommandContribution("ternPluginsCommands", "javascript.reloadAllTernPlugins", 3); //$NON-NLS-1$ //$NON-NLS-0$
+
+			// Render the commands in the heading, emptying any old ones.
+			this.commandService.renderCommands("ternPluginsCommands", "ternPluginCommands", this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 		},
 	
 		render: function(referenceplugin){
@@ -209,34 +194,26 @@ define([
 
 			var _self = this;
 			return this.preferences.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
-					var props = prefs.get("tern/plugins"); //$NON-NLS-1$
-					var plugins = Object.create(null);
-					if(typeof(props) === 'string') {
-						plugins = JSON.parse(props);
+					var props = prefs.get("tern"); //$NON-NLS-1$
+					var plugins;
+					if (props && props["plugins"] !== "undefined"){
+						plugins = props["plugins"];
 					} else {
-						plugins = props;
+						plugins = Object.create(null);
 					}
+					
 					var pluginArray = [];
 					var keys = Object.keys(plugins);
 					for (var i=0; i<keys.length; i++) {
-						var plugin = plugins[keys[i]];
-						if(typeof(plugin) === 'object' && plugin.name) {
-							pluginArray.push(plugin);
-						}
+						pluginArray.push(plugins[keys[i]]);
 					}
 					_self.pluginTitle.textContent = messages["ternPlugins"];
-					
-					if (pluginArray.length > 0){
-						_self.pluginCount.textContent = pluginArray.length;
-						pluginArray.sort(_self._sortPlugins); 
-						_self.explorer = new PluginListExplorer(_self.commandService);
-						_self.pluginListTree = _self.explorer.createTree(_self.pluginList.id, new mExplorer.SimpleFlatModel(pluginArray, "plugin", function(item) { //$NON-NLS-1$ //$NON-NLS-0$
-							return item.name;
-						}), { noSelection: true});
-					} else {
-						_self.pluginList.style.padding = "10px"; //$NON-NLS-1$
-						_self.pluginList.textContent = messages["noTernPluginsAvailable"];
-					}
+					_self.pluginCount.textContent = pluginArray.length;
+					pluginArray.sort(this._sortPlugins); 
+					_self.explorer = new PluginListExplorer(_self.commandService);
+					_self.pluginListTree = _self.explorer.createTree(_self.pluginList.id, new mExplorer.SimpleFlatModel(pluginArray, "plugin", function(item) { //$NON-NLS-1$ //$NON-NLS-0$
+						return item.name;
+					}), { /*setFocus: false,*/ noSelection: true});
 			});
 		},
 		
@@ -250,13 +227,12 @@ define([
 		 * @returns -1 for a first, 1 for b first, 0 if equals
 		 */
 		_sortPlugins: function(a, b) {
-			//TODO do we want to sort by removable? or only colour them differently? or simply use the 'remove' command to show this
-			/*if (b.removable && !a.removeable){
+			if (b.removable && !a.removeable){
 				return -1;
 			}
 			if (a.removable && !b.removable){
 				return 1;
-			}*/
+			}
 			var n1 = a.name.toLowerCase();
 			var n2 = b.name.toLowerCase();
 			if (n1 < n2) { return -1; }

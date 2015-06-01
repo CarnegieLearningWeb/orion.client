@@ -11,7 +11,6 @@
 
 /*eslint-env browser, amd*/
 define([
-	"orion/plugin", 
 	"plugins/fileClientPlugin",
 	"plugins/authenticationPlugin",
 	"plugins/jslintPlugin",
@@ -25,10 +24,9 @@ define([
 	"plugins/helpPlugin",
 	"shell/plugins/shellPagePlugin",
 	"plugins/site/sitePlugin"
-], function(PluginProvider) {
+], function() {
 	
 	var plugins = Array.prototype.slice.call(arguments);
-	plugins.shift();
 
 	function connect(pluginProvider) {
 		var login = new URL("../mixloginstatic/LoginWindow.html", self.location.href).href;
@@ -38,7 +36,6 @@ define([
 			description: "This plugin provides the core Orion support.",
 			login: login
 		};
-		pluginProvider = pluginProvider || new PluginProvider();
 		pluginProvider.updateHeaders(headers);
 		registerServiceProviders(pluginProvider);
 		pluginProvider.connect();

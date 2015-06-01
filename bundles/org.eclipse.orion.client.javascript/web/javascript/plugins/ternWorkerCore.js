@@ -9,17 +9,8 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-/*globals importScripts onmessage:true doctrine onconnect:true requirejs*/
+/*globals importScripts onmessage:true doctrine onconnect:true*/
 /*eslint-env node, browser*/
-var lang ='en'; //$NON-NLS-1$
-var sear = self.location.search;
-if(sear) {
-	var langs = sear.split('worker-language'); //$NON-NLS-1$
-	if(Array.isArray(langs) && langs.length === 2) {
-		lang = langs[1].slice(1);
-	}
-} 
-requirejs.config({locale: lang});
 require({
 	baseUrl: "../../", //$NON-NLS-1$
 	paths: {
@@ -30,16 +21,10 @@ require({
 [
 	'tern/lib/tern',
 	'tern/plugin/doc_comment',
-	'tern/plugin/orionAmqp',
-	'tern/plugin/orionAngular',
-	//'tern/plugin/orionComponent',
-	'tern/plugin/orionExpress',	
-	'tern/plugin/orionMongoDB',
-	'tern/plugin/orionMySQL',	
-	'tern/plugin/orionNode',
-	'tern/plugin/orionPostgres',
-	'tern/plugin/orionRedis',
 	'tern/plugin/orionRequire',
+	'tern/plugin/orionNode',
+	'tern/plugin/orionAngular',
+	'tern/plugin/orionComponent',
 	'tern/plugin/ternPlugins',
 	'tern/defs/ecma5',
 	'tern/defs/browser',
@@ -52,8 +37,7 @@ require({
 	'i18n!javascript/nls/workermessages',
 	'orion/i18nUtil'
 ],
-/* @callback */ function(Tern, docPlugin, orionAMQPPlugin, orionAngularPlugin,/* orionComponentPlugin,*/ orionExpressPlugin, orionMongoDBPlugin,
-							orionMySQLPlugin, orionNodePlugin, orionPostgresPlugin, orionRedisPlugin, orionRequirePlugin, ternPluginsPlugin, 
+/* @callback */ function(Tern, docPlugin, orionRequirePlugin, orionNodePlugin, orionAngularPlugin, orionComponentPlugin, ternPluginsPlugin, 
 							ecma5, browser, AssistHandler, DeclarationHandler, HoverHandler, OccurrencesHandler, RenameHandler, PluginsHandler, 
 							Messages, i18nUtil) {
     
@@ -73,79 +57,32 @@ require({
                     	name: Messages['ternDocPluginName'],
                     	description: Messages['ternDocPluginDescription'],
                         fullDocs: true,
-                        version: '0.6.2', //$NON-NLS-1$
                         removable: false
-                    },
-                    orionAmqp: {
-                    	name: Messages['orionAMQPPluginName'],
-                    	description: Messages['orionAMQPPluginDescription'],
-                    	version: '0.9.1', //$NON-NLS-1$
-                    	removable: true,
-                    	env: 'amqp' //$NON-NLS-1$
-                    },
-                    orionAngular: {
-                    	name: Messages['orionAngularPluginName'],
-                    	description: Messages['orionAngularPluginDescription'],
-                    	version: '0.6.2', //$NON-NLS-1$
-                    	removable: true
-                    },
-                   /* orionComponent: {
-                    	name: Messages['orionComponentPluginName'],
-                    	description: Messages['orionComponentPluginDescription'],
-                    	version: '0.6.2', //$NON-NLS-1$
-                    	removable: true,
-                    },*/
-                    orionExpress: {
-                    	name: Messages['orionExpressPluginName'],
-                    	description: Messages['orionExpressPluginDescription'],
-                    	version: '4.12.4', //$NON-NLS-1$
-                    	removable: true,
-                    	env: 'express' //$NON-NLS-1$
-                    },
-                    orionMongoDB: {
-                    	name: Messages['orionMongoDBPluginName'],
-                    	description: Messages['orionMongoDBPluginDescription'],
-                    	version: '1.1.21', //$NON-NLS-1$
-                    	removable: true,
-                    	env: 'mongodb' //$NON-NLS-1$
-                    },
-                    orionMySQL: {
-                    	name: Messages['orionMySQLPluginName'],
-                    	description: Messages['orionMySQLPluginDescription'],
-                    	version: '2.7.0', //$NON-NLS-1$
-                    	removable: true,
-                    	env: 'mysql' //$NON-NLS-1$
-                    },
-                    orionNode: {
-                    	name: Messages['orionNodePluginName'],
-                    	description: Messages['orionNodePluginDescription'],
-                    	version: '0.6.2', //$NON-NLS-1$
-                    	removable: true
-                    },
-                    orionPostgres: {
-                    	name: Messages['orionPostgresPluginName'],
-                    	description: Messages['orionPostgresPluginDescription'],
-                    	version: '4.4.0', //$NON-NLS-1$
-	                   	removable: true,
-	                   	env: 'pg' //$NON-NLS-1$
-                    },
-                    orionRedis: {
-                    	name: Messages['orionRedisPluginName'],
-                    	description: Messages['orionRedisPluginDescription'],
-                    	version: '0.12.1', //$NON-NLS-1$
-                    	removable: true,
-                    	env: 'redis' //$NON-NLS-1$
                     },
                     orionRequire: {
                     	name: Messages['orionRequirePluginName'],
                     	description: Messages['orionRequirePluginDescription'],
-                    	version: '0.6.2', //$NON-NLS-1$
+                    	removable: true
+                    	//depth: 1
+                    },
+                   /* orionNode: {
+                    	name: Messages['orionNodePluginName'],
+                    	description: Messages['orionNodePluginDescription'],
                     	removable: true
                     },
+                    orionAngular: {
+                    	name: Messages['orionAngularPluginName'],
+                    	description: Messages['orionAngularPluginDescription'],
+                    	removable: true
+                    },
+                    orionComponent: {
+                    	name: Messages['orionComponentPluginName'],
+                    	description: Messages['orionComponentPluginDescription'],
+                    	removable: true
+                    },*/
                     plugins: {
                     	name: Messages['ternPluginsPluginName'],
                     	description: Messages['ternPluginsPluginDescription'],
-                    	version: '1.0', //$NON-NLS-1$
                     	removable: false
                     }
                 },
@@ -214,10 +151,6 @@ require({
                     	PluginsHandler.setPluginEnablement(ternserver, _d.args, post);
                     	break;
                     }
-                    case 'environments': {
-                    	PluginsHandler.getEnvironments(ternserver, _d.args, post);
-                    	break;
-                    }
                 }
             }
         }
@@ -266,19 +199,15 @@ require({
         var err = args.error;
         var contents = args.contents;
         var file = args.file;
-        var reads = pendingReads[file];
-        if(Array.isArray(reads)) {
-            var f = reads.shift();
-            if(typeof(f) === 'function') {
-            	f(err, contents);
-            }
+        var read = pendingReads[file];
+        if(typeof(read) === 'function') {
+            read(err, contents);
+             delete pendingReads[file];
         }
-        reads = pendingReads[args.logical];
-        if(Array.isArray(reads)) {
-        	f = reads.shift();
-            if(typeof(f) === 'function') {
-            	f(err, {contents: contents, file:file, logical:args.logical});
-            }
+        read = pendingReads[args.logical];
+        if(typeof(read) === 'function') {
+            read(err, {contents: contents, file:file, logical:args.logical});
+            delete pendingReads[args.logical];
         }
     }
     
@@ -301,15 +230,14 @@ require({
      * @param {Function} callback The callback once the file has been read or failed to read
      */
     function _getFile(file, callback) {
-    	if(ternserver) {
+    	if(file === 'warmup') {
+    		callback(null, null);
+    	} else if(ternserver) {
         	var _f = file;
            if(typeof(file) === 'object') {
            		_f = file.logical;
            }
-           if(!Array.isArray(pendingReads[_f])) {
-           		pendingReads[_f] = [];
-           }
-           pendingReads[_f].push(callback);
+           pendingReads[_f] = callback;
            post({request: 'read', args: {file:file}}); //$NON-NLS-1$
 	    } else {
 	       post(i18nUtil.formatMessage(Messages['failedReadRequest'], _f)); //$NON-NLS-1$

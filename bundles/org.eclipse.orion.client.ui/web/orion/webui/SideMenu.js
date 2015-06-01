@@ -111,6 +111,19 @@ define(['orion/webui/littlelib', 'orion/PageUtil', 'orion/URL-shim'], function(l
 				
 				var sideMenuHome = document.createElement("div"); //$NON-NLS-0$
 				sideMenuHome.classList.add("sideMenuHome"); //$NON-NLS-0$
+				var link = document.createElement("a");
+				link.href = "http://globaloria.com";
+				link.target = "_blank";
+				link.title = "Globaloria.com";
+				
+				var logo = document.createElement("img");
+				logo.src = "../Globaloria_Square.jpg";
+				logo.id = logo.alt = logo.title = "Globaloria_Square.png";
+				logo.style.width = "50px";
+				logo.style.height = "50px";
+				link.appendChild(logo);
+				sideMenuHome.appendChild(link);
+				
 				this._sideMenuHome = sideMenuHome;
 				
 				var sideMenuList = document.createElement("ul"); //$NON-NLS-0$
@@ -327,6 +340,12 @@ define(['orion/webui/littlelib', 'orion/PageUtil', 'orion/URL-shim'], function(l
 					anchor.href = bestLink.href;
 					anchor.title = bestLink.title;
 				}
+				
+				//Added by Jon
+				if(category === 'shell')
+					anchor.parentElement.style.display = "none";
+				else if(category === 'sites')
+					anchor.parentElement.style.display = "none";
 			}, this);
 			this._show();
 		},

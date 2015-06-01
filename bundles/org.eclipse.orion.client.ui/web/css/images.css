@@ -709,6 +709,8 @@
 .core-sprite-horizontal,
 .core-sprite-vertical,
 .core-sprite-pip,
+/*Added by Jon*/
+.core-sprite-pre,
 .core-sprite-open,
 .core-sprite-debug,
 .core-sprite-download,
@@ -793,6 +795,8 @@
 .core-sprite-horizontal:before{ content:'\E042'; }
 .core-sprite-vertical:before{ content:'\E041'; }
 .core-sprite-pip:before{ content:'\E067'; }
+/*Added by Jon*/
+.core-sprite-pre:before{ content:'\E00F'; }
 
 
 /* icons for file types - possibly more to come - at least one for images */ 

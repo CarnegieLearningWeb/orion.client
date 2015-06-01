@@ -35,14 +35,13 @@ define([
 		this._serviceRegistry = options.serviceRegistry;
 		this._pluginRegistry = options.pluginRegistry;
 		this._commandRegistry = new mCommandRegistry.CommandRegistry({});
+		//this._fileClient = new mEmbeddedFileClient.EmbeddedFileClient();
 		this._fileClient = new mFileClient.FileClient(this._serviceRegistry);
 		this._contentTypeRegistry = new mContentTypes.ContentTypeRegistry(this._serviceRegistry);
 		this._editorCommands = new mEditorCommands.EditorCommandFactory({
 			serviceRegistry: this._serviceRegistry,
 			commandRegistry: this._commandRegistry,
-			fileClient: this._fileClient,
-			toolbarId: "_orion_hidden_actions",
-			navToolbarId: "_orion_hidden_actions"
+			fileClient: this._fileClient
 			/*
 			renderToolbars: this.renderToolbars.bind(this),
 			searcher: this.searcher,
@@ -55,9 +54,6 @@ define([
 		});
 		this._progressService = {
 			progress: function(deferred, operationName, progressMonitor){
-				return deferred;
-			},
-			showWhile: function(deferred, message, avoidDisplayError){
 				return deferred;
 			}
 		};			
@@ -78,9 +74,6 @@ define([
 			});
 			inputManager.addEventListener("InputChanged", function(evt) { //$NON-NLS-0$
 				evt.editor = this.editorView.editor;
-				this.pageActionsScope = "_orion_hidden_actions";
-				this._commandRegistry.destroy(this.pageActionsScope);
-				this._commandRegistry.renderCommands(this.pageActionsScope, this.pageActionsScope, evt.metadata, evt.editor, "tool"); //$NON-NLS-0$
 			}.bind(this));
 			inputManager.addEventListener("InputChanging", function(e) { //$NON-NLS-0$
 				e.editor = this.editorView.editor;
@@ -88,11 +81,8 @@ define([
 		},
 		defaultOptions: function(parentId) {
 			var model = new mTextModel.TextModel();
-			var id = idCounter.toString();
-			var context = Object.create(null);
-			context.openEditor = function(fileurl, options){this.editorView.editor.setSelection(options.start, options.end);}.bind(this);
+			var id = idCounter === 0 ? "" : idCounter.toString();
 			return {
-				activateContext: context,
 				id: id,
 				parent: parentId,
 				model: model,
@@ -113,7 +103,6 @@ define([
 		},
 		createEditor: function(options) {
 			return this._editorCommands.createCommands().then(function() {
-				this._editorCommands.registerCommands();
 				this.createInputManager();
 				this.editorView = new mEditorView.EditorView(this.defaultOptions(options.parent));
 				idCounter++;

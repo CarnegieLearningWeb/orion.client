@@ -43,8 +43,6 @@ define([
 	'orion/keyBinding',
 	'orion/util',
 	'orion/Deferred',
-	'orion/webui/contextmenu',
-	'orion/metrics',
 	'orion/objects'
 ], function(
 	messages,
@@ -54,7 +52,7 @@ define([
 	mDispatcher, EditorContext, TypeDefRegistry, Highlight,
 	mMarkOccurrences, mSyntaxchecker, LiveEditSession,
 	mProblems, mBlamer, mDiffer,
-	mKeyBinding, util, Deferred, mContextMenu, mMetrics, objects
+	mKeyBinding, util, Deferred, objects
 ) {
 	var fPattern = "/__embed/";
 	var Dispatcher = mDispatcher.Dispatcher;
@@ -79,9 +77,6 @@ define([
 	 */
 	function EditorView(options) {
 		this._parent = options.parent;
-		if(typeof this._parent === "string") {
-			this._parent = document.getElementById(options.parent);
-		}
 		this.id = options.id || "";
 		this.activateContext = options.activateContext;
 		this.renderToolbars = options.renderToolbars;
@@ -416,7 +411,7 @@ define([
 
 			var contentAssistFactory = readonly ? null : {
 				createContentAssistMode: function(editor) {
-					var contentAssist = new mContentAssist.ContentAssist(editor.getTextView(), serviceRegistry);
+					var contentAssist = new mContentAssist.ContentAssist(editor.getTextView());
 
 					contentAssist.addEventListener("Activating", setContentAssistProviders.bind(null, editor, contentAssist)); //$NON-NLS-0$
 					var widget = new mContentAssist.ContentAssistWidget(contentAssist, "contentassist"); //$NON-NLS-0$
@@ -574,14 +569,8 @@ define([
 			if(this.editorPreferences) {
 				this.editorPreferences.getPrefs(this.updateSettings.bind(this));
 			}
-			
-			// Create a context menu...
-			this._createContextMenu();
 		},
 		destroy: function() {
-			if(this.lastFileLocation) {
-				this.fileClient.deleteFile(this.lastFileLocation);
-			}
 			this.editor.uninstall();
 		},
 		getStyleAccessor: function() {
@@ -591,49 +580,6 @@ define([
 				styleAccessor = styler.getStyleAccessor();
 			}
 			return styleAccessor;
-		},
-		_createContextMenu: function() {			
-			// Create the context menu element (TBD: re0use a single Node for all context Menus ??)
-			this._editorContextMenuNode = document.createElement("ul"); //$NON-NLS-0$
-			this._editorContextMenuNode.className = "dropdownMenu"; //$NON-NLS-0$
-			this._editorContextMenuNode.setAttribute("role", "menu"); //$NON-NLS-1$ //$NON-NLS-0$
-			this._parent.parentNode.appendChild(this._editorContextMenuNode);
-			
-			// Hook the context menu to the textView's content node
-			var tv = this.editor.getTextView();
-			var contextMenu = new mContextMenu.ContextMenu({
-				dropdown: this._editorContextMenuNode,
-				triggerNode: tv._clientDiv
-			});
-						
-			//function called when the context menu is triggered to set the nav selection properly
-			var contextMenuTriggered = function(wrapper) {
-				var re = wrapper.event;
-				if (re.target) {
-					var tv = this.editor.getTextView();
-					var pt = tv.convert({x: re.clientX, y: re.clientY}, "page", "document"); //$NON-NLS-1$ //$NON-NLS-0$
-					var offset = tv.getOffsetAtLocation(pt.x, pt.y);
-
-					// Check if we're inside an existing selection, otherwise set the offset
-					var insideSel = false;
-					var sels = tv.getSelections();
-					for (var i=0; i<sels.length; i++) {
-						var sel = sels[i];
-						if (sel.start <= offset && sel.end >= offset) {
-							insideSel = true;
-							break;
-						}
-					}
-					if (!insideSel) {
-						tv.setCaretOffset(offset);
-					}
-					
-					this.commandRegistry.destroy(this._editorContextMenuNode); // remove previous content
-					this.commandRegistry.renderCommands("editorContextMenuActions", this._editorContextMenuNode, null, this, "menu");  //$NON-NLS-0$
-					mMetrics.logEvent("contextMenu", "opened", "editor"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-				}
-			}.bind(this);
-			contextMenu.addEventListener("triggered", contextMenuTriggered); //$NON-NLS-0$
 		}
 	};
 	mEventTarget.EventTarget.addMixin(EditorView.prototype);

@@ -16,10 +16,8 @@ define([
 'javascript/finder', 
 'orion/URITemplate',
 'orion/Deferred',
-'i18n!javascript/nls/messages',
-'orion/i18nUtil',
 'doctrine' //last, exports into global
-], function(Objects, Finder, URITemplate, Deferred, Messages, i18nUtil) {
+], function(Objects, Finder, URITemplate, Deferred) {
 	
 	/**
 	 * @description Formats the hover info as markdown text
@@ -98,34 +96,34 @@ define([
 	        }
 	        var hover = '';
 	        if(typeof(format.deprecated) !== 'undefined') {
-	        	hover += i18nUtil.formatMessage('__${0}__ ', Messages['deprecatedHoverTitle'])+format.deprecated+'\n\n'; //$NON-NLS-2$ //$NON-NLS-1$
+	        	hover += '__Deprecated.__ '+format.deprecated+'\n\n'; //$NON-NLS-2$
 	        }
 	        if(format.desc !== '') {
 	            hover += format.desc+'\n\n'; //$NON-NLS-1$
 	        }
 	        if(format.params.length > 0) {
-	            hover += i18nUtil.formatMessage('__${0}__\n\n', Messages['parametersHoverTitle']); //$NON-NLS-1$
+	            hover += '__Parameters:__\n\n';
 	            for(i = 0; i < format.params.length; i++) {
 	                hover += '>'+format.params[i] + '\n\n'; //$NON-NLS-1$
 	            }
 	        }
 	        if(format.returns) {
-	            hover += i18nUtil.formatMessage('__${0}__\n\n>', Messages['returnsHoverTitle']) + format.returns + '\n\n'; //$NON-NLS-2$ //$NON-NLS-1$
+	            hover += '__Returns:__\n\n>' + format.returns + '\n\n'; //$NON-NLS-2$
 	        }
 	        if(format.throws.length > 0) {
-	        	hover += i18nUtil.formatMessage('__${0}__\n\n', Messages['throwsHoverTitle']); //$NON-NLS-1$
+	        	hover += '__Throws:__\n\n';
 	        	for(i = 0; i < format.throws.length; i++) {
 	        		hover += '>'+format.throws[i]+'\n\n'; //$NON-NLS-1$
 	        	}
 	        }
 	        if(format.callback) {
-				hover += i18nUtil.formatMessage('__${0}__\n\n>', Messages['callbackHoverTitle']) + format.callback + '\n\n'; //$NON-NLS-2$ //$NON-NLS-1$
+				hover += '__Callback:__\n\n>' + format.callback + '\n\n'; //$NON-NLS-2$
 	        }
 	        if(format.since) {
-	            hover += i18nUtil.formatMessage('__${0}__\n\n>', Messages['sinceHoverTitle'])+format.since+'\n\n'; //$NON-NLS-2$ //$NON-NLS-1$
+	            hover += '__Since:__\n\n>'+format.since+'\n\n'; //$NON-NLS-2$
 	        }
 	        if(format.see.length > 0) {
-	        	hover += i18nUtil.formatMessage('__${0}__\n\n', Messages['seeAlsoHoverTitle']); //$NON-NLS-1$
+	        	hover += '__See Also:__\n\n';
 	        	for(i = 0; i < format.see.length; i++) {
 	        		hover += '>'+format.see[i]; //$NON-NLS-1$
 	        		if(i < format.see.length-1) {
@@ -356,7 +354,7 @@ define([
 		    if(path && files) {
 		        var title = null;
 		        if(files.length > 1) {
-		             title = i18nUtil.formatMessage('###${0} \'${1}\'###', Messages['openFileForTitle'], path); //$NON-NLS-1$ //$NON-NLS-2$
+		             title = '###Open file for \''+path+'\'###';
 		        }
 		        var hover = '';
 		        for(var i = 0; i < files.length; i++) {

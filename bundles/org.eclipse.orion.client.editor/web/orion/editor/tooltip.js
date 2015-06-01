@@ -450,17 +450,12 @@ function Tooltip (view) {
 			
 			// Set a default size for the tooltip
 			var defWidth = viewportWidth;
-			var defHeight = viewportHeight;
 			if (!info.allowFullWidth){
 				defWidth = Math.min(viewportWidth/2, 600);
-				defHeight = Math.min(viewportHeight/2, 400);
+				var defHeight = Math.min(viewportHeight/2, 250);
 				tipRect.width = Math.min(tipRect.width, defWidth);
 				tipRect.height = Math.min(tipRect.height, defHeight);
 			}
-
-			// Now that we have our width recalculate the desired height...
-			tooltipDiv.style.width = (tipRect.width - padding) + "px"; //$NON-NLS-1$
-			tipRect.height = Math.min(tooltipDiv.getBoundingClientRect().height, defHeight);
 			
 			// Hack for single line tooltips that wrap, set a minimum height to make them show 2 lines without scrolling
 			// The largest line height was MacOS Chrome with 20px+padding.  So 25 is the minimum height we are sure we are one two lines
@@ -606,11 +601,11 @@ function Tooltip (view) {
 			var yOK = y >= rect.top && y <= (rect.top + rect.height);
 			return xOK && yOK;
 		},
-		mapOffset: function(offset) {
+		mapOffset: function(offset, parent) {
 			var textView = this._view;
 			var model = textView.getModel();
 			if (model.getBaseModel) {
-				offset = model.mapOffset(offset, true);
+				offset = model.mapOffset(offset, parent);
 			}
 			return offset;
 		},

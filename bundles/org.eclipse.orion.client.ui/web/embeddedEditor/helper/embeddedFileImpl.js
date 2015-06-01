@@ -65,13 +65,13 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 		 */
 		read: function(fLocation, isMetadata) {
 			if(isMetadata){
-				var locationURL = new URL(fLocation);
+				var splits = fLocation.split("/");
 				var meta = {
 					Directory: false,
 					Length: 123,
 					LocaltimeStamp: 123,
 					Location: fLocation,
-					Name: locationURL.pathname,
+					Name: splits[splits.length - 1],
 					Parents: []
 				};
 				return new Deferred().resolve(meta);
@@ -97,7 +97,7 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 		 * @param {String} location The location of the file or directory to delete.
 		 */
 		deleteFile: function(fLocation) {
-			delete this.fileRoot[fLocation];
+			this.fileRoot[fLocation] = undefined;
 			return new Deferred().resolve([]);
 		}
 	};

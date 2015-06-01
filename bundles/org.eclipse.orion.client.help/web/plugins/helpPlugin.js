@@ -9,7 +9,7 @@
  * Contributors: IBM Corporation - initial API and implementation
  ******************************************************************************/
 /*eslint-env browser, amd*/
-define(["require", "i18n!orion/help/nls/messages", "orion/plugin", "help/helpService"], function(require, messages, PluginProvider, mHelpService) {
+define(["require", "orion/plugin", "help/helpService"], function(require, PluginProvider, mHelpService) {
 	
 	function connect() {
 		var headers = {
@@ -26,8 +26,8 @@ define(["require", "i18n!orion/help/nls/messages", "orion/plugin", "help/helpSer
 		var serviceImpl = new mHelpService.HelpService();
 		var properties = {
 			root: {
-				Location: require.toUrl("helpContent/Orion User Guide/Getting Started.md"), //$NON-NLS-0$
-				Name: messages["Getting Started"],
+				Location: require.toUrl("/helpContent/Orion User Guide/Getting Started.md"), //$NON-NLS-0$
+				Name: "Getting Started",
 				Directory: false
 			}
 		};
