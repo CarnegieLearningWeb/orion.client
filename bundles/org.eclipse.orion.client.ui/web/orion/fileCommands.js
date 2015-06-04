@@ -1,10 +1,10 @@
 /*******************************************************************************
  * @license
  * Copyright (c) 2011, 2014 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials are made 
- * available under the terms of the Eclipse Public License v1.0 
- * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
- * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
+ * All rights reserved. This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License v1.0
+ * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
+ * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html).
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -13,14 +13,14 @@
 /*global confirm*/
 
 define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18nUtil', 'orion/uiUtils', 'orion/fileUtils', 'orion/commands', 'orion/fileDownloader',
-	'orion/commandRegistry', 'orion/contentTypes', 'orion/compare/compareUtils', 
+	'orion/commandRegistry', 'orion/contentTypes', 'orion/compare/compareUtils',
 	'orion/Deferred', 'orion/webui/dialogs/DirectoryPrompterDialog', 'orion/webui/dialogs/SFTPConnectionDialog',
 	'orion/EventTarget', 'orion/form', 'orion/xsrfUtils'],
 	function(messages, lib, i18nUtil, mUIUtils, mFileUtils, mCommands, mFileDownloader, mCommandRegistry, mContentTypes, mCompareUtils, Deferred, DirPrompter, SFTPDialog, EventTarget, form, xsrfUtils){
 
 	/**
 	 * Utility methods
-	 * @class This class contains static utility methods for creating and managing commands 
+	 * @class This class contains static utility methods for creating and managing commands
 	 * related to file management.
 	 * @name orion.fileCommands
 	 */
@@ -31,14 +31,14 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 	// This variable is used by a shared error handler so it is set up here.  Anyone using the error handler should set this
 	// variable first.
 	var progressService = null;
-	
+
 	var lastItemLoaded = {Location: null};
-	
+
 	var explorer;
 	fileCommandUtils.setExplorer = function(newExplorer) {
 		explorer = newExplorer;
 	};
-	
+
 	/**
 	 * Returns a shared model event dispatcher that can be used by multiple <code>orion.explorer.FileExplorer</code>
 	 * so that all explorers are notified of model changes from other explorers.
@@ -67,7 +67,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 	 * @param {Object} targetFolder
 	 * @param {Object} file
 	 * @param {orion.explorer.FileExplorer} explorer
-	 * @param {orion.EventTarget} [explorer.modelEventDispatcher] If supplied, this dispatcher will be invoked to dispatch 
+	 * @param {orion.EventTarget} [explorer.modelEventDispatcher] If supplied, this dispatcher will be invoked to dispatch
 	 * events describing the file upload.
 	 * @param {Boolean} unzip
 	 * @param {Boolean} force
@@ -80,9 +80,9 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 	 * @param {Boolean} preventNotification Optional. true if a model event should not be dispatched after the file is uploaded, false otherwise
 	 * @returns {XMLHttpRequest} The XMLHttpRequest object that was created and used for the upload.
 	 */
-	fileCommandUtils.uploadFile = function(targetFolder, file, explorer, unzip, force, handlers, preventNotification) { 
+	fileCommandUtils.uploadFile = function(targetFolder, file, explorer, unzip, force, handlers, preventNotification) {
 		var req = new XMLHttpRequest();
-		
+
 		if (handlers) {
 			if (handlers.progress) {
 				//transfer in progress
@@ -90,11 +90,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 			if (handlers.load) {
 				//transfer finished successfully
-				req.upload.addEventListener("load", handlers.load, false);	
+				req.upload.addEventListener("load", handlers.load, false);
 			}
 			if (handlers.error) {
 				//transfer failed
-				req.upload.addEventListener("error", handlers.error, false);	
+				req.upload.addEventListener("error", handlers.error, false);
 			}
 			if (handlers.abort) {
 				//transfer cancelled
@@ -135,12 +135,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					}
 				}
 				if (!preventNotification) {
-					dispatchModelEventOn({ type: "create", parent: targetFolder, newValue: null /* haven't fetched the new file in Orion yet */ }); //$NON-NLS-0$	
+					dispatchModelEventOn({ type: "create", parent: targetFolder, newValue: null /* haven't fetched the new file in Orion yet */ }); //$NON-NLS-0$
 				}
 			}
 		}.bind(this);
 		req.send(file);
-		
+
 		return req;
 	};
 
@@ -156,8 +156,8 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 	 * @param {String} [selectionToolbarId] Gives the scope for selection-based commands. Commands in this scope are rendered
 	 * with current selection as their target.
 	 * @param {Object} item The model item to render toolbar commands against.
-	 * @param {Boolean} [rootSelection=false] If <code>true</code>, any selection-based commands will be rendered with the <code>explorer</code>'s 
-	 * treeRoot as their target, when no selection has been made. If <code>false</code>, any selection-based commands will be inactive when no 
+	 * @param {Boolean} [rootSelection=false] If <code>true</code>, any selection-based commands will be rendered with the <code>explorer</code>'s
+	 * treeRoot as their target, when no selection has been made. If <code>false</code>, any selection-based commands will be inactive when no
 	 * selection has been made.
 	 */
 	fileCommandUtils.updateNavTools = function(registry, commandRegistry, theExplorer, toolbarId, selectionToolbarId, toolbarItem, rootSelection) {
@@ -199,7 +199,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 			commandRegistry.renderCommands(toolbar.id, toolbar, toolbarItem, explorer, "button"); //$NON-NLS-0$
 		}
-		
+
 		if (selectionToolbarId) {
 			updateSelectionTools(null, explorer ? explorer.getTreeRoot() : null);
 		}
@@ -213,7 +213,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			});
 		}
 	};
-	
+
 	function errorHandler(error) {
 		if (progressService) {
 			progressService.setProgressResult(error);
@@ -222,12 +222,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		}
 	}
 
-	
+
 	function getNewItemName(explorer, item, domId, defaultName, onDone) {
 		var refNode, name;
 		var hideRefNode = true;
 		var insertAsChild = false;
-		
+
 		var placeholder = explorer.makeNewItemPlaceholder(item, domId, true);
 		if (placeholder) {
 			refNode = placeholder.refNode;
@@ -238,12 +238,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		}
 
 		if (refNode) {
-			var done = function(name) { 
+			var done = function(name) {
 				if (name) {
 					onDone(name);
 				}
 			};
-			
+
 			mUIUtils.getUserText({
 				id: domId+"EditBox", //$NON-NLS-0$
 				refNode: refNode,
@@ -261,7 +261,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 		}
 	}
-	
+
 	function forceSingleItem(item) {
 		if (!item) {
 			return {};
@@ -299,44 +299,32 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 						}
 						dispatchModelEventOn({type: "create", parent: loadedWorkspace, newValue: folder }); //$NON-NLS-0$
 					}, errorHandler);
-				}, 
-				function(error) {
-					if (error.status === 400 || error.status === 412) {
-						var resp = error.responseText;
-						if (typeof resp === "string") {
-							try {
-								resp = JSON.parse(resp);
-								resp.Message = i18nUtil.formatMessage(messages["FailedToCreateProject"], name);
-								error = resp;
-							} catch(error) {}
-						}
-					}
-					errorHandler(error);
-				});
+				},
+				errorHandler);
 			}, errorHandler);
 		}
 	}
 
 	// Shared for the whole page
 	var bufferedSelection = [];
-	
+
 	var isCutInProgress = false;
-	
+
 	/**
-	 * Returns the buffer containing the cut selections or null if a 
+	 * Returns the buffer containing the cut selections or null if a
 	 * cut operation is not in progress.
 	 * @name orion.fileCommands#getCutBuffer
 	 * @function
 	 * @returns {Array} bufferedSelection or null
 	 */
 	fileCommandUtils.getCutBuffer = function() {
-		return isCutInProgress ? bufferedSelection : null;	
+		return isCutInProgress ? bufferedSelection : null;
 	};
-	
+
 	/**
 	 * Tests whether or not the specified model is equal to
 	 * or a child of the specified bufferedModel.
-	 * 
+	 *
 	 * @returns true if the test passes, false otherwise
 	 */
 	fileCommandUtils.isEqualToOrChildOf = function(model, bufferedModel) {
@@ -345,16 +333,16 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		} else if (-1 !== model.Location.indexOf(bufferedModel.Location)) {
 			// model may be a child of bufferedModel
 			if (model.parent === bufferedModel.parent) {
-				// model is not a child but rather a file in the same 
+				// model is not a child but rather a file in the same
 				// directory with a name that starts with bufferedModel's name
 				return false;
 			}
 			return true;
 		}
-		
+
 		return false;
 	};
-	
+
 	/**
 	 * Creates the commands related to file management.
 	 * @param {orion.serviceregistry.ServiceRegistry} serviceRegistry The service registry to use when creating commands
@@ -371,7 +359,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		function contains(arr, item) {
 			return arr.indexOf(item) !== -1;
 		}
-		
+
 		function stripPath(location) {
 			location = mFileUtils.makeRelative(location);
 			// get hash part and strip query off
@@ -384,7 +372,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 			return path;
 		}
-		
+
 		function canCreateProject(item) {
 			if (!explorer || !explorer.isCommandsVisible()) {
 				return false;
@@ -392,7 +380,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			item = forceSingleItem(item);
 			return item.Location && mFileUtils.isAtRoot(item.Location);
 		}
-		
+
 		function makeMoveCopyTargetChoices(items, userData, isCopy) {
 			items = Array.isArray(items) ? items : [items];
 			var callback = function(selectedItems) {
@@ -423,13 +411,13 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					});
 				});
 			};
-			
+
 			var prompt = function(selectedItems) {
 				var dialog = new DirPrompter.DirectoryPrompterDialog({
 					title: messages["Choose a Folder"],
 					serviceRegistry: serviceRegistry,
-					fileClient: fileClient,				
-					func: function(targetFolder) { 
+					fileClient: fileClient,
+					func: function(targetFolder) {
 						if (targetFolder && targetFolder.Location) {
 							if (!Array.isArray(selectedItems)) {
 								selectedItems = [selectedItems];
@@ -474,7 +462,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				});
 				dialog.show();
 			};
-			
+
 			// Remember all source paths so we do not propose to move/copy a source to its own location
 			var sourceLocations = [];
 			for (var i=0; i<items.length; i++) {
@@ -491,7 +479,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					sourceLocations.push(items[i].stripped);
 				}
 			}
-	
+
 			var choices = [];
 			var proposedPaths = [];
 			// All children of the root that are folders should be available for choosing.
@@ -578,7 +566,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				});
 			});
 		}
-		
+
 		/*
 		* Iterate over an array of items and return the target folder. The target
 		* folder of an item is either itself (if it is a dir) or its parent. If there
@@ -607,14 +595,14 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 			return folder;
 		}
-		
+
 		function checkFolderSelection(item) {
 			if (!explorer || !explorer.isCommandsVisible()) {
 				return false;
 			}
 			return getTargetFolder(item);
 		}
-		
+
 		function doMove(item, newText) {
 			var moveLocation = item.Location;
 			Deferred.when(getLogicalModelItems(item), function(logicalItems) {
@@ -643,7 +631,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				);
 			});
 		}
-		
+
 		var editAndRename = function(item, data) {
 			// we want to popup the edit box over the name in the explorer.
 			// if we can't find it, we'll pop it up over the command dom element.
@@ -658,13 +646,13 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			if (lib.node(id)) {
 				return;
 			}
-			
+
 			mUIUtils.getUserText({
-				id: id, 
-				refNode: refNode, 
-				hideRefNode: true, 
+				id: id,
+				refNode: refNode,
+				hideRefNode: true,
 				initialText: item.Name,
-				onComplete: doMove.bind(null, item), 
+				onComplete: doMove.bind(null, item),
 				selectTo: item.Directory ? "" : "." //$NON-NLS-1$ //$NON-NLS-0$
 			});
 		};
@@ -697,7 +685,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					}),
 				callback: function(data) {
 					var item = forceSingleItem(data.items);
-					
+
 					var name;
 					if (data.parameters.hasParameters() && (name = data.parameters.valueFor("name")) !== null) { //$NON-NLS-0$
 						doMove(item, name);
@@ -707,7 +695,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				}
 			});
 		commandService.addCommand(renameCommand);
-		
+
 		var contentTypeService = new mContentTypes.ContentTypeRegistry(serviceRegistry);
 		var compareWithEachOtherCommand = new mCommands.Command({
 				name: messages["CompareEach"],
@@ -741,10 +729,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				}
 			});
 		commandService.addCommand(compareWithEachOtherCommand);
-		
+
 		var compareWithCommand = new mCommands.Command({
 			name : messages["Compare with..."],
-			tooltip: messages["CompareFolders"], 
+			tooltip: messages["CompareFolders"],
 			id: "eclipse.compareWith", //$NON-NLS-0$
 			visibleWhen: function(item) {
 				if (!explorer || !explorer.isCommandsVisible()) {
@@ -761,8 +749,8 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				var dialog = new DirPrompter.DirectoryPrompterDialog({
 					title: messages["Choose a Folder"],
 					serviceRegistry: serviceRegistry,
-					fileClient: fileClient,				
-					func: function(targetFolder) { 
+					fileClient: fileClient,
+					func: function(targetFolder) {
 						if (targetFolder && targetFolder.Location) {
 							var compareURL = mCompareUtils.generateCompareTreeHref(data.items[0].Location, {compareTo: targetFolder.Location, readonly: true});
 							window.open(compareURL);
@@ -770,13 +758,13 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					}
 				});
 				dialog.show();
-			} 
+			}
 		});
 		commandService.addCommand(compareWithCommand);
-		
+
 		var downloadSingleFileCommand = new mCommands.Command({
 			name : messages["Download"],
-			tooltip: messages["Download_tooltips"], 
+			tooltip: messages["Download_tooltips"],
 			id: "eclipse.downloadSingleFile", //$NON-NLS-0$
 			visibleWhen: function(item) {
 				if (!explorer || !explorer.isCommandsVisible()) {
@@ -795,10 +783,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				var items = Array.isArray(data.items) ? data.items : [data.items];
 				var contentType = contentTypeService.getFilenameContentType(items[0].Name);
 				downloader.downloadFromLocation(items[0], contentType);
-			} 
+			}
 		});
 		commandService.addCommand(downloadSingleFileCommand);
-		
+
 		var deleteCommand = new mCommands.Command({
 			name: messages["Delete"],
 			imageClass: "core-sprite-delete", //$NON-NLS-0$
@@ -857,10 +845,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 							dispatchModelEvent({ type: "deleteMultiple", items: summary }); //$NON-NLS-0$
 						}, errorHandler);
 					}
-				);	
+				);
 			}});
 		commandService.addCommand(deleteCommand);
-	
+
 		var downloadCommand = new mCommands.Command({
 			name: messages["Zip"],
 			tooltip: messages["ZipDL"],
@@ -880,28 +868,28 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		commandService.addCommand(downloadCommand);
 
 		function createUniqueNameArtifact(parentItem, prefix, createFunction) {
-			// get the list of files that already exists in the selected directory and ensure 
+			// get the list of files that already exists in the selected directory and ensure
 			// that the new file's initial name is unique within that directory
-						
+
 			var findUniqueName = function(children) {
 				var attempt = 0;
 				var uniqueName = prefix;
-				
+
 				// find a unique name for the new artifact
 				var possiblyCollidingNames = children.filter(function(child){
 					return 0 === child.Name.indexOf(prefix);
 				}).map(function(child){
 					return child.Name;
 				});
-				
+
 				while (-1 !== possiblyCollidingNames.indexOf(uniqueName)){
 					attempt++;
 					uniqueName = prefix.concat(" (").concat(attempt).concat(")");  //$NON-NLS-1$ //$NON-NLS-0$
 				}
-				
+
 				return uniqueName;
 			};
-			
+
 			if (parentItem.children) {
 				var uniqueName = findUniqueName(parentItem.children);
 				createFunction(uniqueName); // create the artifact
@@ -913,10 +901,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 						var uniqueName = findUniqueName(children);
 						createFunction(uniqueName); // create the artifact
 					},
-					errorHandler);	
+					errorHandler);
 			}
-		}		
-		
+		}
+
 		/**
 		 * Creates a new file or folder as a child of the specified parentItem.
 		 */
@@ -930,30 +918,17 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 						function(newArtifact) {
 							dispatchModelEvent({ type: "create", parent: parentItem, newValue: newArtifact }); //$NON-NLS-0$
 						},
-						function(error) {
-							if (error.status === 400 || error.status === 412) {
-								var resp = error.responseText;
-								if (typeof resp === "string") {
-									try {
-										resp = JSON.parse(resp);
-										resp.Message = i18nUtil.formatMessage(messages["FailedToCreateFile"], name);
-										error = resp;
-									} catch(error) {}
-								}
-							}
-							errorHandler(error);
-						}
-					);
+						errorHandler);
 				}
 			};
-			
+
 			createUniqueNameArtifact(parentItem, namePrefix, function(uniqueName){
 				getNewItemName(explorer, parentItem, explorer.getRow(parentItem), uniqueName, function(name) {
 					createFunction(name);
 				});
 			});
 		}
-		
+
 		var getParentItem = function(selections, items){
 			var item = getTargetFolder(selections);
 			if (!item || !item.Location) {
@@ -964,7 +939,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 			return item;
 		};
-		
+
 		var newFileCommand = new mCommands.Command({
 			name: messages["New File"],
 			tooltip: messages["Create a new file"],
@@ -977,7 +952,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: checkFolderSelection
 		});
 		commandService.addCommand(newFileCommand);
-		
+
 		var newFolderCommand = new mCommands.Command({
 			name: messages['New Folder'],
 			tooltip: messages["Create a new folder"],
@@ -1018,7 +993,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: checkFolderSelection
 		});
 		commandService.addCommand(importZipURLCommand);
-		
+
 		var newProjectCommand = new mCommands.Command({
 			name: messages["New Folder"],
 			imageClass: "core-sprite-new_folder", //$NON-NLS-0$
@@ -1037,12 +1012,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 							createProject(explorer, fileClient, progressService, name);
 						});
 					});
-				} 
+				}
 			},
 			visibleWhen: canCreateProject
 		});
 		commandService.addCommand(newProjectCommand);
-		
+
 		var linkProjectCommand = new mCommands.Command({
 			name: messages["Link to Server"],
 			tooltip: messages["LinkContent"],
@@ -1068,12 +1043,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: canCreateProject
 		});
 		commandService.addCommand(linkProjectCommand);
-		
+
 		var goUpCommand = new mCommands.Command({
 			name: messages["Go Up"],
 			tooltip: messages["GoUpToParent"],
 			imageClass: "core-sprite-go-up", //$NON-NLS-0$
-//			addImageClassToElement: true,
+			//addImageClassToElement: true,
 			id: "eclipse.upFolder", //$NON-NLS-0$
 			callback: function(data) {
 				if (typeof explorer.scopeUp === "function") { //$NON-NLS-0$
@@ -1112,7 +1087,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 		});
 		commandService.addCommand(goIntoCommand);
-					
+
 		var importCommand = new mCommands.Command({
 			name : messages["File or zip archive"],
 			tooltip: messages["ImportLcFile"],
@@ -1130,21 +1105,21 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 							explorer._uploadFile(item, fileInput.files.item(i), expandItem);
 						}
 					}
-					
+
 					fileInput.removeEventListener("change", changeListener);
 				};
-				
+
 				fileInput.addEventListener("change", changeListener);
 				fileInput.click();
-				
+
 				//replace original fileInput so that "change" event always fires
 				fileInput.parentNode.replaceChild(cloneInput, fileInput);
-				
+
 			},
 			visibleWhen: checkFolderSelection
 		});
 		commandService.addCommand(importCommand);
-	
+
 		var importSFTPCommand = new mCommands.Command({
 			name : messages["SFTP from..."],
 			tooltip: messages["CpyFrmSftp"],
@@ -1171,7 +1146,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: checkFolderSelection
 		});
 		commandService.addCommand(importSFTPCommand);
-	
+
 		var exportSFTPCommand = new mCommands.Command({
 			name : messages["SFTP to..."],
 			tooltip: messages["CpyToSftp"],
@@ -1206,7 +1181,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			}
 		});
 		commandService.addCommand(exportSFTPCommand);
-		
+
 		var copyCommand = new mCommands.Command({
 			name : messages["Copy to"],
 			tooltip: "Copy files and folders to a specified location", //$NON-NLS-0$
@@ -1214,10 +1189,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			choiceCallback: function(items, userData) {
 				return makeMoveCopyTargetChoices(items, userData, true);
 			},
-			visibleWhen: oneOrMoreFilesOrFolders 
+			visibleWhen: oneOrMoreFilesOrFolders
 		});
 		commandService.addCommand(copyCommand);
-		
+
 		var moveCommand = new mCommands.Command({
 			name : messages["Move to"],
 			tooltip: messages["MvToLocation"],
@@ -1228,7 +1203,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: oneOrMoreFilesOrFolders
 		});
 		commandService.addCommand(moveCommand);
-		
+
 		var copyToBuffer = function(data) {
 			var navHandler = explorer.getNavHandler();
 			// re-enable items that were previously cut and not yet pasted, if any
@@ -1240,15 +1215,15 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			isCutInProgress = false; // reset the state, caller should set to true if necessary
 			bufferedSelection = data.items;
 		};
-		
+
 		var cutCommand = new mCommands.Command({
 			name: messages["Cut"],
 			id: "eclipse.cut", //$NON-NLS-0$
 			callback: function(data) {
 				var navHandler = explorer.getNavHandler();
-				
+
 				copyToBuffer(data);
-				
+
 				if (bufferedSelection.length) {
 					isCutInProgress = true;
 					// disable cut items in explorer
@@ -1260,7 +1235,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: oneOrMoreFilesOrFolders
 		});
 		commandService.addCommand(cutCommand);
-		
+
 		var copyToBufferCommand = new mCommands.Command({
 			name: messages["Copy"],
 			id: "eclipse.copySelections", //$NON-NLS-0$
@@ -1268,14 +1243,14 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			visibleWhen: oneOrMoreFilesOrFolders
 		});
 		commandService.addCommand(copyToBufferCommand);
-		
+
 		var canPaste = function(items){
 			if (!explorer || !explorer.isCommandsVisible()) {
 				return false;
 			}
 			return checkFolderSelection(items);
 		};
-		
+
 		var pasteFromBufferCommand = new mCommands.Command({
 				name: messages["Paste"],
 				id: "eclipse.pasteSelections", //$NON-NLS-0$
@@ -1337,7 +1312,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 								type: isCutInProgress ? "moveMultiple" : "copyMultiple", //$NON-NLS-1$ //$NON-NLS-0$
 								items: summary
 							});
-							
+
 							if (isCutInProgress) {
 								var navHandler = explorer.getNavHandler();
 								bufferedSelection.forEach(function(pastedItem){
@@ -1350,10 +1325,37 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					}
 				}
 			});
-		commandService.addCommand(pasteFromBufferCommand);		
+		commandService.addCommand(pasteFromBufferCommand);
+
+		var duplicateFileCommand = new mCommands.Command({
+				name: messages["Duplicate"],
+				id: "eclipse.duplicateFile",
+				visibleWhen: function(item) {
+					var currItem    = forceSingleItem(item);
+					var isDirectory = currItem.Directory;
+
+					if (!explorer || !explorer.isCommandsVisible()) {
+						return false;
+					}
+
+					if (isDirectory) {
+						return false;
+					}
+
+					return true;
+				},
+				callback: function(data) {
+					// First copy the contents into the buffer
+					copyToBuffer(data);
+					// Then paste them
+					pasteFromBufferCommand.callback(data);
+				}
+			});
+		commandService.addCommand(duplicateFileCommand);
+
 		return new Deferred().resolve();
 	};
-		
+
 	fileCommandUtils.createNewContentCommand = function(id, name, href, hrefContent, explorer, fileClient, progress, progressMessage) {
 		var parametersArray = href ? [] : [
 			new mCommandRegistry.CommandParameter("folderName", "text", messages['Folder name:'], name), //$NON-NLS-1$ //$NON-NLS-0$
@@ -1375,11 +1377,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				} else {
 					if (data.parameters && data.parameters.valueFor('folderName')) { //$NON-NLS-0$
 						var newFolderName = data.parameters.valueFor('folderName'); //$NON-NLS-0$
-						createProject(explorer, fileClient, progress, newFolderName, 
+						createProject(explorer, fileClient, progress, newFolderName,
 							function(folder) {
 								data.parameters.clientCollect = true;
 								data.commandRegistry.runCommand("orion.importZipURL", folder, explorer, data.parameters); //$NON-NLS-0$
-							}); 
+							});
 					} else {
 						getNewItemName(explorer, data.items, data.domNode.id, name, function(name) {
 								createProject(explorer, fileClient, progress, name,
@@ -1400,6 +1402,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		});
 		return newContentCommand;
 	};
-	
+
 	return fileCommandUtils;
 });
