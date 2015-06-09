@@ -117,7 +117,7 @@ define(['orion/webui/littlelib', 'orion/PageUtil', 'orion/URL-shim'], function(l
 				link.title = "Globaloria.com";
 				
 				var logo = document.createElement("img");
-				logo.src = "../Globaloria_Square.jpg";
+				logo.src = "../Globaloria_Square_transparent.png";
 				logo.id = logo.alt = logo.title = "Globaloria_Square.png";
 				logo.style.width = "50px";
 				logo.style.height = "50px";
