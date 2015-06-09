@@ -47,13 +47,14 @@ define([
 	'orion/Deferred',
 	'orion/projectClient',
 	'orion/webui/splitter',
-	'orion/webui/tooltip'
+	'orion/webui/tooltip',
+	'globaloria/htmlEditor'
 ], function(
 	messages, Sidebar, mInputManager, mCommands, mGlobalCommands,
 	mTextModel, mUndoStack,
 	mFolderView, mEditorView, mPluginEditorView , mMarkdownView, mMarkdownEditor,
 	mCommandRegistry, mContentTypes, mFileClient, mFileCommands, mEditorCommands, mSelection, mStatus, mProgress, mOperationsClient, mOutliner, mDialogs, mExtensionCommands, ProjectCommands, mSearchClient,
-	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip
+	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor
 ) {
 
 var exports = {};
@@ -364,20 +365,20 @@ objects.mixin(EditorViewer.prototype, {
 				this.curFileNode.innerHTML = evt.name || "";
 			}
 			
-//			var iframe = document.getElementById("previewFrame");
-//			console.log(iframe);
-//			if(iframe!==undefined && iframe !== null){
-//				var currentFile = window.location.hash.slice(1,window.location.hash.length);
-//				//TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
-//				currentFile = currentFile.replace(new RegExp('25', 'g'),'');				
-//				if(window.location.port!=='')
-//					iframe.src = "http://"+window.location.hostname+":"+window.location.port+currentFile;
-//				else
-//					iframe.src = "http://"+window.location.hostname+currentFile;
-//				iframe.contentWindow.location.reload();
-//				
-//				
-//			}
+			//var iframe = document.getElementById("previewFrame");
+			//console.log(iframe);
+			//if(iframe!==undefined && iframe !== null){
+			//	var currentFile = window.location.hash.slice(1,window.location.hash.length);
+			//	//TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
+			//	currentFile = currentFile.replace(new RegExp('25', 'g'),'');				
+			//	if(window.location.port!=='')
+			//		iframe.src = "http://"+window.location.hostname+":"+window.location.port+currentFile;
+			//	else
+			//		iframe.src = "http://"+window.location.hostname+currentFile;
+			//	iframe.contentWindow.location.reload();
+			//	
+			//	
+			//}
 			
 		}.bind(this));
 		inputManager.addEventListener("InputChanging", function(e) { //$NON-NLS-0$
@@ -456,7 +457,8 @@ objects.mixin(EditorViewer.prototype, {
 	
 	getCurrentEditorView: function() {
 		if (this.currentEditorView) {
-			if (this.currentEditorView.editorID === "orion.editor.markdown") { //$NON-NLS-0$
+			if (this.currentEditorView.editorID === "orion.editor.markdown" ||
+				this.currentEditorView.editorID === "orion.editor.html") {
 				return this.editorView;
 			}
 		}
@@ -484,6 +486,10 @@ objects.mixin(EditorViewer.prototype, {
 					options.editorView = this.editorView;
 					options.anchor = input.anchor;
 					view = new mMarkdownEditor.MarkdownEditorView(options);
+				} else if (id === "orion.editor.html") {
+					options.editorView = this.editorView;
+					options.anchor = input.anchor;
+					view = new mHTMLEditor.HTMLEditorView(options);
 				} else {
 					var editors = this.serviceRegistry.getServiceReferences("orion.edit.editor"); //$NON-NLS-0$
 					for (var i=0; i<editors.length; i++) {

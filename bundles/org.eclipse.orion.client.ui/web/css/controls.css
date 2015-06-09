@@ -1076,6 +1076,29 @@ textarea.parameterInput {
 	position: fixed;
 }
 
+.orionHTML {
+	height: inherit;
+	width: inherit;
+}
+
+.reload-button {
+	float: right;
+	padding: 10px 20px;
+	background-color: #0b6481;
+	color: #ffffff;
+	font-size: 13px;
+	font-weight: bold;
+	border: none;
+	margin-top: 10px;
+	margin-bottom: 10px;
+	margin-right: 10px;
+}
+
+.reload-button:hover {
+	cursor: pointer;
+	background-color: #0c6f8f;
+}
+
 .orionMarkdown {
 	padding: 8px;
 	color: gray;
