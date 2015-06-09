@@ -156,6 +156,19 @@ define([
 				source: "!Projects" // Filter out workspace; Raw only applies to regular files and folders.
 			}]
 		});
+
+		var HTML_EDITOR_ID = "orion.editor.html";
+		provider.registerService("orion.edit.editor", {}, {
+			id: HTML_EDITOR_ID,
+			name: messages["Orion Markdown Editor"],
+			nls: "orion/nls/messages",
+			"default": true,
+			uriTemplate: "../edit/edit.html#{,Location,params*},editor=" + HTML_EDITOR_ID});
+
+		provider.registerService("orion.navigate.openWith", {}, {
+			editor: HTML_EDITOR_ID,
+			contentType: ["text/html"]});
+
 	}
 
 	return {
