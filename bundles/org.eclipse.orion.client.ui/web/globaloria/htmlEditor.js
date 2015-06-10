@@ -192,10 +192,11 @@ define([
         currentFile = currentFile.replace(new RegExp('25', 'g'),'');
         currentFile = currentFile.replace(',editor=orion.editor.html','');
         var port = ":"+window.location.port;
+        var protocol = window.location.protocol+"//";
         if(window.location.port!=='')
-            iframe.src = "http://"+window.location.hostname+port+currentFile;
+            iframe.src = protocol+window.location.hostname+port+currentFile;
         else
-            iframe.src = "http://"+window.location.hostname+currentFile;
+            iframe.src = protocol+window.location.hostname+currentFile;
 
 
         // Add a refresh button to reload the game
