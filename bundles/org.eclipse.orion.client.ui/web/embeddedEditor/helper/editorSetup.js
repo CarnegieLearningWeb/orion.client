@@ -41,7 +41,9 @@ define([
 		this._editorCommands = new mEditorCommands.EditorCommandFactory({
 			serviceRegistry: this._serviceRegistry,
 			commandRegistry: this._commandRegistry,
-			fileClient: this._fileClient
+			fileClient: this._fileClient,
+			toolbarId: "_orion_hidden_actions",
+			navToolbarId: "_orion_hidden_actions"
 			/*
 			renderToolbars: this.renderToolbars.bind(this),
 			searcher: this.searcher,
@@ -54,6 +56,9 @@ define([
 		});
 		this._progressService = {
 			progress: function(deferred, operationName, progressMonitor){
+				return deferred;
+			},
+			showWhile: function(deferred, message, avoidDisplayError){
 				return deferred;
 			}
 		};			
@@ -74,6 +79,9 @@ define([
 			});
 			inputManager.addEventListener("InputChanged", function(evt) { //$NON-NLS-0$
 				evt.editor = this.editorView.editor;
+				this.pageActionsScope = "_orion_hidden_actions";
+				this._commandRegistry.destroy(this.pageActionsScope);
+				this._commandRegistry.renderCommands(this.pageActionsScope, this.pageActionsScope, evt.metadata, evt.editor, "tool"); //$NON-NLS-0$
 			}.bind(this));
 			inputManager.addEventListener("InputChanging", function(e) { //$NON-NLS-0$
 				e.editor = this.editorView.editor;
@@ -81,8 +89,11 @@ define([
 		},
 		defaultOptions: function(parentId) {
 			var model = new mTextModel.TextModel();
-			var id = idCounter === 0 ? "" : idCounter.toString();
+			var id = idCounter.toString();
+			var context = Object.create(null);
+			context.openEditor = function(fileurl, options){this.editorView.editor.setSelection(options.start, options.end);}.bind(this);
 			return {
+				activateContext: context,
 				id: id,
 				parent: parentId,
 				model: model,
@@ -103,9 +114,10 @@ define([
 		},
 		createEditor: function(options) {
 			return this._editorCommands.createCommands().then(function() {
+				this._editorCommands.registerCommands();
 				this.createInputManager();
 				this.editorView = new mEditorView.EditorView(this.defaultOptions(options.parent));
-				idCounter++;
+				//idCounter++;
 				this.editorView.create();
 				this._inputManager.editor = this.editorView.editor;
 				this._inputManager.setAutoSaveTimeout(300);

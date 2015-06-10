@@ -2919,11 +2919,15 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 					this._resetLineHeight(startLine, endLine);
 				}
 			}
+			var imeLineIndex = -1;
+			if (!ruler && this._imeOffset !== -1) {
+				imeLineIndex = this._model.getLineAtOffset(this._imeOffset);
+			}
 			if (!ruler || ruler.getOverview() === "page") { //$NON-NLS-0$
 				var child = div.firstChild;
 				while (child) {
 					var lineIndex = child.lineIndex;
-					if (startLine <= lineIndex && lineIndex < endLine) {
+					if (startLine <= lineIndex && lineIndex < endLine && lineIndex !== imeLineIndex) {
 						child.lineChanged = true;
 					}
 					child = child.nextSibling;
@@ -3497,15 +3501,33 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 		},
 		_handleCompositionStart: function (e) {
 			if (this._ignoreEvent(e)) { return; }
+			if (this._imeTimeout) {
+				var window = this._getWindow();
+				window.clearTimeout(this._imeTimeout);
+				this._imeTimeout = null;
+			}
+			if (this._imeText) {
+				this._commitIME(this._imeText);
+				this._imeText = null;
+			}
 			this._startIME();
 			if (this._mutationObserver) {
 				this._mutationObserver.disconnect();
 				this._mutationObserver = null;
 			}
 		},
+		_handleCompositionUpdate: function(e) {
+			if (this._ignoreEvent(e)) { return; }
+			this._imeText = e.data;
+		},
 		_handleCompositionEnd: function (e) {
 			if (this._ignoreEvent(e)) { return; }
-			this._commitIME(e.data);
+			this._imeText = e.data;
+			var window = this._getWindow();
+			this._imeTimeout = window.setTimeout(function() {
+				this._commitIME(this._imeText);
+				this._imeText = this._imeTimeout = null;
+			}.bind(this), 0);
 		},
 		_handleContextMenu: function (e) {
 			if (this._ignoreEvent(e)) { return; }
@@ -4547,7 +4569,9 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 		},
 		_handleTextInput: function (e) {
 			if (this._ignoreEvent(e)) { return; }
-			this._imeOffset = -1;
+			if (this._imeOffset !== -1) {
+				return;
+			}
 			var selection = this._getWindow().getSelection();
 			if (
 				selection.anchorNode !== this._anchorNode || selection.focusNode !== this._focusNode ||
@@ -4601,9 +4625,7 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 						selections[i].start -= deltaStart;
 						selections[i].end -= deltaEnd;
 					}
-					this._ignoreQueueUpdate = util.isSafari;
 					this._modifyContent({text: deltaText, selection: selections, _ignoreDOMSelection: true}, true);
-					this._ignoreQueueUpdate = false;
 				}
 			} else {
 				this._doContent(e.data);
@@ -5524,13 +5546,13 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 					insertText = newText.substring(start, end);
 				}
 			}
+			this._imeOffset = -1;
 			if (insertText) {
 				if (!this._doContent(insertText) && !util.isWebkit) {
 					line.lineRemoved = true;
 					this._queueUpdate();
 				}
 			}
-			this._imeOffset = -1;
 		},
 		_createActions: function () {
 			this.addKeyMode(new mKeyModes.DefaultKeyMode(this));
@@ -5883,6 +5905,10 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 			if (this._cursorTimer) {
 				window.clearInterval(this._cursorTimer);
 				this._cursorTimer = null;
+			}
+			if (this._imeTimeout) {
+				window.clearInterval(this._imeTimeout);
+				this._imeTimeout = null;
 			}
 			
 			var rootDiv = this._rootDiv;
@@ -6331,9 +6357,10 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 						handlers.push({target: this._clientDiv, type: "DOMCharacterDataModified", handler: function (e) { return self._handleDataModified(e ? e : window.event); }}); //$NON-NLS-0$
 					}
 				}
-				if ((util.isFirefox && (!util.isWindows || util.isFirefox >= 15)) || util.isIE) {
+				if ((util.isFirefox && (!util.isWindows || util.isFirefox >= 15)) || util.isIE || util.isWebkit) {
 					handlers.push({target: this._clientDiv, type: "compositionstart", handler: function (e) { return self._handleCompositionStart(e ? e : window.event); }}); //$NON-NLS-0$
 					handlers.push({target: this._clientDiv, type: "compositionend", handler: function (e) { return self._handleCompositionEnd(e ? e : window.event); }}); //$NON-NLS-0$
+					handlers.push({target: this._clientDiv, type: "compositionupdate", handler: function (e) { return self._handleCompositionUpdate(e ? e : window.event); }}); //$NON-NLS-0$
 				}
 				if (this._overlayDiv) {
 					handlers.push({target: this._overlayDiv, type: "mousedown", handler: function(e) { return self._handleMouseDown(e ? e : window.event);}}); //$NON-NLS-0$
@@ -7097,6 +7124,7 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 			if (!this._clientDiv) { return; }
 			if (this._redrawCount > 0) { return; }
 			if (this._ignoreDOMSelection) { return; }
+			if (this._imeOffset !== -1) return;
 			var model = this._model;
 			var selections = this._getSelections();
 			var selection = Selection.editing(selections, this._autoScrollDir === "down"); //$NON-NLS-0$
@@ -7245,6 +7273,7 @@ define("orion/editor/textView", [  //$NON-NLS-0$
 		_updateDOMSelection: function () {
 			if (this._redrawCount > 0) { return; }
 			if (this._ignoreDOMSelection) { return; }
+			if (this._imeOffset !== -1) return;
 			if (!this._clientDiv) { return; }
 			var selection = this._getSelections();
 			var domSelection = this._domSelection, i;

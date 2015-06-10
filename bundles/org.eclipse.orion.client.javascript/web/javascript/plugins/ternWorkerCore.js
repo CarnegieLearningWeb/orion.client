@@ -21,10 +21,16 @@ require({
 [
 	'tern/lib/tern',
 	'tern/plugin/doc_comment',
-	'tern/plugin/orionRequire',
-	'tern/plugin/orionNode',
+//	'tern/plugin/orionAMQP',
 	'tern/plugin/orionAngular',
 	'tern/plugin/orionComponent',
+//	'tern/plugin/orionExpress',	
+//	'tern/plugin/orionMongoDB',
+//	'tern/plugin/orionMySQL',	
+	'tern/plugin/orionNode',
+//	'tern/plugin/orionPostgres',
+	'tern/plugin/orionRedis',
+	'tern/plugin/orionRequire',
 	'tern/plugin/ternPlugins',
 	'tern/defs/ecma5',
 	'tern/defs/browser',
@@ -37,7 +43,8 @@ require({
 	'i18n!javascript/nls/workermessages',
 	'orion/i18nUtil'
 ],
-/* @callback */ function(Tern, docPlugin, orionRequirePlugin, orionNodePlugin, orionAngularPlugin, orionComponentPlugin, ternPluginsPlugin, 
+/* @callback */ function(Tern, docPlugin, /*orionAMQPPlugin,*/ orionAngularPlugin, orionComponentPlugin, /*orionExpressPlugin,*/ /*orionMongoDBPlugin,*/ 
+							/*orionMySQLPlugin,*/ orionNodePlugin, /*orionPostgresPlugin,*/ orionRedisPlugin, orionRequirePlugin, ternPluginsPlugin, 
 							ecma5, browser, AssistHandler, DeclarationHandler, HoverHandler, OccurrencesHandler, RenameHandler, PluginsHandler, 
 							Messages, i18nUtil) {
     
@@ -57,32 +64,73 @@ require({
                     	name: Messages['ternDocPluginName'],
                     	description: Messages['ternDocPluginDescription'],
                         fullDocs: true,
+                        version: '0.6.2', //$NON-NLS-1$
                         removable: false
                     },
-                    orionRequire: {
-                    	name: Messages['orionRequirePluginName'],
-                    	description: Messages['orionRequirePluginDescription'],
-                    	removable: true
-                    	//depth: 1
-                    },
-                   /* orionNode: {
-                    	name: Messages['orionNodePluginName'],
-                    	description: Messages['orionNodePluginDescription'],
-                    	removable: true
-                    },
+//                    orionAmqp: {
+//                    	name: Messages['orionAMQPPluginName'],
+//                    	description: Messages['orionAMQPPluginDescription'],
+//                    	version: '0.6.2', //$NON-NLS-1$
+//                    	removable: true
+//                    },
                     orionAngular: {
                     	name: Messages['orionAngularPluginName'],
                     	description: Messages['orionAngularPluginDescription'],
+                    	version: '0.6.2', //$NON-NLS-1$
                     	removable: true
                     },
                     orionComponent: {
                     	name: Messages['orionComponentPluginName'],
                     	description: Messages['orionComponentPluginDescription'],
+                    	version: '0.6.2', //$NON-NLS-1$
                     	removable: true
-                    },*/
+                    },
+//                    orionExpress: {
+//                    	name: Messages['orionExpressPluginName'],
+//                    	description: Messages['orionExpressPluginDescription'],
+//                    	version: '0.6.2', //$NON-NLS-1$
+//                    	removable: true
+//                    },
+//                    orionMongoDB: {
+//                    	name: Messages['orionMongoDBPluginName'],
+//                    	description: Messages['orionMongoDBPluginDescription'],
+//                    	version: '0.6.2', //$NON-NLS-1$
+//                    	removable: true
+//                    },
+//                    orionMySQL: {
+//                    	name: Messages['orionMySQLPluginName'],
+//                    	description: Messages['orionMySQLPluginDescription'],
+//                    	version: '0.6.2', //$NON-NLS-1$
+//                    	removable: true
+//                    },
+                    orionNode: {
+                    	name: Messages['orionNodePluginName'],
+                    	description: Messages['orionNodePluginDescription'],
+                    	version: '0.6.2', //$NON-NLS-1$
+                    	removable: true
+                    },
+//                    orionPostgres: {
+//                    	name: Messages['orionPostgresPluginName'],
+//                    	description: Messages['orionPostgresPluginDescription'],
+//                    	version: '0.6.2', //$NON-NLS-1$
+//                    	removable: true
+//                    },
+                    orionRedis: {
+                    	name: Messages['orionRedisPluginName'],
+                    	description: Messages['orionRedisPluginDescription'],
+                    	version: '0.6.2', //$NON-NLS-1$
+                    	removable: true
+                    },
+                    orionRequire: {
+                    	name: Messages['orionRequirePluginName'],
+                    	description: Messages['orionRequirePluginDescription'],
+                    	version: '0.6.2', //$NON-NLS-1$
+                    	removable: true
+                    },
                     plugins: {
                     	name: Messages['ternPluginsPluginName'],
                     	description: Messages['ternPluginsPluginDescription'],
+                    	version: '1.0', //$NON-NLS-1$
                     	removable: false
                     }
                 },
@@ -199,15 +247,19 @@ require({
         var err = args.error;
         var contents = args.contents;
         var file = args.file;
-        var read = pendingReads[file];
-        if(typeof(read) === 'function') {
-            read(err, contents);
-             delete pendingReads[file];
+        var reads = pendingReads[file];
+        if(Array.isArray(reads)) {
+            var f = reads.shift();
+            if(typeof(f) === 'function') {
+            	f(err, contents);
+            }
         }
-        read = pendingReads[args.logical];
-        if(typeof(read) === 'function') {
-            read(err, {contents: contents, file:file, logical:args.logical});
-            delete pendingReads[args.logical];
+        reads = pendingReads[args.logical];
+        if(Array.isArray(reads)) {
+        	f = reads.shift();
+            if(typeof(f) === 'function') {
+            	f(err, {contents: contents, file:file, logical:args.logical});
+            }
         }
     }
     
@@ -230,14 +282,15 @@ require({
      * @param {Function} callback The callback once the file has been read or failed to read
      */
     function _getFile(file, callback) {
-    	if(file === 'warmup') {
-    		callback(null, null);
-    	} else if(ternserver) {
+    	if(ternserver) {
         	var _f = file;
            if(typeof(file) === 'object') {
            		_f = file.logical;
            }
-           pendingReads[_f] = callback;
+           if(!Array.isArray(pendingReads[_f])) {
+           		pendingReads[_f] = [];
+           }
+           pendingReads[_f].push(callback);
            post({request: 'read', args: {file:file}}); //$NON-NLS-1$
 	    } else {
 	       post(i18nUtil.formatMessage(Messages['failedReadRequest'], _f)); //$NON-NLS-1$

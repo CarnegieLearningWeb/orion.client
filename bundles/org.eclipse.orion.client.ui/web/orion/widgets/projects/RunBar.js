@@ -387,7 +387,8 @@ define([
 			this.setStatus({
 				State: "PROGRESS", //$NON-NLS-0$
 				Message: progressMessage,
-				ShortMessage: messages["checkingStateShortMessage"] //$NON-NLS-0$
+				ShortMessage: messages["checkingStateShortMessage"], //$NON-NLS-0$
+				Url: (launchConfiguration.status && launchConfiguration.status.Url) ? launchConfiguration.status.Url : null
 			});
 		},
 		
@@ -422,6 +423,8 @@ define([
 									// run command because it knows how to collect params first then check the status again
 									this._commandRegistry.runCommand("orion.launchConfiguration.checkStatus", launchConfiguration, this, null, null, this._statusLight); //$NON-NLS-0$
 								} else {
+									if(error.Alert && error.Alert == true)
+										this._progressService.setProgressResult(error.Message);
 									this._launchConfigurationDispatcher.dispatchEvent({type: "changeState", newValue: launchConfiguration}); //$NON-NLS-0$
 								}
 							}.bind(this)
@@ -452,7 +455,12 @@ define([
 			
 			this._setText(this._appInfoSpan, null);
 			
-			this._disableAllControls(); // applicable controls will be re-enabled further below
+			if(status.Info && status.Info == "Deploying"){
+				this._disableControl(this._playButton);
+				this._disableControl(this._stopButton);
+			} else {
+				this._disableAllControls(); // applicable controls will be re-enabled further below
+			}
 			
 			if (status) {
 				if (status.error) {
@@ -516,13 +524,25 @@ define([
 			if (logLocationTemplate) {
 				uriTemplate = new URITemplate(logLocationTemplate);
 				uriParams = {
-					OrionHome: PageLinks.getOrionHome(),
-					Name: "",
-					Target: {
-						launchConfLocation: this._selectedLaunchConfiguration.File.Location
-					}
-				};
-				this._enableLink(this._logsLink, uriTemplate.expand(uriParams));
+						OrionHome: PageLinks.getOrionHome(),
+						Name: "",
+						Target: {
+							launchConfLocation: this._selectedLaunchConfiguration.File.Location
+						}
+					};
+					this._enableLink(this._logsLink, uriTemplate.expand(uriParams));
+			} else {
+				this._serviceRegistry.getService("orion.project.deploy").getLogLocationTemplate(this._selectedLaunchConfiguration).then(function(result){
+					uriTemplate = new URITemplate(result);
+					uriParams = {
+							OrionHome: PageLinks.getOrionHome(),
+							Name: "",
+							Target: {
+								launchConfLocation: this._selectedLaunchConfiguration.File.Location
+							}
+						};
+						this._enableLink(this._logsLink, uriTemplate.expand(uriParams));
+				}.bind(this));
 			}
 		},
 		

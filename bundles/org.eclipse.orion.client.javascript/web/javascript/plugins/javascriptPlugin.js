@@ -75,7 +75,7 @@ define([
     		               }
     		               ]
     	});
-    	
+
     	/**
     	 * Re-init
     	 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=462878
@@ -155,9 +155,17 @@ define([
 		    						});	
 		    					} else {
 		    						var file = _d.args.file;
-		    						return fileClient.read(file).then(function(contents) {
-		    									ternWorker.postMessage({request: 'read', args:{contents:contents, file:file}});	 //$NON-NLS-1$
-		    								});
+		    						try {
+			    						return fileClient.read(file).then(function(contents) {
+			    									ternWorker.postMessage({request: 'read', args:{contents:contents, file:file}});	 //$NON-NLS-1$
+			    								},
+			    								function(err) {
+			    									ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$
+			    								});
+			    					}
+		    						catch(err) {
+		    							ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$
+		    						}
 		    					}
 		    					break;
 		    				}
@@ -176,12 +184,18 @@ define([
     				case 'installed_plugins': {
     					var plugins = _d.plugins;
     					return prefService ? prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
-							var props = prefs.get("tern"); //$NON-NLS-1$
+							var props = prefs.get("tern/plugins"); //$NON-NLS-1$
 							if (!props) {
 								props = Object.create(null);
+							} else if(typeof(props) === 'string') {
+								props = JSON.parse(props);
 							}
-							props["plugins"] = plugins;
-							prefs.put("tern", props); //$NON-NLS-1$
+							var keys = Object.keys(plugins);
+							for(var i = 0; i < keys.length; i++) {
+								var key = keys[i];
+								props[key] = plugins[key];	 //$NON-NLS-1$
+							}
+							prefs.put("tern/plugins", JSON.stringify(props)); //$NON-NLS-1$
 							prefs.sync(true);
 						}) : new Deferred().resolve();
     				}
@@ -277,7 +291,7 @@ define([
     	);
     	
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-0$
-    			new OpenDeclCommand.OpenDeclarationCommand(astManager, scriptresolver, ternWorker), 
+    			new OpenDeclCommand.OpenDeclarationCommand(astManager, scriptresolver, ternWorker, CUProvider), 
     			{
     		name: javascriptMessages["openDeclName"],  //$NON-NLS-0$
     		tooltip : javascriptMessages['openDeclTooltip'],  //$NON-NLS-0$

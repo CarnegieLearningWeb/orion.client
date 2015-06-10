@@ -28,22 +28,24 @@ define({//Default message bundle
 	"There are unsaved changes.": "There are unsaved changes.",
 	"ERROR: ": "ERROR: ",
 	"Compare...": "Compare...",
-	"files changed": " files changed",
+	"n of t files changed": "${0} of ${1} files changed",//n and t are numbers
 	"Location": "Location",
 	"Options": "Options",
 	"Sort by folders": "Sort by folders",
 	"Line 0 : Col 0": "Line 0 : Col 0",
 	"NoDiffServiceLocationMatched": "No Matching DiffService for location:",
 	"NoFoldersIdentical": "${0} files compared. The two folders are identical.",
-	'generatingTreeResult': 'Generating compare result...',  //$NON-NLS-0$  //$NON-NLS-1$
-	'fetchingFolder': 'Fetching folder: ${0}...',  //$NON-NLS-0$  //$NON-NLS-1$
-	'readingFile': 'Reading file: ${0}...',  //$NON-NLS-0$  //$NON-NLS-1$
-	'readingFileMetadata': 'Reading file metadata: ${0}...',  //$NON-NLS-0$  //$NON-NLS-1$
-	'comparingFile': 'Comparing: ${0}...',  //$NON-NLS-0$  //$NON-NLS-1$
-	'compareTreeTitle': 'Compare Folders',  //$NON-NLS-0$  //$NON-NLS-1$
-	'IgnoreWhitespace': 'Ignore white space', //$NON-NLS-0$  //$NON-NLS-1$
-	'IgnoreWhitespaceTooltip': 'Ignore white space where applicable', //$NON-NLS-0$  //$NON-NLS-1$
-	'UseWhitespace': 'Use white space', //$NON-NLS-0$  //$NON-NLS-1$
-	'UseWhitespaceTooltip': 'Compare white space where applicable', //$NON-NLS-0$  //$NON-NLS-1$
-	'confirmUnsavedChanges': 'There are unsaved changes. Do you want to save them?' //$NON-NLS-1$ //$NON-NLS-0$
+	'generatingTreeResult': 'Generating compare result...',
+	'fetchingFolder': 'Fetching folder: ${0}...',
+	'readingFile': 'Reading file: ${0}...',
+	'readingFileMetadata': 'Reading file metadata: ${0}...',
+	'comparingFile': 'Comparing: ${0}...',
+	'compareTreeTitle': 'Compare Folders',
+	'IgnoreWhitespace': 'Ignore white space',
+	'IgnoreWhitespaceTooltip': 'Ignore white space where applicable',
+	'UseWhitespace': 'Use white space',
+	'UseWhitespaceTooltip': 'Compare white space where applicable',
+	'confirmUnsavedChanges': 'There are unsaved changes. Do you want to save them?',
+	"word added": "word added",
+	"word deleted": "word deleted"
 });
