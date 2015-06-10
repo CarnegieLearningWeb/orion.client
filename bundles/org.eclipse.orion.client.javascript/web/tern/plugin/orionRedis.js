@@ -106,16 +106,7 @@
 	/* eslint-disable missing-nls */
 	var defs = {
 		"!name": "redis",
-		"!define": {
-			"!node": {
-				"redis": {
-					"createClient": "fn(port_arg: number, host_arg?: string, options?: ClientOpts) -> RedisClient",
-					"print": "fn(err: Error, reply: ?)",
-					"debug_mode": "bool",
-					"ClientOpts": "redis.ClientOpts"
-				}
-			}
-		},
+		"!define": {},
 	    "ClientOpts": {
 	      "parser": "string",
 	      "return_buffers": "bool",
@@ -270,6 +261,8 @@
 	    "print": "fn(err: Error, reply: ?)",
 	    "debug_mode": "bool",
 	    "MessageHandler": {},
+	    "CommandT": {},
+	    "ResCallbackT": {},
 	    "ServerInfo": {
 	      "redis_version": "string",
 	      "versions": "[number]"

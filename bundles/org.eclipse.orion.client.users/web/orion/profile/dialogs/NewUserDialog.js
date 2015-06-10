@@ -55,6 +55,8 @@ define(['i18n!profile/nls/messages', 'orion/webui/dialog'], function(messages, d
 
 		var dialog = this;
 
+		console.log(this);
+		console.log("Home Wiki: "+dialog.$homeWiki.value);
 		this.registry.getService("orion.core.user").createUser({
 			UserName: dialog.$userName.value,
 			Password: dialog.$password.value,

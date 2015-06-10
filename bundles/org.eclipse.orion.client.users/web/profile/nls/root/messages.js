@@ -56,8 +56,8 @@ define({//Default message bundle
 	//Added by Jon
 	"Home Wiki" : "Home Wiki",
 	"HomeWiki options": [
-		'<option></option>',
-		'<option value="rtcwiki">RTC Wiki</option>',
-		'<option value="sandbox">Sandbox</option>',
+		'<option></option>'+
+		'<option value="rtcwiki">RTC Wiki</option>'+
+		'<option value="sandbox">Sandbox</option>'
 	]
 });

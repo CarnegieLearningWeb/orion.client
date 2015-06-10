@@ -581,6 +581,7 @@ and (max-device-width : 1024px)  {
 
 .sideMenu{
     width: 50px;
+    /* Added by Jon, changed bg color */
     background: #0b6481;
 	float: left;
     position: absolute;

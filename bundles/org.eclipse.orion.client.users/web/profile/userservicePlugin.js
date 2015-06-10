@@ -12,7 +12,7 @@
 define(["require", "orion/plugin", "profile/UsersService", "domReady!"], function(require, PluginProvider, UsersService) {
 	
 	function connect() {
-		var login = new URL(require.toUrl("/mixloginstatic/LoginWindow.html"), self.location.href).href;
+		var login = new URL(require.toUrl("mixloginstatic/LoginWindow.html"), self.location.href).href;
 		var headers = {
 			name: "Orion User Profile",
 			version: "1.0",
@@ -24,7 +24,6 @@ define(["require", "orion/plugin", "profile/UsersService", "domReady!"], functio
 		pluginProvider.connect();
 	}
 
-<<<<<<< Updated upstream
 	function registerServiceProviders(provider) {
 		var usersService = new UsersService();
 	
@@ -32,42 +31,6 @@ define(["require", "orion/plugin", "profile/UsersService", "domReady!"], functio
 			return {
 				name: "User profile"
 			};
-=======
-
-	usersService.getDivContent = function () {
-		var content = {
-			"actions": [{
-				"id": "saveProfileButton",
-				"name": "Save Profile",
-				"tooltip": "Save Profile",
-				"action": "saveProfile"
-			}, {
-				"id": "resetProfileButton",
-				"name": "Reset",
-				"tooltip": "Reset Profile Information",
-				"action": "resetProfile"
-			}, {
-				"id": "deleteProfileButton",
-				"name": "Delete Profile",
-				"tooltip": "Delete Profile",
-				"action": "deleteProfile"
-			}],
-			"sections" : [
-                            {"id": "personalInformation", "name" : "Personal Information", "data" :[
-                                                                                                    {"type": "TextBox", "props": {"id": "pi_username", "readOnly" : false, "name" : "UserName"}, "label": "User Name:"},
-                                                                                                    {"type": "TextBox", "props": {"id": "pi_fullname", "readOnly" : false,  "name" : "FullName"}, "label" : "Full Name:"},
-                                                                                                  	 {"type": "TextBox", "props": {"id": "pi_email", "readOnly" : false, "name" : "Email"}, "label" : "Email:"},
-                                                                                                  	 {"type": "CheckBox", "props": {"id": "pi_emailConfirmed", "readOnly" : true, "name" : "EmailConfirmed"}, "label" : "Email confirmed:"},
-                                                                                                    {"type": "DateLong", "props": {"id": "pi_lastLogin", "name" : "LastLoginTimestamp"}, "label" : "Last login:	"},
-                                                                                                  	 {"type": "Text", "props": {"id": "pi_diskUsage", "name" : "DiskUsage"}, "label" : "Disk Usage:	"},
-                                                                                                     {"type": "DateLong", "props": {"id": "pi_diskUsageTimestamp", "name" : "DiskUsageTimestamp"}, "label" : "Disk Usage Last Calculated:	"},
-                                                                                                     //Added by Jon
-                                                                                                     {"type": "TextBox", "props": {"id": "pi_homewiki", "readOnly" : false,  "name" : "HomeWiki"}, "label" : "Home Wiki:"},
-                                                                                                    ]
-                            },
-                          {"id": "oauthids", "name": "Manage External Accounts", "type": "iframe", "data" : {"src": "../mixloginstatic/manageExternalIds.html"}}
-                            ]
->>>>>>> Stashed changes
 		};
 	
 	
@@ -91,16 +54,18 @@ define(["require", "orion/plugin", "profile/UsersService", "domReady!"], functio
 				}],
 				"sections" : [
 	                            {"id": "personalInformation", "name" : "Personal Information", "data" :[
-	                                                                                                    {"type": "TextBox", "props": {"id": "pi_username", "readOnly" : false, "name" : "UserName"}, "label": "User Name:"},
-	                                                                                                    {"type": "TextBox", "props": {"id": "pi_fullname", "readOnly" : false,  "name" : "FullName"}, "label" : "Full Name:"},
-	                                                                                                  	 {"type": "TextBox", "props": {"id": "pi_email", "readOnly" : false, "name" : "Email"}, "label" : "Email:"},
-	                                                                                                  	 {"type": "CheckBox", "props": {"id": "pi_emailConfirmed", "readOnly" : true, "name" : "EmailConfirmed"}, "label" : "Email confirmed:"},
-	                                                                                                    {"type": "DateLong", "props": {"id": "pi_lastLogin", "name" : "LastLoginTimestamp"}, "label" : "Last login:	"},
-	                                                                                                  	 {"type": "Text", "props": {"id": "pi_diskUsage", "name" : "DiskUsage"}, "label" : "Disk Usage:	"},
-	                                                                                                     {"type": "DateLong", "props": {"id": "pi_diskUsageTimestamp", "name" : "DiskUsageTimestamp"}, "label" : "Disk Usage Last Calculated:	"}
-	                                                                                                    ]
+                                {"type": "TextBox", "props": {"id": "pi_username", "readOnly" : false, "name" : "UserName"}, "label": "User Name:"},
+                                {"type": "TextBox", "props": {"id": "pi_fullname", "readOnly" : false,  "name" : "FullName"}, "label" : "Full Name:"},
+                              	 {"type": "TextBox", "props": {"id": "pi_email", "readOnly" : false, "name" : "Email"}, "label" : "Email:"},
+                              	 {"type": "CheckBox", "props": {"id": "pi_emailConfirmed", "readOnly" : true, "name" : "EmailConfirmed"}, "label" : "Email confirmed:"},
+                                {"type": "DateLong", "props": {"id": "pi_lastLogin", "name" : "LastLoginTimestamp"}, "label" : "Last login:	"},
+                              	 {"type": "Text", "props": {"id": "pi_diskUsage", "name" : "DiskUsage"}, "label" : "Disk Usage:	"},
+                                 {"type": "DateLong", "props": {"id": "pi_diskUsageTimestamp", "name" : "DiskUsageTimestamp"}, "label" : "Disk Usage Last Calculated:	"},
+                              	 //Added By Jon
+                              	{"type": "TextBox", "props": {"id": "pi_homewiki", "readOnly" : false,  "name" : "HomeWiki"}, "label" : "Home Wiki:"},
+                                ]
 	                            },
-	                          {"id": "oauthids", "name": "Manage External Accounts", "type": "iframe", "data" : {"src": new URL(require.toUrl("/mixloginstatic/manageExternalIds.html"), self.location.href).href}}
+	                          {"id": "oauthids", "name": "Manage External Accounts", "type": "iframe", "data" : {"src": new URL(require.toUrl("mixloginstatic/manageExternalIds.html"), self.location.href).href}}
 	                            ]
 			};
 	
