@@ -48,13 +48,14 @@ define([
 	'orion/projectClient',
 	'orion/webui/splitter',
 	'orion/webui/tooltip',
-	'globaloria/htmlEditor'
+	'globaloria/htmlEditor',
+	'globaloria/javascriptEditor'
 ], function(
 	messages, Sidebar, mInputManager, mCommands, mGlobalCommands,
 	mTextModel, mUndoStack,
 	mFolderView, mEditorView, mPluginEditorView , mMarkdownView, mMarkdownEditor,
 	mCommandRegistry, mContentTypes, mFileClient, mFileCommands, mEditorCommands, mSelection, mStatus, mProgress, mOperationsClient, mOutliner, mDialogs, mExtensionCommands, ProjectCommands, mSearchClient,
-	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor
+	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor, mJSEditor
 ) {
 
 var exports = {};
@@ -347,15 +348,19 @@ objects.mixin(EditorViewer.prototype, {
 			contentTypeRegistry: this.contentTypeRegistry
 		});
 		inputManager.addEventListener("InputChanged", function(evt) { //$NON-NLS-0$
+			console.log(evt);
 			var metadata = evt.metadata;
 			if (metadata) {
 				sessionStorage.lastFile = PageUtil.hash();
 			} else {
 				delete sessionStorage.lastFile;
 			}
+			console.log(evt.input);
 			var view = this.getEditorView(evt.input, metadata);
+			console.log(view);
 			this.setEditor(view ? view.editor : null);
 			evt.editor = this.editor;
+			console.log(metadata);
 			this.pool.metadata = metadata;
 			var href = window.location.href;
 			this.activateContext.setActiveEditorViewer(this);
@@ -457,7 +462,8 @@ objects.mixin(EditorViewer.prototype, {
 	getCurrentEditorView: function() {
 		if (this.currentEditorView) {
 			if (this.currentEditorView.editorID === "orion.editor.markdown" ||
-				this.currentEditorView.editorID === "orion.editor.html") {
+				this.currentEditorView.editorID === "orion.editor.html" ||
+				this.currentEditorView.editorID === "orion.editor.js") {
 				return this.editorView;
 			}
 		}
@@ -485,10 +491,15 @@ objects.mixin(EditorViewer.prototype, {
 					options.editorView = this.editorView;
 					options.anchor = input.anchor;
 					view = new mMarkdownEditor.MarkdownEditorView(options);
+					console.log(view);
 				} else if (id === "orion.editor.html") {
 					options.editorView = this.editorView;
 					options.anchor = input.anchor;
 					view = new mHTMLEditor.HTMLEditorView(options);
+				} else if (id === "orion.editor.js") {
+					options.editorView = this.editorView;
+					options.anchor = input.anchor;
+					view = new mJSEditor.JavaScriptEditorView(options);
 				} else {
 					var editors = this.serviceRegistry.getServiceReferences("orion.edit.editor"); //$NON-NLS-0$
 					for (var i=0; i<editors.length; i++) {
