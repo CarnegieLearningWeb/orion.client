@@ -173,40 +173,50 @@ define([
 
     function createIframeWindow(targetNode) {
         // Add the current page iframe to the current page
-        var frameDiv = document.createElement("div");
-        frameDiv.id = 'previewHtml'; //$NON-NLS-0$
+        var frameDiv          = document.createElement("div");
+        frameDiv.id           = 'previewHtml'; //$NON-NLS-0$
 
-        var iframe = document.createElement("iframe"); //$NON-NLS-0$
-        iframe.id = 'previewFrame'; //$NON-NLS-0$
-        iframe.name = 'HTML Previewer'; //$NON-NLS-0$
-        iframe.type = "text/html"; //$NON-NLS-0$
-        iframe.sandbox = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
+        var iframe            = document.createElement("iframe"); //$NON-NLS-0$
+        iframe.id             = 'previewFrame'; //$NON-NLS-0$
+        iframe.name           = 'HTML Previewer'; //$NON-NLS-0$
+        iframe.type           = "text/html"; //$NON-NLS-0$
+        iframe.sandbox        = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
         frameDiv.style.border = "none"; //$NON-NLS-0$
-        frameDiv.style.width = "100%"; //$NON-NLS-0$
+        frameDiv.style.width  = "100%"; //$NON-NLS-0$
         frameDiv.style.height = "100%"; //$NON-NLS-0$
-        iframe.style.width = "100%"; //$NON-NLS-0$
-        iframe.style.height = "100%"; //$NON-NLS-0$
+        iframe.style.width    = "100%"; //$NON-NLS-0$
+        iframe.style.height   = "100%"; //$NON-NLS-0$
 
         var currentFile = window.location.hash.slice(1,window.location.hash.length);
         //TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
-        currentFile = currentFile.replace(new RegExp('25', 'g'),'');
-        currentFile = currentFile.replace(',editor=orion.editor.html','');
-        var port = ":"+window.location.port;
+        currentFile  = currentFile.replace(new RegExp('25', 'g'),'');
+        currentFile  = currentFile.replace(',editor=orion.editor.html','');
+        var port     = ":"+window.location.port;
         var protocol = window.location.protocol+"//";
-        if(window.location.port!=='')
-            iframe.src = protocol+window.location.hostname+port+currentFile;
-        else
-            iframe.src = protocol+window.location.hostname+currentFile;
+        var fullUrl;
 
+        if(window.location.port!=='')
+            fullUrl = protocol+window.location.hostname+port+currentFile;
+        else
+            fullUrl = protocol+window.location.hostname+currentFile;
+
+        iframe.src = fullUrl;
 
         // Add a refresh button to reload the game
-        var reloadButton = document.createElement("button");
-        reloadButton.setAttribute('onClick', 'document.getElementById("previewFrame").contentWindow.location.reload()');
+        var reloadButton         = document.createElement("button");
         reloadButton.textContent = 'Refresh Preview';
-        // reloadButton.style.float = 'right';
-        reloadButton.className = 'reload-button';
+        reloadButton.className   = 'btn glife-green';
+        reloadButton.setAttribute('onClick', 'document.getElementById("previewFrame").contentWindow.location.reload()');
+
+        // Add a refresh button to reload the game
+        var newWindowButton         = document.createElement("a");
+        newWindowButton.textContent = 'Open in New Page';
+        newWindowButton.className   = 'btn glife-navy';
+        newWindowButton.setAttribute('href', fullUrl);
+        newWindowButton.setAttribute('target', '_blank');
 
         frameDiv.appendChild(reloadButton);
+        frameDiv.appendChild(newWindowButton);
         frameDiv.appendChild(iframe);
         targetNode.appendChild(frameDiv);       
     }
