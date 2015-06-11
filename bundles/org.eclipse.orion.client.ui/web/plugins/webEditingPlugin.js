@@ -160,7 +160,7 @@ define([
 		var HTML_EDITOR_ID = "orion.editor.html";
 		provider.registerService("orion.edit.editor", {}, {
 			id: HTML_EDITOR_ID,
-			name: messages["Orion Markdown Editor"],
+			name: messages["Orion HTML Editor"],
 			nls: "orion/nls/messages",
 			"default": true,
 			uriTemplate: "../edit/edit.html#{,Location,params*},editor=" + HTML_EDITOR_ID});
@@ -168,6 +168,18 @@ define([
 		provider.registerService("orion.navigate.openWith", {}, {
 			editor: HTML_EDITOR_ID,
 			contentType: ["text/html"]});
+
+		var JAVASCRIPT_EDITOR_ID = "orion.editor.js";
+		provider.registerService("orion.edit.editor", {}, {
+			id: JAVASCRIPT_EDITOR_ID,
+			name: messages["Orion JavaScript Editor"],
+			nls: "orion/nls/messages",
+			"default": true,
+			uriTemplate: "../edit/edit.html#{,Location,params*},editor=" + JAVASCRIPT_EDITOR_ID});
+
+		provider.registerService("orion.navigate.openWith", {}, {
+			editor: JAVASCRIPT_EDITOR_ID,
+			contentType: ["application/javascript"]});
 
 	}
 
