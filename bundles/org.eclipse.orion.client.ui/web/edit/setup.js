@@ -349,19 +349,15 @@ objects.mixin(EditorViewer.prototype, {
 			contentTypeRegistry: this.contentTypeRegistry
 		});
 		inputManager.addEventListener("InputChanged", function(evt) { //$NON-NLS-0$
-			console.log(evt);
 			var metadata = evt.metadata;
 			if (metadata) {
 				sessionStorage.lastFile = PageUtil.hash();
 			} else {
 				delete sessionStorage.lastFile;
 			}
-			console.log(evt.input);
 			var view = this.getEditorView(evt.input, metadata);
-			console.log(view);
 			this.setEditor(view ? view.editor : null);
 			evt.editor = this.editor;
-			console.log(metadata);
 			this.pool.metadata = metadata;
 			var href = window.location.href;
 			this.activateContext.setActiveEditorViewer(this);

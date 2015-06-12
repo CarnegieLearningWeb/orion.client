@@ -161,5 +161,6 @@ define({//Default message bundle
 	"starting": "restarting", //$NON-NLS-0$  //$NON-NLS-1$
 	"stopping": "stopping", //$NON-NLS-0$  //$NON-NLS-1$
 	"checkingStateShortMessage": "checking status", //$NON-NLS-0$  //$NON-NLS-1$
-	"Duplicate" : "Duplicate File"
+	"Duplicate" : "Duplicate File",
+    "nextLesson": "Create Next Lesson"
 });
