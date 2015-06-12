@@ -72,11 +72,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 	 * @param {Boolean} unzip
 	 * @param {Boolean} force
 	 * @param {Object} handlers Optional. An object which contains handlers for the different events that the upload can fire.
-	 * 			handlers.progress The handler function that should be called when progress occurs.
-	 * 			handlers.load The handler function that should be called when the transfer completes successfully.
-	 * 			handlers.error The handler function that should be called if the transfer fails.
-	 * 			handlers.abort The handler function that should be called if the transfer is cancelled by the user.
-	 * 			handlers.loadend The handler function that should be called when the transfer completes (regardless of success or failure).
+	 *          handlers.progress The handler function that should be called when progress occurs.
+	 *          handlers.load The handler function that should be called when the transfer completes successfully.
+	 *          handlers.error The handler function that should be called if the transfer fails.
+	 *          handlers.abort The handler function that should be called if the transfer is cancelled by the user.
+	 *          handlers.loadend The handler function that should be called when the transfer completes (regardless of success or failure).
 	 * @param {Boolean} preventNotification Optional. true if a model event should not be dispatched after the file is uploaded, false otherwise
 	 * @returns {XMLHttpRequest} The XMLHttpRequest object that was created and used for the upload.
 	 */
@@ -1352,6 +1352,156 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				}
 			});
 		commandService.addCommand(duplicateFileCommand);
+
+		var lessonNames = [
+			"drawShape",
+			"moveShape",
+			"controlShape",
+			"displayScore",
+			"increaseScore",
+			"multipleCollectables",
+			"multipleEnemies",
+			"addArtwork",
+			"addSound",
+			"addGameOver",
+			"addVictoryScreen",
+			"extendScene",
+			"addGoal"
+		];
+
+		var nextLessonCommand = new mCommands.Command({
+				name: messages["nextLesson"],
+				id: "eclipse.nextLesson",
+				visibleWhen: function(item) {
+					var currItem    = forceSingleItem(item);
+					// Grab just the file name with out dashes and extentions
+					var filename    = cleanupFileName(currItem.Name);
+					var isDirectory = currItem.Directory;
+
+
+					if (!explorer || !explorer.isCommandsVisible()) {
+						return false;
+					}
+
+					if (isDirectory) {
+						return false;
+					}
+
+					if (lessonNames.indexOf(filename) === -1) {
+						return false;
+					}
+
+					return true;
+				},
+				callback: function(data) {
+					// Copy file contents to the buffer
+					copyToBuffer(data);
+
+					// Grab necessary variables
+					var currItem       = forceSingleItem(data.items);
+					var filename       = currItem.Name;
+					var splitResults   = filename.split('.');
+					var fileExt        = splitResults[splitResults.length - 1];
+					var filename       = cleanupFileName(filename);
+					var nextLessonInfo = getNextLessonInfo(filename);
+					var nextFileName   = nextLessonInfo.nextFileName;
+					var nextFileIndex  = nextLessonInfo.nextFileIndex;
+					var newFileName    = generateNextFileName(nextFileName, nextFileIndex, fileExt);
+
+					// Paste the contents into the new created file
+					pasteFromBufferNoPrompt(data, newFileName);
+				}
+			});
+		commandService.addCommand(nextLessonCommand);
+
+		var cleanupFileName = function(filename) {
+			if (filename.match(/-/)) {
+				var startIndex = filename.indexOf('-') + 1;
+				var endIndex   = filename.length;
+
+				filename = filename.slice(startIndex, endIndex);
+			}
+
+			if (filename.match(/\./)) {
+				var splitArr = filename.split('.');
+
+				filename = splitArr[0];
+			}
+
+			return filename;
+		}
+
+		var getNextLessonInfo = function(filename) {
+			var indexOfCurrFile   = lessonNames.indexOf(filename);
+			var indexOfNextLesson = indexOfCurrFile + 1;
+			var nextFileName      = lessonNames[indexOfNextLesson];
+
+			var lessonInfo = {
+				nextFileName  : nextFileName,
+				nextFileIndex : indexOfNextLesson + 1 //because arrays are 0 index
+			};
+
+			return lessonInfo;
+		}
+
+		var pasteFromBufferNoPrompt = function(data, nextFilename) {
+			var item = getTargetFolder(data.items);
+			if (bufferedSelection.length > 0 && item) {
+				// Do not allow pasting into the Root of the Workspace
+				if (mFileUtils.isAtRoot(item.Location)) {
+					errorHandler(messages["Cannot paste into the root"]);
+					return;
+				}
+				var fileOperation = isCutInProgress ? fileClient.moveFile : fileClient.copyFile;
+				var summary = [];
+				var deferreds = [];
+				bufferedSelection.forEach(function(selectedItem) {
+					var location = selectedItem.Location;
+					var name = selectedItem.Name || null;
+					if (location) {
+						var itemLocation = item.Location || item.ContentLocation;
+
+						if (location) {
+							var deferred = fileOperation.apply(fileClient, [location, itemLocation, nextFilename]);
+							var messageKey = isCutInProgress ? "Moving ${0}": "Pasting ${0}"; //$NON-NLS-1$ //$NON-NLS-0$
+							var eventType = isCutInProgress ? "move": "copy"; //$NON-NLS-1$ //$NON-NLS-0$
+							deferreds.push(progressService.showWhile(deferred, i18nUtil.formatMessage(messages[messageKey], location)).then(
+								function(result) {
+									summary.push({
+										oldValue: selectedItem,
+										newValue: result,
+										parent: item
+									});
+									dispatchModelEvent({ type: eventType, oldValue: selectedItem, newValue: result, parent: item, count: bufferedSelection.length });
+								},
+								errorHandler));
+						}
+					}
+				});
+				Deferred.all(deferreds).then(function() {
+					dispatchModelEvent({
+						type: isCutInProgress ? "moveMultiple" : "copyMultiple", //$NON-NLS-1$ //$NON-NLS-0$
+						items: summary
+					});
+
+					if (isCutInProgress) {
+						var navHandler = explorer.getNavHandler();
+						bufferedSelection.forEach(function(pastedItem){
+							navHandler.enableItem(pastedItem);
+						});
+						bufferedSelection = [];
+						isCutInProgress = false;
+					}
+				});
+			}
+		}a
+
+		var generateNextFileName = function(nextFileName, nextFileIndex, fileExt) {
+			var prefix      = (nextFileIndex >= 10 ) ? nextFileIndex : '0' + nextFileIndex;
+			var newFileName = prefix + '-' + nextFileName + '.' + fileExt;
+
+			return newFileName;
+		}
 
 		return new Deferred().resolve();
 	};
