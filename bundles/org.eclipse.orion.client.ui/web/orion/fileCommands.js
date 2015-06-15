@@ -1354,6 +1354,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		commandService.addCommand(duplicateFileCommand);
 
 		var lessonNames = [
+			"createCanvas",
 			"drawShape",
 			"moveShape",
 			"controlShape",
@@ -1406,6 +1407,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					var nextLessonInfo = getNextLessonInfo(filename);
 					var nextFileName   = nextLessonInfo.nextFileName;
 					var nextFileIndex  = nextLessonInfo.nextFileIndex;
+					nextFileIndex      = (fileExt == 'js') ? nextFileIndex - 1 : nextFileIndex;
 					var newFileName    = generateNextFileName(nextFileName, nextFileIndex, fileExt);
 
 					// Paste the contents into the new created file
@@ -1415,8 +1417,8 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 		commandService.addCommand(nextLessonCommand);
 
 		var cleanupFileName = function(filename) {
-			if (filename.match(/-/)) {
-				var startIndex = filename.indexOf('-') + 1;
+			if (filename.match(/_/)) {
+				var startIndex = filename.indexOf('_') + 1;
 				var endIndex   = filename.length;
 
 				filename = filename.slice(startIndex, endIndex);
@@ -1498,7 +1500,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 
 		var generateNextFileName = function(nextFileName, nextFileIndex, fileExt) {
 			var prefix      = (nextFileIndex >= 10 ) ? nextFileIndex : '0' + nextFileIndex;
-			var newFileName = prefix + '-' + nextFileName + '.' + fileExt;
+			var newFileName = prefix + '_' + nextFileName + '.' + fileExt;
 
 			return newFileName;
 		}
