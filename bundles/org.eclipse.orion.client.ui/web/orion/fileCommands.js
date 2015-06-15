@@ -1494,7 +1494,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					}
 				});
 			}
-		}a
+		}
 
 		var generateNextFileName = function(nextFileName, nextFileIndex, fileExt) {
 			var prefix      = (nextFileIndex >= 10 ) ? nextFileIndex : '0' + nextFileIndex;
