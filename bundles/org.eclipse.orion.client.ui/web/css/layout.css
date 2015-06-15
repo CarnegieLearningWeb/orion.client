@@ -490,16 +490,24 @@ and (max-device-width : 1024px)  {
 	border-bottom-right-radius: 3px;
 }
 
+.splitThumbRightLayout,
+.splitVerticalThumbDownLayout {
+	background-image: url('../information-icon-white.png') !important;
+	background-repeat: no-repeat !important;
+	background-size: 9px 9px !important;
+}
+
 .splitThumbRightLayout {
 	position: absolute;
 	right: 100%;
-	height: 4em;
-	width: 4px;
+	height: 5em;
+	width: 12px;
 	top: calc(50% - 2em);
 	margin-right: -1px;
 	cursor: pointer;
 	border-top-left-radius: 3px;
 	border-bottom-left-radius: 3px;
+	background-position: 2px 25px !important;
 }
 
 .splitVerticalThumbUpLayout {
@@ -517,13 +525,14 @@ and (max-device-width : 1024px)  {
 .splitVerticalThumbDownLayout {
 	position: absolute;
 	bottom: 100%;
-	width: 4em;
-	height: 4px;
+	width: 5em;
+	height: 12px;
 	left: calc(50% - 2em);
 	margin-bottom: -1px;
 	cursor: pointer;
 	border-top-left-radius: 3px;
 	border-top-right-radius: 3px;
+	background-position: 25px 2px !important;
 }
 
 .splitLayoutAnimation {
