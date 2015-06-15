@@ -1365,7 +1365,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			"addArtwork",
 			"addSound",
 			"addGameOver",
-			"addVictoryScreen",
 			"extendScene",
 			"addGoal"
 		];
