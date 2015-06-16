@@ -1394,23 +1394,44 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					return true;
 				},
 				callback: function(data) {
+					/*******************************/
+					/* Copy the HTML file First    */
+					/*******************************/
 					// Copy file contents to the buffer
 					copyToBuffer(data);
 
 					// Grab necessary variables
 					var currItem       = forceSingleItem(data.items);
+					var parentLocation = currItem.parent.Location;
 					var filename       = currItem.Name;
 					var splitResults   = filename.split('.');
-					var fileExt        = splitResults[splitResults.length - 1];
-					var filename       = cleanupFileName(filename);
-					var nextLessonInfo = getNextLessonInfo(filename);
+					var cleanFilename  = cleanupFileName(filename);
+					var nextLessonInfo = getNextLessonInfo(cleanFilename);
 					var nextFileName   = nextLessonInfo.nextFileName;
 					var nextFileIndex  = nextLessonInfo.nextFileIndex;
-					nextFileIndex      = (fileExt == 'js') ? nextFileIndex - 1 : nextFileIndex;
-					var newFileName    = generateNextFileName(nextFileName, nextFileIndex, fileExt);
+					var newFileName    = generateNextFileName(nextFileName, nextFileIndex, 'html');
 
 					// Paste the contents into the new created file
 					pasteFromBufferNoPrompt(data, newFileName);
+
+					/**************************************************/
+					/* Create the JavaScript file from the HTML file  */
+					/**************************************************/
+					// Generate JavaScript file name
+					var jsOldFileName     = generateNextFileName(cleanFilename, nextFileIndex - 1, 'js');
+					var jsNewFileName     = generateNextFileName(nextFileName, nextFileIndex, 'js');
+					// Generate JavaScript file 'Location' path
+					var jsParentLocation  = parentLocation + 'js/';
+					var jsOldLocationPath = jsParentLocation + jsOldFileName;
+
+					if (jsNewFileName === '02_drawShape.js') {
+						// If this is the first file, we create an empty file
+						fileClient.createFile(jsParentLocation, jsNewFileName);
+					} else {
+						// Copy the contents of the current file and use it to create
+						// the next JS file
+						fileClient.copyFile(jsOldLocationPath, jsParentLocation, jsNewFileName);
+					}
 				}
 			});
 		commandService.addCommand(nextLessonCommand);
