@@ -1373,10 +1373,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				name: messages["nextLesson"],
 				id: "eclipse.nextLesson",
 				visibleWhen: function(item) {
-					var currItem    = forceSingleItem(item);
+					var currItem      = forceSingleItem(item);
 					// Grab just the file name with out dashes and extentions
-					var filename    = cleanupFileName(currItem.Name);
-					var isDirectory = currItem.Directory;
+					var filename      = currItem.Name;
+					var cleanFilename = cleanupFileName(filename);
+					var isDirectory   = currItem.Directory;
 
 
 					if (!explorer || !explorer.isCommandsVisible()) {
@@ -1387,7 +1388,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 						return false;
 					}
 
-					if (lessonNames.indexOf(filename) === -1) {
+					if (!filename.match(/\.html$/)) {
+						return false;
+					}
+
+					if (lessonNames.indexOf(cleanFilename) === -1) {
 						return false;
 					}
 
