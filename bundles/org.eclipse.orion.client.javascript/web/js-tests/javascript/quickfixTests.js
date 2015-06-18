@@ -40,8 +40,12 @@ define([
 			var fixComputer = new QuickFixes.JavaScriptQuickfixes(astManager);
 			var editorContext = {
 				/*override*/
-				getText: function() {
-					return new Deferred().resolve(buffer);
+				getText: function(start, end) {
+					if(typeof(start) === 'undefined' && typeof(end) === 'undefined') {
+						return new Deferred().resolve(buffer);
+					} else {
+						return new Deferred().resolve(buffer.slice(start, end));
+					}
 				},
 				
 				setText: function(text, start, end) {
@@ -541,7 +545,46 @@ define([
                 expected: { value: "new Error([1,  2])", start: 6,  end: 13 }
             });
        });
-
+	//NO-RESERVED-KEYS
+		/**
+		 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=469966
+		 */
+		it("Test no-reserved-keys-fix-1", function() {
+			var rule = createTestRule('no-reserved-keys');
+			var expected = {value: '"public"',
+							start: 11,
+							end: 17
+							};
+			return getFixes({buffer: 'var foo = {public: 1};',
+								rule: rule,
+								expected: expected});
+		});
+		/**
+		 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=469966
+		 */
+		it("Test no-reserved-keys-fix-2", function() {
+			var rule = createTestRule('no-reserved-keys');
+			var expected = {value: '"enum"',
+							start: 24,
+							end: 28
+							};
+			return getFixes({buffer: 'var foo = {"public": 1, enum:2};',
+								rule: rule,
+								expected: expected});
+		});
+		/**
+		 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=469966
+		 */
+		it("Test no-reserved-keys-fix-3", function() {
+			var rule = createTestRule('no-reserved-keys');
+			var expected = {value: '"break"',
+							start: 34,
+							end: 39
+							};
+			return getFixes({buffer: 'var foo = {"public": 1, "enum":2, break: function(){}};',
+								rule: rule,
+								expected: expected});
+		});
 	//NO-UNDEF
 	     /**
 	      * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=458567
@@ -740,6 +783,18 @@ define([
 		                    start: 25, 
 		                    end: 25};
 		    return getFixes({buffer: 'var f = { /**\n *@see\n *\n */\none: function(p, p2, p3) {p(); p2();}};', 
+		                      rule: rule,
+		                      expected: expected});
+		});
+		/**
+		 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=467757
+		 */
+		it("Test no-unused-params-leading-line-comment-1", function() {
+		    var rule = createTestRule('no-unused-params');
+		    var expected = {value: "/**\n  * @callback\n  */\n ",
+		                    start: 16, 
+		                    end: 16};
+		    return getFixes({buffer: 'var f = {//foo\n one: function(p, p2, p3) {p(); p2();}};', 
 		                      rule: rule,
 		                      expected: expected});
 		});
@@ -1328,6 +1383,57 @@ define([
 		                      rule: rule,
 		                      expected: expected,
 		                      pid: 'missing-nls'});
+		});
+	//USE-ISNAN
+	    it("Test use-isnan-1", function() {
+		    var rule = createTestRule('use-isnan');
+		    var expected = {value: "isNaN(foo)",
+		                    start: 3, 
+		                    end: 14};
+		    return getFixes({buffer: 'if(foo === NaN){}', 
+		                      rule: rule,
+		                      expected: expected,
+		                      pid: 'use-isnan'});
+		});
+		it("Test use-isnan-2", function() {
+		    var rule = createTestRule('use-isnan');
+		    var expected = {value: "isNaN(foo)",
+		                    start: 3, 
+		                    end: 14};
+		    return getFixes({buffer: 'if(NaN === foo){}', 
+		                      rule: rule,
+		                      expected: expected,
+		                      pid: 'use-isnan'});
+		});
+		it("Test use-isnan-3", function() {
+		    var rule = createTestRule('use-isnan');
+		    var expected = {value: "isNaN(foo+23)",
+		                    start: 3, 
+		                    end: 19};
+		    return getFixes({buffer: 'if((foo+23) === NaN){}', 
+		                      rule: rule,
+		                      expected: expected,
+		                      pid: 'use-isnan'});
+		});
+		it("Test use-isnan-4", function() {
+		    var rule = createTestRule('use-isnan');
+		    var expected = {value: "isNaN(foo+23)",
+		                    start: 3, 
+		                    end: 19};
+		    return getFixes({buffer: 'if(NaN === (foo+23)){}', 
+		                      rule: rule,
+		                      expected: expected,
+		                      pid: 'use-isnan'});
+		});
+		it("Test use-isnan-5", function() {
+		    var rule = createTestRule('use-isnan');
+		    var expected = {value: "isNaN(45 === (foo+23))",
+		                    start: 3, 
+		                    end: 28};
+		    return getFixes({buffer: 'if(NaN === (45 === (foo+23)){}', 
+		                      rule: rule,
+		                      expected: expected,
+		                      pid: 'use-isnan'});
 		});
 	});
 });

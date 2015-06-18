@@ -67,9 +67,11 @@ define([
 		}
 	};
 	ternworker.postMessage('tests_ready');
-	
+	var envs = Object.create(null);
 	var astManager = new ASTManager.ASTManager(Esprima);
-	var ternAssist = new TernAssist.TernContentAssist(astManager, ternworker);
+	var ternAssist = new TernAssist.TernContentAssist(astManager, ternworker, function() {
+			return new Deferred().resolve(envs);
+		});
 
 	/**
 	 * @description Sets up the test
@@ -88,7 +90,7 @@ define([
 			assert(options.callback, 'You must provide a test callback for worker-based tests');
 			state.callback = options.callback;
 			ternworker.postMessage({request: 'delfile', args:{file: file}});
-			
+		envs = typeof(options.env) === 'object' ? options.env : Object.create(null);
 		var editorContext = {
 			/*override*/
 			getText: function() {
