@@ -37,17 +37,17 @@ define([
 			var entryNode = document.createElement("div"); //$NON-NLS-1$
 			entryNode.classList.add("plugin-entry"); //$NON-NLS-1$
 			
-			var cmdNode = document.createElement("span"); //$NON-NLS-1$
-			cmdNode.classList.add("plugin-commands"); //$NON-NLS-1$
-			var reloadPluginsCommand = new mCommands.Command({
-				name: messages["reloadPluginCmd"],
-				tooltip: messages["reloadPluginCmdTooltip"],
-				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
-				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
-			});
-			this.commandService.addCommand(reloadPluginsCommand);
-			this.commandService.registerCommandContribution("ternPluginCommands", "javascript.reloadTernPlugin", 2); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
-			this.commandService.renderCommands("ternPluginCommands", cmdNode, this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+//			var cmdNode = document.createElement("span"); //$NON-NLS-1$
+//			cmdNode.classList.add("plugin-commands"); //$NON-NLS-1$
+//			var reloadPluginsCommand = new mCommands.Command({
+//				name: messages["reloadPluginCmd"],
+//				tooltip: messages["reloadPluginCmdTooltip"],
+//				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
+//				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
+//			});
+//			this.commandService.addCommand(reloadPluginsCommand);
+//			this.commandService.registerCommandContribution("ternPluginCommands", "javascript.reloadTernPlugin", 2); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
+//			this.commandService.renderCommands("ternPluginCommands", cmdNode, this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			// TODO entryNode.appendChild(cmdNode);
 			
 			// TODO NLS Version and Removeable or replace with icons
@@ -55,21 +55,24 @@ define([
 				var nameNode = document.createElement("div"); //$NON-NLS-1$
 				nameNode.classList.add("plugin-title"); //$NON-NLS-1$
 				nameNode.textContent = item.name;
+				
+				if (item.version){
+					var versionNode = document.createElement("span"); //$NON-NLS-1$
+					versionNode.textContent = 'v'+item.version; //$NON-NLS-1$
+					versionNode.style.marginLeft = "10px"; //$NON-NLS-1$
+					nameNode.appendChild(versionNode);
+				}
+				
 				entryNode.appendChild(nameNode);
-			}
-			
-			if (item.version){
-				var versionNode = document.createElement("div"); //$NON-NLS-1$
-				versionNode.textContent = item.version;
-				entryNode.appendChild(versionNode);
 			}
 			
 			if (item.description){
 				var descNode = document.createElement("div"); //$NON-NLS-1$
 				descNode.textContent = item.description;
-				if (item.removable){
-					descNode.textContent += " (Removable)";
-				}
+				// TODO Show to the user that the plug-in is added by the platform and can't be removed
+//				if (item.removable){
+//					descNode.textContent += " (Removable)";
+//				}
 				entryNode.appendChild(descNode);
 			}
 			
@@ -168,19 +171,19 @@ define([
 //			this.commandService.addCommand(installPluginCommand);
 			
 //			this.commandService.registerCommandContribution("ternPluginCommands", "orion.installPlugin", 2, /* not grouped */ null, false, /* no key binding yet */ null, new mCommandRegistry.URLBinding("installPlugin", "url")); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			var reloadAllPluginsCommand = new mCommands.Command({
-				name: messages["reloadAllPluginsCmd"],
-				tooltip: messages["reloadAllPluginsCmdTooltip"],
-				id: "javascript.reloadAllTernPlugins", //$NON-NLS-0$
-				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
-			});
-
-			this.commandService.addCommand(reloadAllPluginsCommand);
-			// register these with the toolbar
-			this.commandService.registerCommandContribution("ternPluginsCommands", "javascript.reloadAllTernPlugins", 3); //$NON-NLS-1$ //$NON-NLS-2$
-
-			// Render the commands in the heading, emptying any old ones.
-			this.commandService.renderCommands("ternPluginsCommands", "ternPluginCommands", this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
+//			var reloadAllPluginsCommand = new mCommands.Command({
+//				name: messages["reloadAllPluginsCmd"],
+//				tooltip: messages["reloadAllPluginsCmdTooltip"],
+//				id: "javascript.reloadAllTernPlugins", //$NON-NLS-0$
+//				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
+//			});
+//
+//			this.commandService.addCommand(reloadAllPluginsCommand);
+//			// register these with the toolbar
+//			this.commandService.registerCommandContribution("ternPluginsCommands", "javascript.reloadAllTernPlugins", 3); //$NON-NLS-1$ //$NON-NLS-2$
+//
+//			// Render the commands in the heading, emptying any old ones.
+//			this.commandService.renderCommands("ternPluginsCommands", "ternPluginCommands", this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
 		},
 	
 		render: function(referenceplugin){

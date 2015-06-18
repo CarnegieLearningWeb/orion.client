@@ -30,6 +30,7 @@ define({//Default message bundle
     'noConstantCondition' : 'Constant as conditional expression:',
     'noRegexSpaces' : 'Multiple spaces in regular expressions:',
     'noReservedKeys' : 'Reserved words used as property keys:',
+    'noReservedKeysFixName': 'Surround key with quotes',
 	'noEqeqeq' : 'Discouraged \'==\' use:',
 	'noDebugger' : 'Discouraged \'debugger\' statement use:',
 	'noWith': 'Discouraged \'with\' statement use:',
@@ -40,6 +41,7 @@ define({//Default message bundle
 	'noProto': 'Discouraged __proto__ property use:',
 	'noUndefInit': 'Explicitly initializing variables to undefined:',
 	'useIsNaN' : 'NaN not compared with isNaN():',
+	'useIsNanFixName': 'Use isNaN()',
 	'missingDoc' : 'Missing JSDoc:',
 	'noUnreachable' : 'Unreachable code:',
 	'noFallthrough' : 'Switch case fall-through:',
@@ -66,8 +68,8 @@ define({//Default message bundle
 	'renameElementTooltip' : 'Rename the selected JavaScript element',
 	'openDeclName' : 'Open Declaration',
 	'openDeclTooltip' : 'Open the declaration of the selected element',
-	'validTypeof': 'Invalid \'typeof\' comparison',
-	'noSparseArrays': 'Sparse array declarations',
+	'validTypeof': 'Invalid \'typeof\' comparison:',
+	'noSparseArrays': 'Sparse array declarations:',
 	'javascriptValidation': 'Javascript Validation',
 	'jsHover': 'JavaScript Hover Provider',
 	'removeExtraSemiFixName': 'Remove extra semicolon',
@@ -81,7 +83,7 @@ define({//Default message bundle
 	'unreachableFixName': 'Remove unreachable code',
 	'sparseArrayFixName': 'Convert to normal array',
 	'semiFixName': 'Add missing \';\'',
-	'radix': 'Missing radix parameter to parseInt()',
+	'radix': 'Missing radix parameter to parseInt():',
 	'unusedVarsUnusedFixName': 'Remove unused variable',
 	'unusedFuncDeclFixName': 'Remove unused function',
 	'noCommaDangleFixName': 'Remove extra \',\'',
@@ -103,5 +105,13 @@ define({//Default message bundle
 	'reloadAllPluginsCmdTooltip': 'Reload all plug-ins',
 	'ternPlugins': 'Tern Plugins',
 	'noTernPluginsAvailable': 'No Tern plug-ins are currently loaded. This may be because you have not yet activated content assist in a JavaScript file. Tern plug-ins provide type information and code templates for JavaScript.',
-	'noDeclFound': 'No declaration was found to navigate to.'
+	'noDeclFound': 'Could not find declaration',
+	"deprecatedHoverTitle": "Deprecated.", // the in-line title for deprecated memebers. The word is used alone in a sentence with no further punctuation
+	"parametersHoverTitle": "Parameters:", // the in-line title for the parameters section. The word is used alone in a sentence with no further punctuation
+	"returnsHoverTitle": "Returns:", // the in-line title for the returns section. The word is used alone in a sentence with no further punctuation
+	"throwsHoverTitle": "Throws:", // the in-line title for the throws section. The word is used alone in a sentence with no further punctuation
+	"callbackHoverTitle": "Callback:", // the in-line title for the callback section. The word is used alone in a sentence with no further punctuation
+	"sinceHoverTitle": "Since:", // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
+	"seeAlsoHoverTitle": "See Also:", // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
+	"openFileForTitle": "Open file for" // the in-line title for the 'open file hover'. The sentence is used as-is and is followed only by a OS file path
 });
