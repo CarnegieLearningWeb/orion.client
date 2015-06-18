@@ -135,8 +135,6 @@ define([
 
     function JavaScriptEditorView(options) {
         this._options = options;
-        console.log(options);
-        console.log(options.editorView.editor);
 
         ID = "js.toggle.orientation"; //$NON-NLS-0$
         toggleOrientationCommand = new mCommands.Command({
@@ -173,26 +171,103 @@ define([
         }
     };
 
+    // Mapping for the lessons/ topics with URL
+    var lessonTopicMapping = {
+        "02_drawShape.js"            : "JS1:Build_Basic_Game_-_Draw_Shape",
+        "03_moveShape.js"            : "JS1:Build_Basic_Game_-_Move_Shape",
+        "04_controlShape.js"         : "JS1:Build_Basic_Game_-_Control_Shape",
+        "05_displayScore.js"         : "JS1:Build_Basic_Game_-_Display_Score",
+        "06_increaseScore.js"        : "JS1:Build_Basic_Game_-_Increase_Score",
+        "07_multipleCollectables.js" : "JS1:Build_Basic_Game_-_Multiple_Collectables",
+        "08_multipleEnemies.js"      : "JS1:Build_Basic_Game_-_Multiple_Enemies",
+        "09_addArtwork.js"           : "JS1:Customize_Action_Game_-_Add_Artwork",
+        "10_addSounds.js"            : "JS1:Customize_Action_Game_-_Add_Sounds",
+        "11_addGameOver.js"          : "JS1:Customize_Action_Game_-_Add_Game_Over_Screen",
+        "12_extendScene.js"          : "JS1:Customize_Action_Game_-_Extend_Scene",
+        "13_addGoal.js"              : "JS1:Customize_Action_Game_-_Add_Goal_and_Victory_Screen"
+    };
+
+    var grabCurrentLessonFromURL = function(hash) {
+        hash = hash.replace(',editor=orion.editor.js','');
+        hash = hash.split('/');
+        var fileName = hash[hash.length - 1];
+        
+        return fileName;
+    }
+
     function createIframeWindow(targetNode) {
+        var windowHash        = window.location.hash;
+        var lessonName        = grabCurrentLessonFromURL(windowHash);
         // Add the current page iframe to the current page
-        var frameDiv = document.createElement("div");
-        frameDiv.id = 'previewHtml'; //$NON-NLS-0$
+        var frameDiv          = document.createElement("div");
+        frameDiv.id           = 'previewHtml';
 
-        var iframe = document.createElement("iframe"); //$NON-NLS-0$
-        iframe.id = 'previewFrame'; //$NON-NLS-0$
-        iframe.name = 'HTML Previewer'; //$NON-NLS-0$
-        iframe.type = "text/html"; //$NON-NLS-0$
-        iframe.sandbox = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
-        frameDiv.style.border = "none"; //$NON-NLS-0$
-        frameDiv.style.width = "100%"; //$NON-NLS-0$
-        frameDiv.style.height = "100%"; //$NON-NLS-0$
-        iframe.style.width = "100%"; //$NON-NLS-0$
-        iframe.style.height = "100%"; //$NON-NLS-0$
+        // Only create help and topic links if this file contains a link to map to
+        if(lessonTopicMapping.hasOwnProperty(lessonName)) {
+            var topicBaseURL      = "https://myglife.org/mwiki/index.php/"
+            var topicFullURL      = topicBaseURL + lessonTopicMapping[lessonName];
+            var iframe            = document.createElement("iframe");
+            iframe.id             = 'previewFrame';
+            iframe.name           = 'HTML Previewer';
+            iframe.type           = "text/html";
+            iframe.sandbox        = "allow-scripts allow-same-origin allow-forms";
+            frameDiv.style.border = "none";
+            frameDiv.style.width  = "100%";
+            frameDiv.style.height = "100%";
+            iframe.style.width    = "100%";
+            iframe.style.height   = "99%";
 
-        iframe.src = "https://myglife.org/mwiki/index.php?title=Special:UserLogin&returnto=JS1%3ACourse+Index&returntoquery=";
+            iframe.src        = topicFullURL;
+            var el            = document.querySelector('.orionHTML');
+            var match         = el.querySelectorAll('iframe');
+            // Create new 'sticky' div for help and view topic buttons
+            var helpDiv       = document.createElement('div');
+            helpDiv.id        = 'helpDiv';
+            helpDiv.className = 'help-div';
 
-        frameDiv.appendChild(iframe);
-        targetNode.appendChild(frameDiv);       
+            // Add a refresh button to reload the game
+            var getHelpButton         = document.createElement("a");
+            getHelpButton.textContent = 'Get Help?';
+            getHelpButton.className   = 'btn glife-navy';
+
+            getHelpButton.setAttribute('href', 'https://globaloriahelp.zendesk.com');
+            getHelpButton.setAttribute('target', '_blank');
+
+            // Add a refresh button to reload the game
+            var viewTopicButton         = document.createElement("a");
+            viewTopicButton.textContent = 'View Full Topic';
+            viewTopicButton.className   = 'btn glife-navy';
+
+            viewTopicButton.setAttribute('href', topicFullURL);
+            viewTopicButton.setAttribute('target', '_blank');
+
+            helpDiv.appendChild(viewTopicButton);
+            helpDiv.appendChild(getHelpButton);
+            targetNode.appendChild(helpDiv);
+            frameDiv.appendChild(iframe);
+        } else {
+            var notFoundH1             = document.createElement('h1');
+            notFoundH1.style.color     = '#ffffff';
+            notFoundH1.style.textAlign = 'center';
+            notFoundH1.innerHTML       = 'There was an error with the file you are trying to preview';
+
+            var notFoundGif   = document.createElement('img');
+            notFoundGif.src   = '../www404noHeader2.gif';
+            notFoundGif.style.display = 'block';
+            notFoundGif.style.marginLeft = 'auto';
+            notFoundGif.style.marginRight = 'auto';
+            notFoundGif.alt   = 'Sorry! Lesson not found';
+            document.querySelector('.orionHTML').style.backgroundColor = '#004A80';
+
+            var notFoundDiv = document.createElement('div');
+            notFoundDiv.className = 'not-found-div';
+
+            notFoundDiv.appendChild(notFoundH1);
+            notFoundDiv.appendChild(notFoundGif);
+            frameDiv.appendChild(notFoundDiv);
+        }
+
+        targetNode.appendChild(frameDiv);
     }
 
     return {
