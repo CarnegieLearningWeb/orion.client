@@ -1332,3 +1332,16 @@ textarea.parameterInput {
 .fileExplorerProgressDiv {
 	margin-left: 10px;	
 }
+
+.help-div {
+    position: absolute;
+    border: 2px solid #000000;
+    background-color: #37474F;
+    bottom: 0;
+    width: 100%;
+    overflow: hidden;
+}
+
+.not-found-div {
+    padding-top: 100px;
+}
