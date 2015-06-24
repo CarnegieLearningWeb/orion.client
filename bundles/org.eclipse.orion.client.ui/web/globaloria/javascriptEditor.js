@@ -21,8 +21,8 @@ define([
     'orion/URITemplate',
     'orion/PageUtil',
     'orion/webui/splitter',
-    'orion/URL-shim'
-], function(i18nUtil, messages, mCommands, mEditor, mFileCommands, objects, lib, URITemplate, PageUtil, mSplitter) {
+    'mixloginstatic/javascript/jquery'
+], function(i18nUtil, messages, mCommands, mEditor, mFileCommands, objects, lib, URITemplate, PageUtil, mSplitter, jquery) {
 
     var uriTemplate = new URITemplate("#{,resource,params*}"); //$NON-NLS-0$
     var toggleOrientationCommand;
@@ -181,7 +181,7 @@ define([
         "07_multipleCollectables.js" : "JS1:Build_Basic_Game_-_Multiple_Collectables",
         "08_multipleEnemies.js"      : "JS1:Build_Basic_Game_-_Multiple_Enemies",
         "09_addArtwork.js"           : "JS1:Customize_Action_Game_-_Add_Artwork",
-        "10_addSounds.js"            : "JS1:Customize_Action_Game_-_Add_Sounds",
+        "10_addSound.js"             : "JS1:Customize_Action_Game_-_Add_Sounds",
         "11_addGameOver.js"          : "JS1:Customize_Action_Game_-_Add_Game_Over_Screen",
         "12_extendScene.js"          : "JS1:Customize_Action_Game_-_Extend_Scene",
         "13_addGoal.js"              : "JS1:Customize_Action_Game_-_Add_Goal_and_Victory_Screen"
@@ -199,52 +199,73 @@ define([
         var windowHash        = window.location.hash;
         var lessonName        = grabCurrentLessonFromURL(windowHash);
         // Add the current page iframe to the current page
-        var frameDiv          = document.createElement("div");
-        frameDiv.id           = 'previewHtml';
+        var previewDiv          = document.createElement("div");
+        previewDiv.id           = 'previewHtml';
+        previewDiv.style.border = "none";
+        previewDiv.style.width  = "100%";
+        previewDiv.style.height = "100%";
 
         // Only create help and topic links if this file contains a link to map to
         if(lessonTopicMapping.hasOwnProperty(lessonName)) {
             var topicBaseURL      = "https://myglife.org/mwiki/index.php/"
             var topicFullURL      = topicBaseURL + lessonTopicMapping[lessonName];
-            var iframe            = document.createElement("iframe");
-            iframe.id             = 'previewFrame';
-            iframe.name           = 'HTML Previewer';
-            iframe.type           = "text/html";
-            iframe.sandbox        = "allow-scripts allow-same-origin allow-forms";
-            frameDiv.style.border = "none";
-            frameDiv.style.width  = "100%";
-            frameDiv.style.height = "100%";
-            iframe.style.width    = "100%";
-            iframe.style.height   = "99%";
 
-            iframe.src        = topicFullURL;
-            var el            = document.querySelector('.orionHTML');
-            var match         = el.querySelectorAll('iframe');
-            // Create new 'sticky' div for help and view topic buttons
-            var helpDiv       = document.createElement('div');
-            helpDiv.id        = 'helpDiv';
-            helpDiv.className = 'help-div';
+            // Make ajax call to get current lesson contents
+            $.ajax({
+                method: 'GET',
+                url: topicFullURL,
+            }).then(function(results) {
+                // Replace all instance of an absolute path with a full url
+                var re            = /"\/mwiki/gi;
+                var updatedString = results.replace(re, '"https://myglife.org/mwiki');
 
-            // Add a refresh button to reload the game
-            var getHelpButton         = document.createElement("a");
-            getHelpButton.textContent = 'Get Help?';
-            getHelpButton.className   = 'btn glife-navy';
+                // Create temp div child to create a searchable DOM element from
+                // the html string we got back from ajax
+                var tempDiv       = document.createElement('div');
+                tempDiv.innerHTML = updatedString;
+                var childNodes    = tempDiv.childNodes;
+                var content       = $(childNodes).find('#exportContentToGIDE');
+                
+                // Link css styles to the content
+                var link  = document.createElement('link');
+                link.rel  = 'stylesheet';
+                link.type = 'text/css';
+                link.href = 'https://myglife.org/mwiki/skins/globaloria/globaloria.css';
 
-            getHelpButton.setAttribute('href', 'https://globaloriahelp.zendesk.com');
-            getHelpButton.setAttribute('target', '_blank');
+                // Create new 'sticky' div for help and view topic buttons
+                var helpDiv       = document.createElement('div');
+                helpDiv.id        = 'helpDiv';
+                helpDiv.className = 'help-div';
 
-            // Add a refresh button to reload the game
-            var viewTopicButton         = document.createElement("a");
-            viewTopicButton.textContent = 'View Full Topic';
-            viewTopicButton.className   = 'btn glife-navy';
+                // Add a refresh button to reload the game
+                var getHelpButton         = document.createElement("a");
+                getHelpButton.textContent = 'Get Help?';
+                getHelpButton.className   = 'btn glife-navy';
 
-            viewTopicButton.setAttribute('href', topicFullURL);
-            viewTopicButton.setAttribute('target', '_blank');
+                getHelpButton.setAttribute('href', 'https://globaloriahelp.zendesk.com');
+                getHelpButton.setAttribute('target', '_blank');
 
-            helpDiv.appendChild(viewTopicButton);
-            helpDiv.appendChild(getHelpButton);
-            targetNode.appendChild(helpDiv);
-            frameDiv.appendChild(iframe);
+                // Add a refresh button to reload the game
+                var viewTopicButton         = document.createElement("a");
+                viewTopicButton.textContent = 'View Full Topic';
+                viewTopicButton.className   = 'btn glife-navy';
+
+                viewTopicButton.setAttribute('href', topicFullURL);
+                viewTopicButton.setAttribute('target', '_blank');
+
+                helpDiv.appendChild(getHelpButton);
+                helpDiv.appendChild(viewTopicButton);
+                previewDiv.appendChild(link);
+                previewDiv.appendChild(content[0]);
+                previewDiv.appendChild(helpDiv);
+                targetNode.appendChild(previewDiv);
+            },
+            function(results) {
+                console.log('Error Loading AJAX Request Content');
+                console.log(results);
+            });
+
+
         } else {
             var notFoundH1             = document.createElement('h1');
             notFoundH1.style.color     = '#ffffff';
@@ -264,10 +285,10 @@ define([
 
             notFoundDiv.appendChild(notFoundH1);
             notFoundDiv.appendChild(notFoundGif);
-            frameDiv.appendChild(notFoundDiv);
+            previewDiv.appendChild(notFoundDiv);
         }
 
-        targetNode.appendChild(frameDiv);
+        targetNode.appendChild(previewDiv);
     }
 
     return {
