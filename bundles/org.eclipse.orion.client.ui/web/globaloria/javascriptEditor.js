@@ -173,18 +173,26 @@ define([
 
     // Mapping for the lessons/ topics with URL
     var lessonTopicMapping = {
-        "02_drawShape.js"            : "JS1:Build_Basic_Game_-_Draw_Shape",
-        "03_moveShape.js"            : "JS1:Build_Basic_Game_-_Move_Shape",
-        "04_controlShape.js"         : "JS1:Build_Basic_Game_-_Control_Shape",
-        "05_displayScore.js"         : "JS1:Build_Basic_Game_-_Display_Score",
-        "06_increaseScore.js"        : "JS1:Build_Basic_Game_-_Increase_Score",
-        "07_multipleCollectables.js" : "JS1:Build_Basic_Game_-_Multiple_Collectables",
-        "08_multipleEnemies.js"      : "JS1:Build_Basic_Game_-_Multiple_Enemies",
-        "09_addArtwork.js"           : "JS1:Customize_Action_Game_-_Add_Artwork",
-        "10_addSound.js"             : "JS1:Customize_Action_Game_-_Add_Sounds",
-        "11_addGameOver.js"          : "JS1:Customize_Action_Game_-_Add_Game_Over_Screen",
-        "12_extendScene.js"          : "JS1:Customize_Action_Game_-_Extend_Scene",
-        "13_addGoal.js"              : "JS1:Customize_Action_Game_-_Add_Goal_and_Victory_Screen"
+        "02_drawShape.js"               : "JS1:Build_Basic_Game_-_Draw_Shape",
+        "03_moveShape.js"               : "JS1:Build_Basic_Game_-_Move_Shape",
+        "04_controlShape.js"            : "JS1:Build_Basic_Game_-_Control_Shape",
+        "05_displayScore.js"            : "JS1:Build_Basic_Game_-_Display_Score",
+        "06_increaseScore.js"           : "JS1:Build_Basic_Game_-_Increase_Score",
+        "07_multipleCollectables.js"    : "JS1:Build_Basic_Game_-_Multiple_Collectables",
+        "08_multipleEnemies.js"         : "JS1:Build_Basic_Game_-_Multiple_Enemies",
+        "09_addArtwork.js"              : "JS1:Customize_Action_Game_-_Add_Artwork",
+        "10_addSound.js"                : "JS1:Customize_Action_Game_-_Add_Sounds",
+        "11_addGameOver.js"             : "JS1:Customize_Action_Game_-_Add_Game_Over_Screen",
+        "12_extendScene.js"             : "JS1:Customize_Action_Game_-_Extend_Scene",
+        "13_addGoal.js"                 : "JS1:Customize_Action_Game_-_Add_Goal_and_Victory_Screen",
+        "14a_addIngredientMusic.js"     : "Help:JS_Ingredient_-_Background_Music",
+        "14b_addIngredientHealth.js"    : "Help:JS_Ingredient_-_Health_Bar",
+        "14c_addIngredientKeyboard.js"  : "Help:JS_Ingredient_-_Keyboard_Control",
+        "14d_addIngredientAnimation.js" : "Help:JS_Ingredient_-_Animation",
+        "14e_addIngredientJumping.js"   : "Help:JS_Ingredient_-_Jumping",
+        "15_playtest.js"                : "JS1:Customize_Action_Game_-_Playtest",
+        "16_tuneGamePlay.js"            : "JS1:Customize_Action_Game_-_Tune_Game_Play",
+        "17_presentGame.js"             : "JS1:Customize_Action_Game_-_Present_Game"
     };
 
     var grabCurrentLessonFromURL = function(hash) {

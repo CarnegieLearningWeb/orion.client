@@ -1391,7 +1391,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			"addSound",
 			"addGameOver",
 			"extendScene",
-			"addGoal"
+			"addGoal",
+			"addGoal",		// Duplicate is needed to keep correct index num used to append file prefixes
+			"playtest",
+			"tuneGamePlay"
 		];
 
 		var nextLessonCommand = new mCommands.Command({
@@ -1403,7 +1406,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					var filename      = currItem.Name;
 					var cleanFilename = cleanupFileName(filename);
 					var isDirectory   = currItem.Directory;
-
 
 					if (!explorer || !explorer.isCommandsVisible()) {
 						return false;
@@ -1418,6 +1420,13 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					}
 
 					if (lessonNames.indexOf(cleanFilename) === -1) {
+						if (cleanFilename.match(/addIngredient/)){
+							return true;
+						}
+						return false;
+					}
+
+					if (cleanFilename === 'addGoal') {
 						return false;
 					}
 
@@ -1450,6 +1459,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					// Generate JavaScript file name
 					var jsOldFileName     = generateNextFileName(cleanFilename, nextFileIndex - 1, 'js');
 					var jsNewFileName     = generateNextFileName(nextFileName, nextFileIndex, 'js');
+
+					// If this is an ingidient, break current file naming rules & replace the original filename
+					// extension with .js instead of html
+					if (cleanFilename.match(/addIngredient/))
+						jsOldFileName = filename.replace('.html', '.js');
+
 					// Generate JavaScript file 'Location' path
 					var jsParentLocation  = parentLocation + 'js/';
 					var jsOldLocationPath = jsParentLocation + jsOldFileName;
@@ -1487,6 +1502,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			var indexOfCurrFile   = lessonNames.indexOf(filename);
 			var indexOfNextLesson = indexOfCurrFile + 1;
 			var nextFileName      = lessonNames[indexOfNextLesson];
+
+			if (filename.match(/addIngredient/)){
+				indexOfNextLesson = lessonNames.indexOf('playtest');
+				nextFileName      = lessonNames[indexOfNextLesson];
+			}
 
 			var lessonInfo = {
 				nextFileName  : nextFileName,
