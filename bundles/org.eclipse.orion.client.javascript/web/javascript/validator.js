@@ -193,6 +193,9 @@ define([
 		if(typeof(start) !== 'undefined') {
 		    prob.start = start;
 		    prob.end = end;
+		} else if(typeof(e.index) === 'number') {
+			prob.start = end;
+			prob.end = e.index;
 		} else if(typeof(e.lineNumber) !== 'undefined') {
 		    prob.line = e.lineNumber;
 		    prob.start = e.column;
@@ -258,6 +261,15 @@ define([
 					}
 					if(token) {
 					   error.node = token;
+					   if(token.value) {
+					   		if(!error.args) {
+					   			error.args = Object.create(null);
+					   		}
+					   		if(!error.args.data) {
+					   			error.args.data = Object.create(null);
+					   		}
+					   		error.args.data.tokenValue = token.value;
+					   }
 					}
 					errors.push(error);
 				}

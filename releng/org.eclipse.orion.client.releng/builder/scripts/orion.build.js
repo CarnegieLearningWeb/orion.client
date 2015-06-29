@@ -8,22 +8,11 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-/*global Packages*/
 ({
     optimizeCss: "standard.keepLines",
-    optimize: "closure",
+    optimize: "uglify2",
     generateSourceMaps: true,
     preserveLicenseComments: false,
-    closure: {
-        CompilerOptions: {
-            // Need this check to avoid TypeError when eval'ing this buildfile without the Closure jars loaded, or from Node.
-            languageIn: (typeof Packages === "object" && typeof Packages.com.google.javascript.jscomp.CompilerOptions.LanguageMode.valueOf === "function")
-                ? Packages.com.google.javascript.jscomp.CompilerOptions.LanguageMode.valueOf(Packages.com.google.javascript.jscomp.CompilerOptions.LanguageMode, "ECMASCRIPT5")
-                : "ECMASCRIPT5"
-        },
-        CompilationLevel: 'SIMPLE_OPTIMIZATIONS',
-        loggingLevel: 'WARNING'
-    },
 
     pragmas: {
         asynchLoader: true
@@ -59,27 +48,28 @@
             location: "eslint/conf",
         }],
     // Bundles whose ./web/ folders will be copied into the staging directory by the builder.
+    // ** For Nashorn compatibility, use single quotes here **
     bundles: [
-        "${orionClient}/bundles/org.eclipse.orion.client.core",
-        "${orionClient}/bundles/org.eclipse.orion.client.cf",
-        "${orionClient}/bundles/org.eclipse.orion.client.ui",
-        "${orionClient}/bundles/org.eclipse.orion.client.editor",
-        "${orionClient}/bundles/org.eclipse.orion.client.git",
-        "${orionClient}/bundles/org.eclipse.orion.client.help",
-        "${orionClient}/bundles/org.eclipse.orion.client.javascript",
-        "${orionClient}/bundles/org.eclipse.orion.client.webtools",
-        "${orionClient}/bundles/org.eclipse.orion.client.users"
+        '${orionClient}/bundles/org.eclipse.orion.client.core',
+        '${orionClient}/bundles/org.eclipse.orion.client.cf',
+        '${orionClient}/bundles/org.eclipse.orion.client.ui',
+        '${orionClient}/bundles/org.eclipse.orion.client.editor',
+        '${orionClient}/bundles/org.eclipse.orion.client.git',
+        '${orionClient}/bundles/org.eclipse.orion.client.help',
+        '${orionClient}/bundles/org.eclipse.orion.client.javascript',
+        '${orionClient}/bundles/org.eclipse.orion.client.webtools',
+        '${orionClient}/bundles/org.eclipse.orion.client.users'
     ],
     // Folders that should be searched for JSDoc
     jsdocs: [
-        "${orionClient}/bundles/org.eclipse.orion.client.core/web/orion/",
-        "${orionClient}/bundles/org.eclipse.orion.client.cf/web/orion/",
-        "${orionClient}/bundles/org.eclipse.orion.client.ui/web/orion/",
-        "${orionClient}/bundles/org.eclipse.orion.client.editor/web/orion/",
-        "${orionClient}/bundles/org.eclipse.orion.client.git/web/orion/",
-        "${orionClient}/bundles/org.eclipse.orion.client.javascript/web/javascript/",
-        "${orionClient}/bundles/org.eclipse.orion.client.webtools/web/webtools/",
-        "${orionClient}/bundles/org.eclipse.orion.client.users/web/orion/"
+        '${orionClient}/bundles/org.eclipse.orion.client.core/web/orion/',
+        '${orionClient}/bundles/org.eclipse.orion.client.cf/web/orion/',
+        '${orionClient}/bundles/org.eclipse.orion.client.ui/web/orion/',
+        '${orionClient}/bundles/org.eclipse.orion.client.editor/web/orion/',
+        '${orionClient}/bundles/org.eclipse.orion.client.git/web/orion/',
+        '${orionClient}/bundles/org.eclipse.orion.client.javascript/web/javascript/',
+        '${orionClient}/bundles/org.eclipse.orion.client.webtools/web/webtools/',
+        '${orionClient}/bundles/org.eclipse.orion.client.users/web/orion/'
     ],
     // List of modules that r.js will optimize
     modules: (function() {
