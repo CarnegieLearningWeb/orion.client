@@ -52,6 +52,26 @@ define(["orion/Deferred", "orion/xhr", 'orion/EventTarget', 'orion/form'], funct
 
 	UsersService.prototype = /** @lends eclipse.FileService.prototype */
 	{
+		getStudentList : function(students) {
+			var ret = new Deferred();
+			var studentList = {
+				Users : []
+			};
+
+			if (typeof students === 'object') {
+				for (var key in students) {
+					// Check this object looks like what we expect
+					// if so, create a users object to return
+					if (students[key].hasOwnProperty('UserName')) {
+						studentList.Users.push(students[key]);
+					}
+				}
+				ret.resolve(studentList);
+			} else {
+				ret.reject('This object has improper structure');
+			}
+			return ret;
+		},
 		getUsersListSubset : function(start, rows, onLoad) {
 			var ret = new Deferred();
 			var service = this;
@@ -190,7 +210,6 @@ define(["orion/Deferred", "orion/xhr", 'orion/EventTarget', 'orion/form'], funct
 				timeout : 15000,
 				data: JSON.stringify(data)
 			}).then(function(result) {
-				console.log(result);
 				var jsonData = getJSON(result.response);
 				if (onLoad){
 					if(typeof onLoad === "function") //$NON-NLS-0$

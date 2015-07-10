@@ -29,6 +29,9 @@ define(function() {
 		getUserInfo: function(userURI, onLoad){
 			return this._doServiceCall("getUserInfo", arguments); //$NON-NLS-0$
 		},
+		getStudentList : function(students) {
+			return this._doServiceCall("getStudentList", arguments); //$NON-NLS-0$
+		},
 		getUsersListSubset : function(start, rows, onLoad) {
 			return this._doServiceCall("getUsersListSubset", arguments); //$NON-NLS-0$
 		},
