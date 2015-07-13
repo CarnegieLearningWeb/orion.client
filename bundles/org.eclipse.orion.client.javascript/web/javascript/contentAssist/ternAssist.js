@@ -9,7 +9,7 @@
  * Contributors:
  *   IBM Corporation - Various improvements
  ******************************************************************************/
-/*eslint-env amd */
+/*eslint-env amd, browser*/
 define([
 	'i18n!javascript/nls/messages',
     'orion/Deferred',
@@ -37,7 +37,7 @@ define([
  	TemplateProvider.prototype = new mTemplates.TemplateContentAssist([], []);
  	
  	Objects.mixin(TemplateProvider.prototype, {
- 		uninterestingChars: ":!#$^&.?<>", //$NON-NLS-0$
+ 		uninterestingChars: ":!#$^&.?<>", //$NON-NLS-1$
  		
  		isValid: function(prefix, buffer, offset) {
 			var char = buffer.charAt(offset-prefix.length-1);
@@ -47,18 +47,19 @@ define([
 		getTemplateProposals: function(prefix, offset, context, kind) {
 			var proposals = [];
 			var k = kind ? kind.kind : null;
-			var templates = Templates.getTemplatesForKind(k); //this.getTemplates();
+			var templates = Templates.getTemplatesForKind(k);
 			for (var t = 0; t < templates.length; t++) {
 				var template = templates[t];
 				if (this.templateMatches(template, prefix, kind, context)) {
 					var proposal = template.getProposal(prefix, offset, context);
 					var obj = Object.create(null);
 			        obj.type = 'markdown'; //$NON-NLS-1$
-			        obj.content = 'Template source code:\n\n';
+			        obj.content = Messages['templateHoverHeader'];
 			        obj.content += proposal.proposal;
 			        proposal.hover = obj;
 			        proposal.style = 'emphasis'; //$NON-NLS-1$
 					this.removePrefix(prefix, proposal);
+					proposal.kind = 'js'; //$NON-NLS-1$
 					proposals.push(proposal);
 				}
 			}
@@ -78,8 +79,8 @@ define([
 				// proposals, add a title as the first element
 				proposals.splice(0, 0, {
 					proposal: '',
-					description: 'Templates', //$NON-NLS-0$
-					style: 'noemphasis_title', //$NON-NLS-0$
+					description: Messages['templateAssistHeader'],
+					style: 'noemphasis_title', //$NON-NLS-1$
 					unselectable: true
 				});
 			}
@@ -206,26 +207,26 @@ define([
     	node = Finder.findNode(offset, ast, {parents:true});
     	if(node) {
     		if(node.parents && node.parents.length > 0) {
-	    		var parent = node.parents.pop();
-	    		switch(parent.type) {
+	    		var prent = node.parents.pop();
+	    		switch(prent.type) {
 						case 'MemberExpression': 
 							return { kind : 'member'}; //$NON-NLS-1$
 						case 'Program':
 						case 'BlockStatement':
 							break;
 						case 'VariableDeclarator':
-							if(!parent.init || offset < parent.init.range[0]) {
+							if(!prent.init || offset < prent.init.range[0]) {
 								return null;
 							}
 							break;
 						case 'FunctionDelcaration':
 						case 'FunctionExpression':
-							if(offset < parent.body.range[0]) {
+							if(offset < prent.body.range[0]) {
 								return null;						
 							}
 							break;
 						case 'Property':
-							if(offset-1 >= parent.value.range[0] && offset-1 <= parent.value.range[1]) {
+							if(offset-1 >= prent.value.range[0] && offset-1 <= prent.value.range[1]) {
 								return { kind : 'prop'}; //$NON-NLS-1$
 							}
 							return null;
@@ -271,19 +272,20 @@ define([
     	                       var val;
         	                   if((val = /\s*\*\s*\@name\s*(\w*)/ig.exec(params.line)) !== null) {
         	                       if(val[1] === params.prefix) {
-        	                           var name;
+        	                           var _name;
         	                           if(ismember) {
-            	                           name = Signatures.expandMemberExpression(node.left, '');
+            	                           _name = Signatures.expandMemberExpression(node.left, '');
             	                       } else {
-            	                           name = isdecl ? node.id.name : node.key.name;
+            	                           _name = isdecl ? node.id.name : node.key.name;
             	                       }
             	                       proposals.push({
-            								proposal: name,
+            								proposal: _name,
             								relevance: 100,
-            								name: name,
+            								name: _name,
             								description: Messages['funcProposalDescription'],
             								style: 'emphasis', //$NON-NLS-1$
-            								overwrite: true
+            								overwrite: true,
+            								kind: 'js' //$NON-NLS-1$
         							    });
     							}
         	                   } else if((val = /\s*\*\s*\@param\s*(?:\{\w*\})?\s*(\w*)/ig.exec(params.line)) !== null) {
@@ -291,15 +293,16 @@ define([
         	                           var prms = isdecl ? node.params : node.value.params;
         	                           if(prms) {
         	                               for(var i = 0; i < prms.length; i++) {
-        	                                   name = prms[i].name;
-        	                                   if(Util.looselyMatches(params.prefix, name)) { 
+        	                                   _name = prms[i].name;
+        	                                   if(Util.looselyMatches(params.prefix, _name)) { 
             	                                   proposals.push({
-                        								proposal: name,
+                        								proposal: _name,
                         								relevance: 100,
-                        								name: name,
+                        								name: _name,
                         								description: Messages['funcParamProposalDescription'],
                         								style: 'emphasis', //$NON-NLS-1$
-                        								overwrite: true
+                        								overwrite: true,
+                        								kind: 'js' //$NON-NLS-1$
                     							    });
                 							    }
         	                               }
@@ -311,9 +314,9 @@ define([
 		        }
 		    }
         } else if(kind && kind.kind === 'doc') {
-            var comment = kind.node.value.trim();
+            var comment = kind.node.value;
             if(comment) {
-	            if(/^(?:\/\*)?\s*eslint(?:-enable|-disable)?\s+/gi.test(params.line)) {
+	            if(/^\s*(?:\/\*)?\s*eslint(?:-enable|-disable)?\s+/gi.test(comment)) {
 	                //eslint eslint-enable eslint-disable
 	                var rules = Rules.getRules();
 	                var rulekeys = Object.keys(rules).sort();
@@ -328,7 +331,8 @@ define([
 								description: Messages['eslintRuleProposalDescripton'],
 								prefix: params.prefix,
 								style: 'emphasis', //$NON-NLS-1$
-								overwrite: true
+								overwrite: true,
+								kind: 'js' //$NON-NLS-1$
 						    };
 						    var hover = rule.description ? rule.description : '';
 						    if(rule.url) {
@@ -338,7 +342,7 @@ define([
                             proposals.push(_p);
 					    }
 	                }
-	            } else if(/^(?:\/\*)?\s*eslint-env\s+/gi.test(params.line)) {
+	            } else if(/^\s*(?:\/\*)?\s*eslint-env\s+/gi.test(comment)) {
 	                //eslint-env (comma-separated list)
 	                var _all = Objects.mixin(ESLintEnv, pluginenvs);
 	                var keys = Object.keys(_all).sort();
@@ -351,7 +355,8 @@ define([
 								name: key,
 								description: Messages['eslintEnvProposalDescription'],
 								style: 'emphasis', //$NON-NLS-1$
-								overwrite: true
+								overwrite: true,
+								kind: 'js' //$NON-NLS-1$
 						    });
 	                    }
 	                }
@@ -363,12 +368,12 @@ define([
 
 	var deferred = null;
 
-	var handler = function(event) {
-		 if(deferred && typeof(event.data) === 'object') {
-	        var _d = event.data;
+	var handler = function(evnt) {
+		 if(deferred && typeof(evnt.data) === 'object') {
+	        var _d = evnt.data;
 	        if(_d.request === 'completions') {
 	        	if(deferred.proposals) {
-	        		deferred.resolve([].concat(sortProposals(_d.proposals, deferred.args), deferred.proposals));
+	        		deferred.resolve([].concat(sortProposals(_d.proposals ? _d.proposals : [], deferred.args), deferred.proposals));
 	        	} else {
 	        		deferred.resolve(sortProposals(_d.proposals, deferred.args));
 	        	}
@@ -390,6 +395,7 @@ define([
 		this.ternworker = ternWorker;
 		this.pluginenvs = pluginEnvironments;
 		this.ternworker.addEventListener('message', handler, false);
+		this.timeout = null;
 	}
 
 	/**
@@ -451,9 +457,21 @@ define([
 			    }
 			    var args = {params: params, meta: meta, envs:env, files: files};
 	        	this.ternworker.postMessage({request: 'completions', args: args}); //$NON-NLS-1$
+	        	if(deferred) {
+	        		deferred.resolve();
+	        	}
 				deferred = new Deferred();
 				deferred.proposals = proposals;
 				deferred.args = args;
+				if(this.timeout) {
+					clearTimeout(this.timeout);
+				}
+				this.timeout = setTimeout(function() {
+					if(deferred) {
+						deferred.resolve(Messages['noProposalsTimedOut']);
+					}
+					this.timeout = null;
+				}, 5000);
 				return deferred;
    			}
 		},
@@ -472,12 +490,12 @@ define([
 			                if(match[1] === 'eslint-env') {
 			                	// Collapse whitespace around ,
 							    var string = value.replace(/\s*,\s*/g, ",");
-							    string.split(/,+/).forEach(function(name) {
-							        name = name.trim();
-							        if (!name) {
+							    string.split(/,+/).forEach(function(_name) {
+							        _name = _name.trim();
+							        if (!_name) {
 							            return;
 							        }
-							        env[name] = true;
+							        env[_name] = true;
 							    });
 			                }
 			            }
@@ -553,7 +571,8 @@ define([
 	    var proposal = {
             relevance: 100,
             style: 'emphasis', //$NON-NLS-1$
-            overwrite: true
+            overwrite: true,
+            kind: 'js' //$NON-NLS-1$
         };
         proposal.name = proposal.proposal = completion.name;
         if(typeof(completion.type) !== 'undefined') {
@@ -564,7 +583,7 @@ define([
             	var _prop = _t.getProposal(args.params.prefix, args.params.offset, {});
             	var obj = Object.create(null);
 		        obj.type = 'markdown'; //$NON-NLS-1$
-		        obj.content = 'Template source code:\n\n';
+		        obj.content = Messages['templateHoverHeader'];
 		        obj.content += _prop.proposal;
 		        _prop.hover = obj;
 		        provider.removePrefix(args.params.prefix, _prop);
@@ -581,7 +600,7 @@ define([
     		    proposal.description = convertTypes(' : ' + completion.type); //$NON-NLS-1$
 		    }
         }
-        var obj = Object.create(null);
+        obj = Object.create(null);
         obj.type = 'markdown'; //$NON-NLS-1$
         obj.content = '';
         if(!completion.doc) {
@@ -614,6 +633,8 @@ define([
 		if(ret) {
 			proposal.description = ' : ' + convertTypes(ret[1]); //$NON-NLS-1$
 			type = type.slice(0, ret.index);
+		} else {
+			proposal.description = '';
 		}
 		var _p = completion.name + '(';
 		var params = collectParams(type.slice(1, type.length-1));
@@ -671,11 +692,11 @@ define([
 	 * @returns {String} The formatted type sig
 	 */
 	function convertTypes(type) {
-		//TODO do we want to convert all types? make arrays pretty?
-		type = type.replace(/:\s*\?/g, ': Any'); //$NON-NLS-1$
-		type = type.replace(/:\s*bool/g, ': Boolean'); //$NON-NLS-1$
-		type = type.replace(/:\s*number/g, ': Number'); //$NON-NLS-1$
-		type = type.replace(/:\s*string/g, ': String'); //$NON-NLS-1$
+		//TODO do we want to convert all types (any types)? make arrays pretty?
+		type = type.replace(/:\s*\?/g, ': any'); //$NON-NLS-1$
+//		type = type.replace(/:\s*bool/g, ': Boolean'); //$NON-NLS-1$
+//		type = type.replace(/:\s*number/g, ': Number'); //$NON-NLS-1$
+//		type = type.replace(/:\s*string/g, ': String'); //$NON-NLS-1$
 		return type;
 	}
 

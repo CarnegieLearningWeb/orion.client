@@ -31,13 +31,80 @@ function(mEmbeddedEditor) {
 						 '<div class="embeddedEditorParentOuter" id="embeddedEditor1">\n' + 
 						 "</div>\n" + 
 						 "<span>var foo2</span>"; 
+						 
+	var contents2 = '<server description="new server">\n' +
+					 '</server>';
 	var embeddedEditor = new mEmbeddedEditor();
+	var proposals = [
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal ",
+		"proposal "
+	];
+	var contentAssistProvider = {
+		computeProposals: function(buffer, offset, context) {
+			var result = [];
+			for(var i = 0; i < proposals.length; i++){
+				result.push(proposals[i] + i);
+			}
+			return result;
+		}
+	};
+	var hoverProvider = {
+		computeHoverInfo: function (editorContext, context) {
+			var pContent = "*This text will be italic*\n\n **This text will be bold**\n\n";
+			if(typeof context.offset === "number") {
+				return context.offset > 12 ? {
+					title: "This is the title",
+					content: pContent,
+					type: "markdown"} : null;
+			} else if(typeof context.proposal === "string") {
+				var index = parseInt(context.proposal.substring("proposal ".length - 1), 10);
+				return index > 3 ? {
+					title: "This is the title",
+					content: pContent,
+					type: "markdown"} : {};
+			}
+			return null;
+		}
+	};
+
 	embeddedEditor.create({parent: "embeddedEditor", _defaultPlugins: defaultPluginURLs}).then(function(editorViewer) {
 		document.getElementById("progressMessageDiv").textContent = "Plugins loaded!";
 		editorViewer.setContents(contents, "application/javascript");
+		//editorViewer.inputManager.setAutoSaveTimeout(-1);
 		editorViewer.editor.getTextView().setOptions({themeClass: "editorTheme"});
 	});
 	embeddedEditor.create({parent: "embeddedEditor1", _defaultPlugins: defaultPluginURLs,
-						   contentType: "text/html",
-						   contents: contents1});
+						   contentType: "application/xml",
+						   contents: contents2}).then(function(editorViewer){
+		editorViewer.serviceRegistry.registerService("orion.edit.contentassist",
+				contentAssistProvider,
+	    		{	name: "xmlContentAssist",
+	    			contentType: ["application/xml"]
+	    		});
+		editorViewer.serviceRegistry.registerService("orion.edit.hover",
+			hoverProvider,
+    		{	name: "xmlContentHover",
+    			contentType: ["application/xml"]
+    		});
+	
+						   		
+	});
 });

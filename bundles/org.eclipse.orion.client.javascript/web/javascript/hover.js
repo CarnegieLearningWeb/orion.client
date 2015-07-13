@@ -262,7 +262,7 @@ define([
 		 * @param {Object} ctxt The current selection context
 		 */
 		computeHoverInfo: function computeHoverInfo(editorContext, ctxt) {
-		    if(ctxt.proposal) {
+		    if(ctxt.proposal && ctxt.proposal.kind === 'js') {
 		        return ctxt.proposal.hover;
 		    }
 		    var that = this;
@@ -270,6 +270,7 @@ define([
 		    	if (!meta){
 		    		return null;
 		    	}
+		    	that.resolver.setSearchLocation(meta.parents[meta.parents.length - 1].Location);
 		        if(meta && meta.contentType.id === 'application/javascript') {
 		            return that.astManager.getAST(editorContext).then(function(ast) {
         				return that._doHover(ast, ctxt, meta);

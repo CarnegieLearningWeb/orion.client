@@ -14,8 +14,8 @@
 define([
 'orion/objects',
 'orion/URITemplate',
-'htmlparser/visitor'
-], function(Objects, URITemplate, Visitor) {
+'webtools/util'
+], function(Objects, URITemplate, util) {
 	
 	/**
 	 * @description creates a new instance of the hover support
@@ -44,75 +44,57 @@ define([
 		 * @callback
 		 */
 		computeHoverInfo: function computeHover(editorContext, ctxt) {
-			var that = this;
-			return that.htmlAstManager.getAST(editorContext).then(function(ast) {
-			    if(ast) {
-			        var node = that._findNode(ast, ctxt.offset, null);
-			        if(node) {
-			            switch(node.type) {
-			                case 'tag': {
-			                	if (that._hoverableTags.indexOf(node.name) >= 0){
-			                		return that._getTagContentsHover(editorContext, node.range);
-			                	}
-			                    break;
-			                }
-			                case 'attr': {
-			                    var path = node.value;
-			                    switch(node.kind) {
-			                        case 'href': {
-			                            if(/\.(?:png|jpg|jpeg|bmp|gif)$/.test(path)) {
-                            	            return that._getImageHover(editorContext, path);
-                            	        } else if(/^data:image.*;base64/i.test(path)) {
-                            	            return that._getImageHover(editorContext, path, true);
-                            	        }
-			                            return that._getFileHover(editorContext, path);
-			                        }
-			                        case 'src': {
-			                            if(/\.(?:png|jpg|jpeg|bmp|gif)$/.test(path)) {
-                            	            return that._getImageHover(editorContext, path);
-                            	        } else if(/^data:image.*;base64/i.test(path)) {
-                            	            return that._getImageHover(editorContext, path, true);
-                            	        } else if(/\.js$/i.test(path)) {
-                            	            return that._getFileHover(editorContext, path);
-                            	        }
-                            	        break;
-			                        }
-			                        case 'style': {
-			                            //TODO support embedded style sheets
-			                            break;
-			                        }
-			                    }
-			                    break;
-			                }
-			            }
-			        }
-			    }
-			    return null; 
-			});
+			if(ctxt.proposal && ctxt.proposal.kind === 'html') {
+				return ctxt.proposal.hover ? ctxt.proposal.hover : (ctxt.proposal.name ? ctxt.proposal.name : ctxt.proposal.description);
+			} else {
+				var that = this;
+				return that.htmlAstManager.getAST(editorContext).then(function(ast) {
+				    if(ast) {
+				        var node = util.findNodeAtOffset(ast, ctxt.offset);
+				        if(node) {
+				            switch(node.type) {
+				                case 'tag': {
+				                	if (that._hoverableTags.indexOf(node.name) >= 0){
+				                		//return that._getTagContentsHover(editorContext, node.range);
+				                	}
+				                    break;
+				                }
+				                case 'attr': {
+				                    var path = node.value;
+				                    switch(node.kind) {
+				                        case 'href': {
+				                            if(/\.(?:png|jpg|jpeg|bmp|gif)$/.test(path)) {
+	                            	            return that._getImageHover(editorContext, path);
+	                            	        } else if(/^data:image.*;base64/i.test(path)) {
+	                            	            return that._getImageHover(editorContext, path, true);
+	                            	        }
+				                            return that._getFileHover(editorContext, path);
+				                        }
+				                        case 'src': {
+				                            if(/\.(?:png|jpg|jpeg|bmp|gif)$/.test(path)) {
+	                            	            return that._getImageHover(editorContext, path);
+	                            	        } else if(/^data:image.*;base64/i.test(path)) {
+	                            	            return that._getImageHover(editorContext, path, true);
+	                            	        } else if(/\.js$/i.test(path)) {
+	                            	            return that._getFileHover(editorContext, path);
+	                            	        }
+	                            	        break;
+				                        }
+				                        case 'style': {
+				                            //TODO support embedded style sheets
+				                            break;
+				                        }
+				                    }
+				                    break;
+				                }
+				            }
+				        }
+				    }
+				    return null; 
+				});
+			}
 		},
 
-        /**
-		 * Returns the DOM node corresponding to the line and column number 
-		 * or null if no such node could be found.
-		 */
-		_findNode: function(dom, offset) {
-		    var found = null;
-			 Visitor.visit(dom, {
-	            visitNode: function(node) {
-	                //only check nodes that are typed, we don't care about any others
-					if(node.range[0] <= offset) {
-						found = node;
-					} else {
-						if (offset > found.range[1]){
-							found = null;
-						}
-					    return Visitor.BREAK;
-					}      
-	            }
-	        });
-	        return found;
-		},
-		
 		_getFileHover: function _getFileHover(editorContext, path) {
 		    if(path) {
 		        if(/^http/i.test(path)) {
@@ -247,7 +229,7 @@ define([
 			if (range){
 				var self = this;
 				return editorContext.getText().then(function(text) {
-					if(range[0] >= 0 && range[0] < text.length && range[1] > range[0] && range[1] < text.length){
+					if(range[0] >= 0 && range[0] < text.length && range[1] > range[0] && range[1] <= text.length){
 						var start = self._findTagStart(text, range[0]);
 						if (start === null){
 							return null;

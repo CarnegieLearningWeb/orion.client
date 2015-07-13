@@ -64,6 +64,7 @@ function Tooltip (view) {
 			tooltipDiv.setAttribute("aria-live", "assertive"); //$NON-NLS-1$ //$NON-NLS-0$
 			tooltipDiv.setAttribute("aria-atomic", "true"); //$NON-NLS-1$ //$NON-NLS-0$
 			this._tooltipDiv.style.visibility = "hidden"; //$NON-NLS-0$
+			this._tipShowing = false;
 			document.body.appendChild(tooltipDiv);
 			var self = this;
 			textUtil.addEventListener(document, "mousedown", this._mouseDownHandler = function(event) { //$NON-NLS-0$
@@ -136,15 +137,18 @@ function Tooltip (view) {
 		 * @name update
 		 * @description Updates the information in an already visible tooltip
 		 * @function
-		 * @param target The target through which the info is obtained
-		 * @param locked If true locks the tooltip (never hides unless 'hide' is called)
-		 * @param giveFocus If true forces the focus onto the tooltip (used for F2 processing)
+		 * @param tooltipInfo a function that will return the parameters need to update the information
+		 * @param noContent If true makes no attempt to gather new info and just updates the tooltip's position
 		 */
-		update: function(tooltipInfo) {
+		update: function(tooltipInfo, noContent) {
 			if (!tooltipInfo){
 				return;
 			}
-			this._processInfo(tooltipInfo.getTooltipInfo(), true);
+			if (noContent) {
+				this._showContents(null, tooltipInfo.getTooltipInfo(), true);
+			} else {
+				this._processInfo(tooltipInfo.getTooltipInfo(), true);
+			}
 		},
 		
 		/**
@@ -176,8 +180,12 @@ function Tooltip (view) {
 		 * @function
 		 * @public
 		*/
-		hide: function() {
-			if (!this.isVisible()){
+		hide: function(clearLock) {
+			if (clearLock) {
+				this._locked = undefined;
+			}
+			
+			if (this._locked || !this.isVisible()){
 				return;
 			}
 				
@@ -203,6 +211,7 @@ function Tooltip (view) {
 			this._tooltipDiv.classList.remove("textviewTooltipOnFocus"); //$NON-NLS-0$
 			
 			this._tooltipDiv.style.visibility = "hidden"; //$NON-NLS-0$
+			this._tipShowing = false;
 			this._tooltipDiv.style.left = "";
 			this._tooltipDiv.style.right = "";
 			this._tooltipDiv.style.top = "";
@@ -215,7 +224,6 @@ function Tooltip (view) {
 			this._tooltipDiv.style.overflowY = "";		 //$NON-NLS-0$	
 			
 			this._giveFocus = undefined;
-			this._locked = undefined;
 			
 			this._anchorArea = undefined;  // Area of text/ruler/etc. we are showing a tooltip for
 			this._tooltipArea = undefined;  // The area the tooltip covers
@@ -243,7 +251,7 @@ function Tooltip (view) {
 		 * @returns {boolean} 'true' iff the tooltip is currently visible
 		*/
 		isVisible: function() {
-			return this._tooltipDiv && this._tooltipDiv.style.visibility === "visible"; //$NON-NLS-0$
+			return this._tipShowing;
 		},
 		
 		/**
@@ -352,8 +360,10 @@ function Tooltip (view) {
 				}
 			}
 			
-			this._tooltipContents = newContentsDiv;
-			this._tooltipDiv.appendChild(newContentsDiv);
+			if (newContentsDiv) {
+				this._tooltipContents = newContentsDiv;
+				this._tooltipDiv.appendChild(newContentsDiv);				
+			}
 			
 			if (!this._anchorArea){
 				this._anchorArea = this._computeAnchorArea(info);
@@ -367,6 +377,7 @@ function Tooltip (view) {
 			}
 
 			this._tooltipDiv.style.visibility = "visible"; //$NON-NLS-0$
+			this._tipShowing = true;
 			
 			if (this._giveFocus) {
 				this._setInitialFocus(this._tooltipDiv);

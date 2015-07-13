@@ -77,6 +77,7 @@ define([
 					}
 					break;
 				case Estraverse.Syntax.FunctionExpression:
+				case Estraverse.Syntax.ArrowFunctionExpression:
 					if(this._enterScope(node)) {
 						return Estraverse.VisitorOption.Skip;
 					}
@@ -280,6 +281,7 @@ define([
 						}
 						break;
 					case Estraverse.Syntax.FunctionExpression:
+					case Estraverse.Syntax.ArrowFunctionExpression:
 						kind = 'fe';  //$NON-NLS-0$
 						// Include the params, body and identifier (if available) See Bug 447413
 						if (node.id) {
@@ -342,7 +344,8 @@ define([
 			} else {
 				switch(node.type) {
 					case Estraverse.Syntax.FunctionExpression:
-					case Estraverse.Syntax.FunctionDeclaration: {
+					case Estraverse.Syntax.FunctionDeclaration: 
+					case Estraverse.Syntax.ArrowFunctionExpression: {
 					    if(this._popScope()) {
 							return Estraverse.VisitorOption.Break;
 						}
@@ -568,7 +571,7 @@ define([
 					},
 					/** override */
 					leave: function(node) {
-						if(parents && offset >= node.range[1]) {
+						if(parents && offset > node.range[1]) {
 							parents.pop();
 						}
 					}

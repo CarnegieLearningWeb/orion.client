@@ -261,6 +261,14 @@ if (typeof(module) !== 'undefined' && typeof(module.exports) !== 'undefined') {
                 state.pos += 8;
                 return;
             }
+            if (match[2].charAt(0) === '<'){ // TODO ORION 8.0
+            	// Unclosed tag followed by another tag
+            	state.mode = Mode.Tag;
+            	var index = match[0].indexOf('<');
+            	state.pos += index;
+            	state.pos++; // Match text should not include leading <
+            	return;
+            }
             if (!state.done && (state.pos + match[0].length) === state.data.length) {
                 //We're at the and of the data, might be incomplete
                 state.needData = true;
@@ -343,7 +351,7 @@ if (typeof(module) !== 'undefined' && typeof(module.exports) !== 'undefined') {
     Parser.re_parseAttr_selfClose = /(\s*\/\s*)(>?)/g;
     Parser.prototype._parseAttr = function Parser$_parseAttr () {
         var state = this._state;
-        var start = state.pos; //TODO ORION 8.0
+        var start = end = state.pos; //TODO ORION 8.0
         var name_data = this._parseAttr_findName(state);
         if (!name_data || name_data.name === '?') {
             Parser.re_parseAttr_selfClose.lastIndex = state.pos;
@@ -378,7 +386,11 @@ if (typeof(module) !== 'undefined' && typeof(module.exports) !== 'undefined') {
             state.needData = true;
             return null;
         }
-        state.pos += name_data.match.length;
+        var _n = name_data.match.replace("^\s*", "");
+        if(_n) {
+        	start += name_data.match.length - _n.length;
+        }
+        end = state.pos += name_data.match.length;
         var value_data = this._parseAttr_findValue(state);
         if (value_data) {
             if (!state.done && state.pos + value_data.match.length === state.data.length) {
@@ -386,6 +398,7 @@ if (typeof(module) !== 'undefined' && typeof(module.exports) !== 'undefined') {
                 state.pos -= name_data.match.length;
                 return;
             }
+            end = state.pos + value_data.match.trim().length;
             state.pos += value_data.match.length;
         } else {
             Parser.re_parseAttr_splitValue.lastIndex = state.pos;
@@ -401,7 +414,7 @@ if (typeof(module) !== 'undefined' && typeof(module.exports) !== 'undefined') {
         }
         state.lastTag.raw += name_data.match + value_data.match;
 
-        this._writePending({ type: Mode.Attr, name: name_data.name, data: value_data.value, range: [start, state.pos] }); //TODO ORION 8.0
+        this._writePending({ type: Mode.Attr, name: name_data.name, data: value_data.value, range: [start, end] }); //TODO ORION 8.0
     };
 
     Parser.re_parseCData_findEnding = /\]{1,2}$/;
