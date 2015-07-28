@@ -10,13 +10,14 @@
  *******************************************************************************/
  
 // optimization script to concat/minify the Orion editor javascript code
- 
+/* eslint-disable missing-nls */
 ({
     baseUrl: '.',
 	paths: {
         almond: 'requirejs/almond',
         i18n: 'requirejs/i18n',
         text: 'requirejs/text',
+        json: "requirejs/json", 
 		esprima: "esprima/esprima",
 		estraverse: "estraverse/estraverse",
 		escope: "escope/escope",
@@ -56,4 +57,4 @@
 			}));\
 		"
 	}
-})
+});

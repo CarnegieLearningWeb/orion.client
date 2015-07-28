@@ -1089,7 +1089,6 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 				//TODO: code edit widget : separate a finer API to only reposition and resize the tooltips
 				this._contentAssistMode._showTooltip(true);
 			}.bind(this));
-			this._mutationObserver.observe(this.parentNode, {attributes: true});
 		} else {
 			this._useResizeTimer = true;
 		}
@@ -1139,13 +1138,13 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			var document = parent.ownerDocument;
 			var div = util.createElement(document, "div"); //$NON-NLS-0$
 			div.id = "contentoption" + itemIndex; //$NON-NLS-0$
-			div.setAttribute("role", "option"); //$NON-NLS-1$ //$NON-NLS-0$
+			div.setAttribute("role", "option"); //$NON-NLS-1$ //$NON-NLS-2$
 			div.className = STYLES[proposal.style] ? STYLES[proposal.style] : STYLES.dfault;
 			var node;
 			if (proposal.style === "hr") { //$NON-NLS-0$
 				node = util.createElement(document, "hr"); //$NON-NLS-0$
 			} else {
-				node = this._createDisplayNode(div, proposal, itemIndex);
+				node = this._createDisplayNode(proposal, itemIndex);
 				div.contentAssistProposalIndex = itemIndex; // make div clickable
 			}
 			div.appendChild(node);
@@ -1182,38 +1181,48 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			});
 		},
 		/** @private */
-		_createDisplayNode: function(div, proposal, index) {
-			var node = null;
-			var plainString = null;
+		_createDisplayNode: function(proposal, index) {
+			var node = document.createElement("span"); //$NON-NLS-0$
 			
-			if (typeof proposal === "string") { //$NON-NLS-0$
-				//for simple string content assist, the display string is just the proposal
-				plainString = proposal;
-			} else if (proposal.description && typeof proposal.description === "string") { //$NON-NLS-0$
-				if (proposal.name && typeof proposal.name === "string") { //$NON-NLS-0$
-					var nameNode = this._createNameNode(proposal.name);
-					nameNode.contentAssistProposalIndex = index;
-					
-					node = document.createElement("span"); //$NON-NLS-0$
-					node.appendChild(nameNode);
-					
-					var descriptionNode = document.createTextNode(proposal.description);
-					node.appendChild(descriptionNode);
-				} else {
-					plainString = proposal.description;
-				}
+			if (!proposal){
+				return node;
+			}
+			
+			if (typeof proposal === "string"){
+				var simpleName = this._createNameNode(proposal);
+				simpleName.contentAssistProposalIndex = index;
+				return simpleName;
+			}
+			
+			var nameNode;
+			var usingDescription; // Proposals are allowed to use the description as the name
+			if (proposal.name && typeof proposal.name === "string") {
+				nameNode = this._createNameNode(proposal.name);
+			} else if (proposal.description && typeof proposal.description === "string"){
+				nameNode = this._createNameNode(proposal.description);
+				usingDescription = true;
+			} else if (proposal.proposal && typeof proposal.proposal === "string"){
+				nameNode = this._createNameNode(proposal.proposal);
 			} else {
-				//by default return the straight proposal text
-				plainString = proposal.proposal;
+				// Must have a name
+				return node;
 			}
 			
-			if (plainString) {
-				node = this._createNameNode(plainString);
-			}
+			var tagsNode = this._createTagsNode(proposal.tags);
 			
+			var descriptionNode;
+			if (!usingDescription && proposal.description && typeof proposal.description === "string") {
+				descriptionNode = document.createTextNode(proposal.description);
+			}
+
+			if (tagsNode) { node.appendChild(tagsNode); }
+			node.appendChild(nameNode);
+			if (descriptionNode) { node.appendChild(descriptionNode); }
+
+			nameNode.contentAssistProposalIndex = index;
 			node.contentAssistProposalIndex = index;
 			
-			return node;
+			return node;		
 		},
 		/** @private */
 		_stopResizeTimer: function() {
@@ -1245,6 +1254,33 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			node.classList.add("proposal-name"); //$NON-NLS-0$
 			node.appendChild(document.createTextNode(name));
 			return node;
+		},
+		/**
+		 * @private
+		 * @param tags {Array} The array of tags to display
+		 * @returns {Object} the dom node for the tags or <code>null</code>
+		 */
+		_createTagsNode: function(tags) {
+			var tagsNode = null;
+			if (tags && tags.constructor === Array && tags.length > 0){
+				tagsNode = document.createElement("span");	 //$NON-NLS-1$
+				for (var i=0; i<tags.length; i++) {
+					var tag = tags[i];
+					if (tag.content || tag.cssClass){
+						var tagNode = document.createElement("span"); //$NON-NLS-1$
+						if (tag.cssClass){
+							tagNode.classList.add(tag.cssClass);
+						} else {
+							tagNode.classList.add('proposalTag'); //$NON-NLS-1$
+						}
+						if (tag.content){
+							tagNode.textContent = tag.content;
+						}
+						tagsNode.appendChild(tagNode);
+					}
+				}
+			}
+			return tagsNode;
 		},
 		/**
 		 * @private
@@ -1424,6 +1460,8 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 				
 				if(this._useResizeTimer) {
 					this._startResizeTimer();
+				} else if(this._mutationObserver){
+					this._mutationObserver.observe(this.parentNode, {attributes: true});
 				}
 				if (!this.textViewListenerAdded) {
 					this.textView.addEventListener("MouseDown", this.textViewListener.onMouseDown); //$NON-NLS-0$
@@ -1439,11 +1477,13 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			this.parentNode.onclick = null;
 			this.isShowing = false;
 			
-			this._contentAssistMode._hideTooltip();
-			
 			if(this._useResizeTimer) {
 				this._stopResizeTimer();
+			} else if(this._mutationObserver){
+				this._mutationObserver.disconnect();
 			}
+			
+			this._contentAssistMode._hideTooltip();
 			
 			if (this.textViewListenerAdded) {
 				this.textView.removeEventListener("MouseDown", this.textViewListener.onMouseDown); //$NON-NLS-0$

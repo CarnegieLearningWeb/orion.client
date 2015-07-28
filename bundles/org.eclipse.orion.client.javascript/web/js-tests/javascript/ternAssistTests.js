@@ -72,7 +72,8 @@ define([
 	var ternAssist = new TernAssist.TernContentAssist(astManager, ternworker, function() {
 			return new Deferred().resolve(envs);
 		});
-
+		
+	var fileMap = Object.create(null);
 	/**
 	 * @description Sets up the test
 	 * @param {Object} options The options the set up with
@@ -80,9 +81,11 @@ define([
 	 */
 	function setup(options) {
 		state = Object.create(null);
+		fileMap = Object.create(null);
 		var buffer = state.buffer = typeof(options.buffer) === 'undefined' ? '' : options.buffer,
 		    prefix = state.prefix = typeof(options.prefix) === 'undefined' ? '' : options.prefix,
 		    offset = state.offset = typeof(options.offset) === 'undefined' ? 0 : options.offset,
+		    line = state.line = typeof(options.line) === 'undefined' ? '' : options.line,
 		    keywords = typeof(options.keywords) === 'undefined' ? false : options.keywords,
 		    templates = typeof(options.templates) === 'undefined' ? false : options.templates,
 		    contentType = options.contenttype ? options.contenttype : 'application/javascript',
@@ -106,7 +109,7 @@ define([
 			}
 		};
 		astManager.onModelChanging({file: {location: file}});
-		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates};
+		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line};
 		return {
 			editorContext: editorContext,
 			params: params
@@ -235,6 +238,576 @@ define([
 					["coo", "coo : number"]
 				]);
 			});
+			it("test full file inferecing 1", function(done) {
+				var options = {
+					buffer: "x;\n var x = 0;", 
+					prefix: "x", 
+					offset: 1,
+					callback: done};
+				return testProposals(options, [
+					["x", "x : number"]
+				]);
+			});
+			it("test full file inferecing 2", function(done) {
+				var options = {
+					buffer: "function a() { x; }\n var x = 0;", 
+					prefix: "x", 
+					offset: 16,
+					callback: done};
+				return testProposals(options, [
+					["x", "x : number"]
+				]);
+			});
+			it("test full file inferecing 3", function(done) {
+				var options = {
+					buffer: "function a() { var y = x; y}\n var x = 0;", 
+					prefix: "y", 
+					offset: 27,
+					callback: done};
+				return testProposals(options, [
+					["y", "y : number"]
+				]);
+			});
+			it("test full file inferecing 4", function(done) {
+				var options = {
+					buffer: "function a() { var y = x.fff; y}\n var x = { fff : 0 };", 
+					prefix: "y", 
+					offset: 31,
+					callback: done};
+				return testProposals(options, [
+					["y", "y : number"]
+				]);
+			});
+			it("test full file inferecing 5", function(done) {
+				var options = {
+					buffer: "function a() { var y = x.fff; y}\n var x = {};\n x.fff = 8;", 
+					prefix: "y", 
+					offset: 31,
+					callback: done};
+				return testProposals(options, [
+					["y", "y : number"]
+				]);
+			});
+			it("test full file inferecing 6", function(done) {
+				var options = {
+					buffer: "function a() { x.fff = ''; var y = x.fff; y}\n" +
+					"var x = {};\n" +
+					"x.fff = 8;",
+					prefix: "y", 
+					offset: 43,
+					callback: done};
+				return testProposals(options, [
+					["y", "y : string|number"]
+				]);
+			});
+			it("test full file inferecing 7", function(done) {
+				var options = {
+					buffer: "function a() { x.fff = ''; var y = x(); y}\n" +
+					"var x = function() { return 8; }", 
+					prefix: "y", 
+					offset: 41,
+					callback: done};
+				return testProposals(options, [
+					["y", "y : number"]
+				]);
+			});
+			it("test full file inferecing 8", function(done) {
+				var options = {
+					buffer: "function a() { x.fff = ''; var y = z(); y}\n" +
+					"var x = function() { return 8; }, z = x", 
+					prefix: "y", 
+					offset: 41,
+					callback: done};
+				return testProposals(options, [
+					["y", "y : number"]
+				]);
+			});
+		
+			it("test full file inferecing 9", function(done) {
+				var options = {
+					buffer: "function a() {\n function b() {\n x.fff = '';\n }\n x.f\n}\n var x = {};", 
+					prefix: "f", 
+					offset: 51,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+			it("test full file inferecing 10", function(done) {
+				var options = {
+					buffer: "function a() {\n function b() {\n x.fff = '';\n }\n var y = x;\n y.f\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 63,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 11a", function(done) {
+				var options = {
+					buffer: "var x = {};\n function a() {\n var y = x;\n y.f\n function b() {\n x.fff = '';\n}\n}", 
+					prefix: "f", 
+					offset: 44,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 11", function(done) {
+				var options = {
+					buffer: "function a() {\n var y = x;\n y.f\n function b() {\n x.fff = '';\n }\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 31,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 12", function(done) {
+				var options = {
+					buffer: "function a() {\n var y = x;\n y.f\n x.fff = '';\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 31,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 13", function(done) {
+				var options = {
+					buffer: "function b() {\n x.fff = '';\n }\n function a() {\n var y = x;\n y.f\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 63,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 14", function(done) {
+				var options = {
+					buffer: "function a() {\n  var y = x;\n y.f\n }\n function b() {\n x.fff = '';\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 32,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 15", function(done) {
+				var options = {
+					buffer: "function b() {\n x.fff = '';\n }\n function a() {\n x.f\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 51,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			// should still find the fff property here evem though it
+			// is defined after and in another funxtion
+			it("test full file inferecing 16", function(done) {
+				var options = {
+					buffer: "function a() {\n x.f\n }\n function b() {\n x.fff = '';\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 19,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+			it("test full file inferecing 17", function(done) {
+				var options = {
+					buffer: "function a() {\n x.f\n function b() {\n x.fff = '';\n }\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 19,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 18", function(done) {
+				var options = {
+					buffer: "function a() {\n x.fff = '';\n function b() {\n x.f\n }\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 48,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 19", function(done) {
+				var options = {
+					buffer: "function a() {\n function b() {\n x.f\n }\n x.fff = '';\n }\n var x = {};", 
+					prefix: "f", 
+					offset: 35,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			// don't find anything because assignment is in same scope, but after
+			it("test full file inferecing 20", function(done) {
+				var options = {
+					buffer: "x.\n" +
+					"var x = {};\n" +
+					"x.fff = '';", 
+					prefix: "f", 
+					offset: 2,
+					callback: done};
+				return testProposals(options, [
+					['fff', 'fff : string']
+				]);
+			});
+		
+			it("test full file inferecing 21", function(done) {
+				var options = {
+					buffer: "function a() {\n x.fff = '';\n }\n x.\n var x = {}; ", 
+					prefix: "f", 
+					offset: 34,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 22", function(done) {
+				var options = {
+					buffer: "x.\n" +
+					"function a() {\n" +
+					"x.fff = '';\n" +
+					"}\n" +
+					"var x = {}; ", 
+					prefix: "f", 
+					offset: 2,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			it("test full file inferecing 26", function(done) {
+				var options = {
+					buffer: "function a() {\n function b() {\n var fff = x();\n f;\n }\n }\n function x() { return ''; }", 
+					prefix: "f", 
+					offset: 49,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"],
+				]);
+			});
+		
+			// Not inferencing String because function decl comes after reference in same scope
+			it("test full file inferecing 27", function(done) {
+				var options = {
+					buffer: "var fff = x();\n f;\n function x() { return ''; }", 
+					prefix: "f", 
+					offset: 17,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			// Not gonna work because of recursive
+			it("test full file inferecing 28", function(done) {
+				var options = {
+					buffer: "function x() {\n var fff = x();\n f;\n return ''; }", 
+					prefix: "f", 
+					offset: 33,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"],
+				]);
+			});
+		
+			it("test full file inferecing 29", function(done) {
+				var options = {
+					buffer: "function a() {\n function b() {\n var fff = x();\n f;\n }\n }\n var x = function() { return ''; }", 
+					prefix: "f", 
+					offset: 49,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"],
+				]);
+			});
+		
+			// Not working because function decl comes after reference in same scope
+			it("test full file inferecing 30", function(done) {
+				var options = {
+					buffer: "var fff = x();\n f;\n var x = function() { return ''; }", 
+					prefix: "f", 
+					offset: 17,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"]
+				]);
+			});
+		
+			// Not gonna work because of recursive
+			it("test full file inferecing 31", function(done) {
+				var options = {
+					buffer: "var x = function() { var fff = x();\nf;return ''; }", 
+					prefix: "f", 
+					offset: 37,
+					callback: done};
+				return testProposals(options, [
+					["fff", "fff : string"],
+				]);
+			});
+		
+			it("test full file inferecing 32", function(done) {
+				var options = {
+					buffer: "x\n function x() { return ''; }", 
+					prefix: "x", 
+					offset: 1,
+					callback: done};
+				return testProposals(options, [
+					["x()", "x() : string"]
+				]);
+			});
+		
+			it("test full file inferecing 33", function(done) {
+				var options = {
+					buffer: "var xxx = {\n aaa: '',\n bbb: this.a\n};", 
+					prefix: "a", 
+					offset: 34,
+					callback: done};
+				return testProposals(options, [
+					//TODO bug in Tern? ["aaa", "aaa : string"]
+				]);
+			});
+		
+			it("test full file inferecing 34", function(done) {
+				var options = {
+					buffer: "var xxx = {\n" +
+					"	bbb: this.a,\n" +
+					"	aaa: ''\n" +
+					"};", 
+					prefix: "a", 
+					offset: 24,
+					callback: done};
+				return testProposals(options, [
+					//TODO bug in Tern? ["aaa", "aaa : string"]
+				]);
+			});
+			it("test property read before", function(done) {
+				var options = {
+					buffer: "var xxx; xxx.lll++; xxx.ll", 
+					prefix: "ll",
+					offset: 26,
+					callback: done};
+				return testProposals(options, [
+					["lll", "lll"]
+				]);
+			});
+		
+			it("test property read after", function(done) {
+				var options = {
+					buffer: "var xxx;\n" +
+					"xxx.ll;\n" +
+					"xxx.lll++;", 
+					prefix: "ll", 
+					offset: 15,
+					callback: done};
+				return testProposals(options, [
+					["lll", "lll"]
+				]);
+			});
+		
+			it("test property read global before", function(done) {
+				var options = {
+					buffer: "lll++; ll", 
+					prefix: "ll",
+					offset: 9,
+					callback: done};
+				return testProposals(options, [
+					//TODO ["lll", "lll"]
+				]);
+			});
+		
+			it("test property read global after", function(done) {
+				var options = {
+					buffer: "ll; lll++;", 
+					prefix: "ll", 
+					offset: 2,
+					callback: done};
+				return testProposals(options, [
+					//TODO ["lll", "lll"]
+				]);
+			});
+			
+			it("test array parameterization 1", function(done) {
+				var options = {
+					buffer: "var x = [1]; x[foo].toFi", 
+					prefix: "toFi",
+					offset: 24,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 2", function(done) {
+				var options = {
+					buffer: "var x = [1]; x[0].toFi", 
+					prefix: "toFi",
+					offset: 22,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 3", function(done) {
+				var options = {
+					buffer: "var x = [1]; x['foo'].toFi", 
+					prefix: "toFi",
+					offset: 26,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 4", function(done) {
+				var options = {
+					buffer: "([1, 0])[0].toFi", 
+					prefix: "toFi",
+					offset: 16,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 5", function(done) {
+				var options = {
+					buffer: "var x = [[1]]; x[0][0].toFi", 
+					prefix: "toFi",
+					offset: 27,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 6", function(done) {
+				var options = {
+					buffer: "var x = [{}];x[0].a = 8; x[0].a.toFi", 
+					prefix: "toFi",
+					offset: 36,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 7", function(done) {
+				var options = {
+					buffer: "var a = {a : 8}; var x = [a]; x[0].a.toFi", 
+					prefix: "toFi",
+					offset: 41,
+					callback: done};
+					// may not work because a string
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 8", function(done) {
+				var options = {
+					buffer: "var x = [[1]]; x = x[0]; x[0].toFi", 
+					prefix: "toFi",
+					offset: 34,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 9", function(done) {
+				var options = {
+					buffer: "var x = []; x[9] = 0; x[0].toFi", 
+					prefix: "toFi",
+					offset: 31,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 10", function(done) {
+				var options = {
+					buffer: "var x = []; x[9] = ''; x[9] = 0; x[0].toFi", 
+					prefix: "toFi",
+					offset: 42,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 11", function(done) {
+				var options = {
+					buffer: "var x = (function() { return [0]; })(); x[9] = 0; x[0].toFi", 
+					prefix: "toFi",
+					offset: 59,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test array parameterization 12", function(done) {
+				var options = {
+					buffer: "var x = ['','','']; x[9] = 0; x[0].toFi", 
+					prefix: "toFi",
+					offset: 39,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+		
+			// https://github.com/scripted-editor/scripted/issues/65
+			it("test case insensitive ordering 1", function(done) {
+				var options = {
+					buffer: "var xXXX = 8; var xXYZ = 8; var xxxx = 8; var xxyz = 8; x", 
+					prefix: "x",
+					offset: 57,
+					callback: done};
+				return testProposals(options, [
+					["xXXX", "xXXX : number"],
+					["xXYZ", "xXYZ : number"],
+					["xxxx", "xxxx : number"],
+					["xxyz", "xxyz : number"]
+				]);
+			});
+			// https://github.com/scripted-editor/scripted/issues/65
+			it("test case insensitive ordering 2", function(done) {
+				var options = {
+					buffer: "var xXYZ = 8;var xxxx = 8; var xXXX = 8; var xxyz = 8; x", 
+					prefix: "x",
+					offset: 56,
+					callback: done};
+				return testProposals(options, [
+					["xXXX", "xXXX : number"],
+					["xXYZ", "xXYZ : number"],
+					["xxxx", "xxxx : number"],
+					["xxyz", "xxyz : number"]
+				]);
+			});
 		});
 		describe('Incomplete Syntax', function() {
 			/**
@@ -300,12 +873,14 @@ define([
 					['RegExp(source, flags?)', ''],
 					['String(value)', 'String(value) : string'],
 					['SyntaxError(message)', ''],
+					['TypeError(message)', ''],
 					['URIError(message)', ''],
 					['decodeURI(uri)', 'decodeURI(uri) : string'],
 					['decodeURIComponent(uri)', 'decodeURIComponent(uri) : string'],
 					['encodeURI(uri)', 'encodeURI(uri) : string'],
 					['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 					['eval(code)', 'eval(code)'],
+					['isFinite(value)', 'isFinite(value) : bool'],
 					['isNaN(value)', 'isNaN(value) : bool'],
 					['parseFloat(string)', 'parseFloat(string) : number'],
 					['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
@@ -313,7 +888,27 @@ define([
 					['JSON', 'JSON : JSON'],
 					['Math', 'Math : Math'],
 					['NaN', 'NaN : number'],
-					['undefined', 'undefined : any']
+					['undefined', 'undefined : any'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
+					['DataView(buffer, byteOffset?, byteLength?)', ''],
+					['Float32Array(length)', ''],
+					['Float64Array(length)', ''],
+					['Int16Array(length)', ''],
+					['Int32Array(length)', ''],
+					['Int8Array(length)', ''],
+					['Map(iterable?)', ''],
+					['Promise(executor)', ''],
+					['Proxy(target, handler)', ''],
+					['Set(iterable)', ''],
+					['Symbol(description?)', ''],
+					['TypedArray(length)', ''],
+					['Uint16Array()', ''],
+					['Uint32Array()', ''],
+					['Uint8Array()', ''],
+					['Uint8ClampedArray()', ''],
+					['WeakMap(iterable)', ''],
+					['WeakSet(iterable)', '']
 				]);
 			});
 			it("test Single Var Content Assist", function(done) {
@@ -341,12 +936,14 @@ define([
 					['RegExp(source, flags?)', ''],
 					['String(value)', 'String(value) : string'],
 					['SyntaxError(message)', ''],
+					['TypeError(message)', ''],
 					['URIError(message)', ''],
 					['decodeURI(uri)', 'decodeURI(uri) : string'],
 					['decodeURIComponent(uri)', 'decodeURIComponent(uri) : string'],
 					['encodeURI(uri)', 'encodeURI(uri) : string'],
 					['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 					['eval(code)', 'eval(code)'],
+					['isFinite(value)', 'isFinite(value) : bool'],
 					['isNaN(value)', 'isNaN(value) : bool'],
 					['parseFloat(string)', 'parseFloat(string) : number'],
 					['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
@@ -354,7 +951,27 @@ define([
 					['JSON', 'JSON : JSON'],
 					['Math', 'Math : Math'],
 					['NaN', 'NaN : number'],
-					['undefined', 'undefined : any']
+					['undefined', 'undefined : any'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
+					['DataView(buffer, byteOffset?, byteLength?)', ''],
+					['Float32Array(length)', ''],
+					['Float64Array(length)', ''],
+					['Int16Array(length)', ''],
+					['Int32Array(length)', ''],
+					['Int8Array(length)', ''],
+					['Map(iterable?)', ''],
+					['Promise(executor)', ''],
+					['Proxy(target, handler)', ''],
+					['Set(iterable)', ''],
+					['Symbol(description?)', ''],
+					['TypedArray(length)', ''],
+					['Uint16Array()', ''],
+					['Uint32Array()', ''],
+					['Uint8Array()', ''],
+					['Uint8ClampedArray()', ''],
+					['WeakMap(iterable)', ''],
+					['WeakSet(iterable)', '']
 				]);
 			});
 			it("test Single Var Content Assist 2", function(done) {
@@ -382,12 +999,14 @@ define([
 					['RegExp(source, flags?)', ''],
 					['String(value)', 'String(value) : string'],
 					['SyntaxError(message)', ''],
+					['TypeError(message)', ''],
 					['URIError(message)', ''],
 					['decodeURI(uri)', 'decodeURI(uri) : string'],
 					['decodeURIComponent(uri)', 'decodeURIComponent(uri) : string'],
 					['encodeURI(uri)', 'encodeURI(uri) : string'],
 					['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 					['eval(code)', 'eval(code)'],
+					['isFinite(value)', 'isFinite(value) : bool'],
 					['isNaN(value)', 'isNaN(value) : bool'],
 					['parseFloat(string)', 'parseFloat(string) : number'],
 					['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
@@ -395,7 +1014,27 @@ define([
 					['JSON', 'JSON : JSON'],
 					['Math', 'Math : Math'],
 					['NaN', 'NaN : number'],
-					['undefined', 'undefined : any']
+					['undefined', 'undefined : any'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
+					['DataView(buffer, byteOffset?, byteLength?)', ''],
+					['Float32Array(length)', ''],
+					['Float64Array(length)', ''],
+					['Int16Array(length)', ''],
+					['Int32Array(length)', ''],
+					['Int8Array(length)', ''],
+					['Map(iterable?)', ''],
+					['Promise(executor)', ''],
+					['Proxy(target, handler)', ''],
+					['Set(iterable)', ''],
+					['Symbol(description?)', ''],
+					['TypedArray(length)', ''],
+					['Uint16Array()', ''],
+					['Uint32Array()', ''],
+					['Uint8Array()', ''],
+					['Uint8ClampedArray()', ''],
+					['WeakMap(iterable)', ''],
+					['WeakSet(iterable)', '']
 				]);
 			});
 			it("test multi var content assist 1", function(done) {
@@ -425,12 +1064,14 @@ define([
 					['RegExp(source, flags?)', ''],
 					['String(value)', 'String(value) : string'],
 					['SyntaxError(message)', ''],
+					['TypeError(message)', ''],
 					['URIError(message)', ''],
 					['decodeURI(uri)', 'decodeURI(uri) : string'],
 					['decodeURIComponent(uri)', 'decodeURIComponent(uri) : string'],
 					['encodeURI(uri)', 'encodeURI(uri) : string'],
 					['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 					['eval(code)', 'eval(code)'],
+					['isFinite(value)', 'isFinite(value) : bool'],
 					['isNaN(value)', 'isNaN(value) : bool'],
 					['parseFloat(string)', 'parseFloat(string) : number'],
 					['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
@@ -438,7 +1079,27 @@ define([
 					['JSON', 'JSON : JSON'],
 					['Math', 'Math : Math'],
 					['NaN', 'NaN : number'],
-					['undefined', 'undefined : any']
+					['undefined', 'undefined : any'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
+					['DataView(buffer, byteOffset?, byteLength?)', ''],
+					['Float32Array(length)', ''],
+					['Float64Array(length)', ''],
+					['Int16Array(length)', ''],
+					['Int32Array(length)', ''],
+					['Int8Array(length)', ''],
+					['Map(iterable?)', ''],
+					['Promise(executor)', ''],
+					['Proxy(target, handler)', ''],
+					['Set(iterable)', ''],
+					['Symbol(description?)', ''],
+					['TypedArray(length)', ''],
+					['Uint16Array()', ''],
+					['Uint32Array()', ''],
+					['Uint8Array()', ''],
+					['Uint8ClampedArray()', ''],
+					['WeakMap(iterable)', ''],
+					['WeakSet(iterable)', '']
 				]);
 			});
 			it("test multi var content assist 2", function(done) {
@@ -478,12 +1139,14 @@ define([
 					['RegExp(source, flags?)', ''],
 					['String(value)', 'String(value) : string'],
 					['SyntaxError(message)', ''],
+					['TypeError(message)', ''],
 					['URIError(message)', ''],
 					['decodeURI(uri)', 'decodeURI(uri) : string'],
 					['decodeURIComponent(uri)', 'decodeURIComponent(uri) : string'],
 					['encodeURI(uri)', 'encodeURI(uri) : string'],
 					['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 					['eval(code)', 'eval(code)'],
+					['isFinite(value)', 'isFinite(value) : bool'],
 					['isNaN(value)', 'isNaN(value) : bool'],
 					['parseFloat(string)', 'parseFloat(string) : number'],
 					['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
@@ -491,7 +1154,27 @@ define([
 					['JSON', 'JSON : JSON'],
 					['Math', 'Math : Math'],
 					['NaN', 'NaN : number'],
-					['undefined', 'undefined : any']
+					['undefined', 'undefined : any'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
+					['DataView(buffer, byteOffset?, byteLength?)', ''],
+					['Float32Array(length)', ''],
+					['Float64Array(length)', ''],
+					['Int16Array(length)', ''],
+					['Int32Array(length)', ''],
+					['Int8Array(length)', ''],
+					['Map(iterable?)', ''],
+					['Promise(executor)', ''],
+					['Proxy(target, handler)', ''],
+					['Set(iterable)', ''],
+					['Symbol(description?)', ''],
+					['TypedArray(length)', ''],
+					['Uint16Array()', ''],
+					['Uint32Array()', ''],
+					['Uint8Array()', ''],
+					['Uint8ClampedArray()', ''],
+					['WeakMap(iterable)', ''],
+					['WeakSet(iterable)', '']
 				]);
 			});
 			it("test multi function content assist 1", function(done) {
@@ -520,12 +1203,14 @@ define([
 					['RegExp(source, flags?)', ''],
 					['String(value)', 'String(value) : string'],
 					['SyntaxError(message)', ''],
+					['TypeError(message)', ''],
 					['URIError(message)', ''],
 					['decodeURI(uri)', 'decodeURI(uri) : string'],
 					['decodeURIComponent(uri)', 'decodeURIComponent(uri) : string'],
 					['encodeURI(uri)', 'encodeURI(uri) : string'],
 					['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 					['eval(code)', 'eval(code)'],
+					['isFinite(value)', 'isFinite(value) : bool'],
 					['isNaN(value)', 'isNaN(value) : bool'],
 					['parseFloat(string)', 'parseFloat(string) : number'],
 					['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
@@ -533,7 +1218,27 @@ define([
 					['JSON', 'JSON : JSON'],
 					['Math', 'Math : Math'],
 					['NaN', 'NaN : number'],
-					['undefined', 'undefined : any']
+					['undefined', 'undefined : any'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
+					['DataView(buffer, byteOffset?, byteLength?)', ''],
+					['Float32Array(length)', ''],
+					['Float64Array(length)', ''],
+					['Int16Array(length)', ''],
+					['Int32Array(length)', ''],
+					['Int8Array(length)', ''],
+					['Map(iterable?)', ''],
+					['Promise(executor)', ''],
+					['Proxy(target, handler)', ''],
+					['Set(iterable)', ''],
+					['Symbol(description?)', ''],
+					['TypedArray(length)', ''],
+					['Uint16Array()', ''],
+					['Uint32Array()', ''],
+					['Uint8Array()', ''],
+					['Uint8ClampedArray()', ''],
+					['WeakMap(iterable)', ''],
+					['WeakSet(iterable)', '']
 				]);
 			});
 			it("test no dupe 1", function(done) {
@@ -630,7 +1335,9 @@ define([
 				};
 				return testProposals(options, [
 					['', 'ecma5'],
-				    ["Array(size)", "Array(size)"]
+				    ["Array(size)", "Array(size)"],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', ''],
 				]);
 			});
 			// all inferencing based content assist tests here
@@ -697,6 +1404,7 @@ define([
 					["toExponential(digits)", "toExponential(digits) : string"],
 					["toFixed(digits)", "toFixed(digits) : string"],
 					["toLocaleString()", "toLocaleString() : string"],
+					['toPrecision(digits)', 'toPrecision(digits) : string'],
 					["toString(radix?)", "toString(radix?) : string"]
 				]);
 			});
@@ -758,6 +1466,8 @@ define([
 					callback: done
 				};
 				return testProposals(options, [
+					['', 'ecma6'],
+					['codePointAt(pos)', 'codePointAt(pos) : number'],
 					['', 'ecma5'],
 					["concat(other)", "concat(other) : string"]
 				]);
@@ -872,9 +1582,9 @@ define([
 				return testProposals(options, [
 					["ii", "ii : number"],
 					['', 'ecma5'],
-					//["isFinite(num)", "isFinite(num) : bool"],
+					["isFinite(value)", "isFinite(value) : bool"],
 					["isNaN(value)", "isNaN(value) : bool"],
-					//["isPrototypeOf(object)", "isPrototypeOf(object) : bool"],
+					["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
 					//["Infinity", "Infinity : number"],
 				]);
 			});
@@ -888,9 +1598,9 @@ define([
 				return testProposals(options, [
 					["ii", "ii : number"],
 					['', 'ecma5'],
-					//["isFinite(num)", "isFinite(num) : bool"],
+					["isFinite(value)", "isFinite(value) : bool"],
 					["isNaN(value)", "isNaN(value) : bool"],
-					//["isPrototypeOf(object)", "isPrototypeOf(object) : bool"],
+					["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
 					//["Infinity", "Infinity : number"]
 				]);
 			});
@@ -904,9 +1614,9 @@ define([
 				return testProposals(options, [
 					["ii", "ii : number"],
 					['', 'ecma5'],
-					//["isFinite(num)", "isFinite(num) : bool"],
+					["isFinite(value)", "isFinite(value) : bool"],
 					["isNaN(value)", "isNaN(value) : bool"],
-					//["isPrototypeOf(object)", "isPrototypeOf(object) : bool"],
+					["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
 					//["Infinity", "Infinity : number"],
 				]);
 			});
@@ -971,8 +1681,92 @@ define([
 					callback: done
 				};
 				return testProposals(options, [
-					//TODO does not correctly infer Error
-					//["message", "message : string"]
+					['', 'ecma5'],
+					["message", "message : string"]
+				]);
+			});
+			/**
+			 * Tests RegExp proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426733
+			 * @since 7.0
+			 */
+			it("test RegExp literal 1", function(done) {
+				var options = {
+					buffer: "/^.*/.t", 
+					prefix: "t", 
+					offset: 6,
+					callback: done};
+				testProposals(options, [
+						['', 'ecma5'],
+						['test(input)', 'test(input) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+					]);
+			});
+			
+			/**
+			 * Tests RegExp proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426733
+			 * @since 7.0
+			 */
+			it("test RegExp literal 2", function(done) {
+				var options = {
+					buffer: "/^.*/.e", 
+					prefix: "e", 
+					offset: 7,
+					callback: done};
+				testProposals(options, [
+						['', 'ecma5'],
+						['exec(input)', 'exec(input) : [string]']
+					]);
+			});
+			
+			/**
+			 * Tests proposal doc for function expressions
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=458693
+			 * @since 8.0
+			 */
+			it("test func expr doc 1", function(done) {
+				var options = {
+					buffer: "var f = { /** \n* @returns {Array.<String>} array or null\n*/\n one: function() {}};\n f.", 
+					prefix: "o", 
+					offset: 85,
+					callback: done};
+				testProposals(options, [
+				//TODO should we use guessing here?
+					['one()', 'one()']
+				]);
+			});
+			
+			/**
+			 * Tests proposal doc for function expressions
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=458693
+			 * @since 8.0
+			 */
+			it("test func expr doc 2", function(done) {
+				var options = {
+					buffer: "var f = { /** \n* @return {Array.<String>} array or null\n*/\n one: function() {}};\n f.", 
+					prefix: "o", 
+					offset: 84,
+					callback: done};
+				testProposals(options, [
+					['one()', 'one()']
+				]);
+			});
+			
+			/**
+			 * Tests proposal doc for function decls
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=458693
+			 * @since 8.0
+			 */
+			it("test func decl doc 1", function(done) {
+				var options = {
+					buffer: "/** @returns {Object} Something or nothing */ function z(a) {} z", 
+					prefix: "z", 
+					offset: 64,
+					callback: done};
+				testProposals(options, [
+					['z(a)', 'z(a)']
 				]);
 			});
 		});
@@ -991,6 +1785,7 @@ define([
 					callback: done};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["function", "function - Keyword"],
 						["", "Templates"], 
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"]
@@ -1011,6 +1806,7 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["function", "function - Keyword"],
 						["", "Templates"], 
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
@@ -1031,6 +1827,7 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["function", "function - Keyword"],
 						["", "Templates"], 
 						['ction(parameter) {\n\t\n}', 'function - member function expression'],
@@ -1051,6 +1848,7 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["function", "function - Keyword"],
 						["", "Templates"], 
 						['ction(parameter) {\n\t\n}', 'function - member function expression'],
@@ -1071,6 +1869,7 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["function", "function - Keyword"],
 						["", "Templates"], 
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
@@ -1091,6 +1890,7 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["this", "this - Keyword"],
 						['throw', 'throw - Keyword'],
 						['try', 'try - Keyword'],
@@ -1135,6 +1935,7 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
+						['', 'Keywords'],
 						["new", "new - Keyword"]
 						]);
 			});
@@ -1420,76 +2221,836 @@ define([
 				     ]);
 			});
 		});
-//		describe('MySQl Index Tests', function() {
-//			/**
-//			 * Tests mysql index
-//			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
-//			 * @since 7.0
-//			 */
-//			it("test mysql index 1", function(done) {
-//				var options = {
-//					buffer: "require('mysql').createP", 
-//					prefix: "createP", 
-//					offset: 24,
-//					callback: done
-//				};
-//				testProposals(options, [
-//					['', 'mysql'],
-//				    ['ool', 'createPool(config) : Pool'],
-//				    ['oolCluster', 'createPoolCluster(config) : PoolCluster']
-//				]);
-//			});
-//			/**
-//			 * Tests mysql index
-//			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
-//			 * @since 7.0
-//			 */
-//			it("test mysql index 2", function(done) {
-//				var options = {
-//					buffer: "require('mysql').createC", 
-//					prefix: "createC", 
-//					offset: 25,
-//					callback: done
-//				};
-//				testProposals(options, [
-//					['', 'mysql'],
-//				    ['onnection', 'createConnection(config) : Connection']
-//				]);
-//			});
-//			/**
-//			 * Tests mysql index
-//			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
-//			 * @since 7.0
-//			 */
-//			it("test mysql index 3", function(done) {
-//				var options = {
-//					buffer: "require('mysql').createQ", 
-//					prefix: "createQ", 
-//					offset: 25,
-//					callback: done
-//				};
-//				testProposals(options, [
-//					['', 'mysql'],
-//				    ['uery', 'createQuery(sql, values, cb) : Query']
-//				]);
-//			});
-//			/**
-//			 * Tests mysql index for indirect proposals
-//			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
-//			 * @since 7.0
-//			 */
-//			it("test mysql index 4", function(done) {
-//				var options = {
-//					buffer: "require('mysql').createQuery(null,null,null).sta",
-//					prefix: "sta", 
-//					offset: 47,
-//					callback:done
-//				};
-//				testProposals(options, [
-//					['', 'mysql'],
-//				    ['rt', 'start()']
-//				]);
-//			});
-//		});
+		describe('MySQl Index Tests', function() {
+			/*
+			 * Tests mysql index
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test mysql index 1", function(done) {
+				var options = {
+					buffer: "/*eslint-env mysql*/ require('mysql').createP", 
+					prefix: "createP", 
+					offset: 45,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'mysql'],
+				    ['createPool(config)', 'createPool(config) : mysql.Pool'],
+				    ['createPoolCluster(config?)', 'createPoolCluster(config?) : mysql.PoolCluster']
+				]);
+			});
+			/*
+			 * Tests mysql index
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test mysql index 2", function(done) {
+				var options = {
+					buffer: "/*eslint-env mysql*/ require('mysql').createPoolC", 
+					prefix: "createPoolC", 
+					offset: 49,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'mysql'],
+				    ['createPoolCluster(config?)', 'createPoolCluster(config?) : mysql.PoolCluster']
+				]);
+			});
+			/*
+			 * Tests mysql index
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test mysql index 3", function(done) {
+				var options = {
+					buffer: "/*eslint-env mysql*/ require('mysql').createQ", 
+					prefix: "createQ", 
+					offset: 45,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'mysql'],
+				    ['createQuery(sql)', 'createQuery(sql)']
+				]);
+			});
+			/*
+			 * Tests mysql index for indirect proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test mysql index 4", function(done) {
+				var options = {
+					buffer: "/*eslint-env mysql*/ require('mysql').createQuery(null,null,null).sta",
+					prefix: "sta", 
+					offset: 69,
+					callback:done
+				};
+				testProposals(options, [
+					['', 'mysql'],
+				    ['start()', 'start()'],
+				    ['', 'ecma6'],
+				    ['startsWith(searchString, position?)', 'startsWith(searchString, position?) : bool']
+				]);
+			});
+			/**
+			 * Tests no proposals are returned without the eslint-env directive
+			 * @since 10.0
+			 */
+			it("test mysql empty 1", function(done) {
+				var options = {
+					buffer: "require('mysql').createQuery(null,null,null).",
+					prefix: "sta", 
+					offset: 45,
+					callback:done
+				};
+				testProposals(options, [
+				]);
+			});
+		});
+		describe('Redis Index Tests', function() {
+			/**
+			 * Tests redis index indirect proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test redis index 1", function(done) {
+				var options = {
+					buffer: "/*eslint-env redis*/ require('redis').createClient(null, null, null).a", 
+					prefix: "a", 
+					offset: 70,
+					callback: done};
+				testProposals(options, [
+					['', 'redis'],
+				    ['append(key, value, callback?)', 'append(key, value, callback?)'],
+				    ['auth(password, callback?)', 'auth(password, callback?)']
+				]);
+			});
+			
+			/**
+			 * Tests redis index 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test redis index 2", function(done) {
+				var options = {
+					buffer: "/*eslint-env redis*/ require('redis').c", 
+					prefix: "c", 
+					offset: 39,
+					callback: done};
+				testProposals(options, [
+					['', 'redis'],
+				    ['createClient(port_arg, host_arg?, options?)', 'createClient(port_arg, host_arg?, options?) : RedisClient']
+				]);
+			});
+			
+			/**
+			 * Tests redis index 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 10.0
+			 */
+			it("test redis index no proposals 1", function(done) {
+				var options = {
+					buffer: "require('redis').c", 
+					prefix: "c", 
+					offset: 18,
+					callback: done};
+				testProposals(options, [
+				]);
+			});
+		});
+		describe('Postgres Index Tests', function() {
+			/**
+			 * Tests pg index indirect proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test pg index 1", function(done) {
+				var options = {
+					buffer: "/*eslint-env pg*/require('pg').c", 
+					prefix: "c", 
+					offset: 32,
+					callback: done};
+				testProposals(options, [
+					['', 'pg'],
+				    ['connect(connection, callback)', 'connect(connection, callback)'],
+				]);
+			});
+			
+			/**
+			 * Tests redis index 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 7.0
+			 */
+			it("test pg index 2", function(done) {
+				var options = {
+					buffer: "/*eslint-env pg*/require('pg').Cl", 
+					prefix: "Cl", 
+					offset: 33,
+					callback: done};
+				testProposals(options, [
+					['', 'pg'],
+				    ['Client(connection)', 'Client(connection)']
+				]);
+			});
+			/**
+			 * Tests redis index 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
+			 * @since 10.0
+			 */
+			it("test pg index no proposals 1", function(done) {
+				var options = {
+					buffer: "require('pg').Cl", 
+					prefix: "Cl", 
+					offset: 16,
+					callback: done};
+				testProposals(options, [
+				]);
+			});
+		});
+		describe('Comment Assist Tests', function() {
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=443521
+			 * @since 7.0
+			 */
+			it("test line comment 1", function(done) {
+				var options = {
+					buffer: "//  ", 
+					prefix: "", 
+					offset: 4,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=443521
+			 * @since 7.0
+			 */
+			it("test line comment 2", function(done) {
+				var options = {
+					buffer: "// foo ", 
+					prefix: "", 
+					offset: 3,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=443521
+			 * @since 7.0
+			 */
+			it("test line comment 3", function(done) {
+				var options = {
+					buffer: "// foo ", 
+					prefix: "", 
+					offset: 7,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=443521
+			 * @since 7.0
+			 */
+			it("test line comment 4", function(done) {
+				var options = {
+					buffer: "// cur ", 
+					prefix: "c", 
+					offset: 4,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=443521
+			 * @since 7.0
+			 */
+			it("test line comment 5", function(done) {
+				var options = {
+					buffer: "// es ", 
+					prefix: "es", 
+					offset: 5,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=444001
+			 * @since 7.0
+			 */
+			it("test line comment 6", function(done) {
+				var options = {
+					buffer: "// .", 
+					prefix: "", 
+					offset: 4,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=444001
+			 * @since 7.0
+			 */
+			it("test line comment 7", function(done) {
+				var options = {
+					buffer: "// . es", 
+					prefix: "", 
+					offset: 4,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests line comments
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=444001
+			 * @since 7.0
+			 */
+			it("test line comment 8", function(done) {
+				var options = {
+					buffer: "// es .", 
+					prefix: "", 
+					offset: 7,
+					callback: done};
+				testProposals(options, []);
+			});
+			/**
+			 * Tests the author tag insertion
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test author tag", function(done) {
+				var options = {
+					buffer: "/**\n* @a \n*/", 
+					prefix: "@a", 
+					offset: 8,
+					templates: true,
+					callback: done};
+				testProposals(options, [
+					['', 'Templates'],
+				    ['uthor ', '@author - Author JSDoc tag']
+				]);
+			});
+			/**
+			 * Tests the lends tag insertion
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test lends tag", function(done) {
+				var options = {
+					buffer: "/**\n* @name foo\n* @l \n*/", 
+					prefix: "@l", 
+					offset: 20,
+					templates: true,
+					callback: done};
+				testProposals(options, [
+					['', 'Templates'],
+				    ['ends ', '@lends - Lends JSDoc tag'],
+				    ['icense ', '@license - License JSDoc tag']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a function decl with no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 1", function(done) {
+				var options = {
+					buffer: "/**\n* @name  \n*/ function a(){}", 
+					line: '* @name  ',
+					prefix: "", 
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - The name of the function']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a function decl with no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 10.0
+			 */
+			it("test name tag completion 1a - no space", function(done) {
+				var options = {
+					buffer: "/**\n* @name  \n*/function a(){}", 
+					prefix: "",
+					line: '* @name  ',
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - The name of the function']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a function decl with a prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 2", function(done) {
+				var options = {
+					buffer: "/**\n* @name  \n*/ function bar(){}",
+					line: '* @name  ',
+					prefix: "b", 
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				     ['bar', 'bar - The name of the function']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a object property with function expr with no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 3", function(done) {
+				var options = {
+					buffer: "var o = {/**\n* @name  \n*/f: function bar(){}}",
+					line: '* @name  ',
+					prefix: "", 
+					offset: 21,
+					callback: done};
+				testProposals(options, [
+				     ['bar', 'bar - The name of the function']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a object property with function expr with a prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 4", function(done) {
+				var options = {
+					buffer: "var o = {/**\n* @name  \n*/f: function bar(){}}", 
+					line: '* @name  ',
+					prefix: "b", 
+					offset: 21,
+					callback: done};
+				testProposals(options, [
+				     ['bar', 'bar - The name of the function']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a object property with function expr with no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 5", function(done) {
+				var options = {
+					buffer: "/**\n* @name  \n*/ Foo.bar.baz = function(){}",
+					line: '* @name  ',
+					prefix: "", 
+					offset: 12,
+					callback: done};
+				testProposals(options, [
+				     ['Foo.bar.baz', 'Foo.bar.baz - The name of the function']
+				]);
+			});
+			/**
+			 * Tests the function name insertion for a object property with function expr with a prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 6", function(done) {
+				var options = {
+					buffer: "/**\n* @name  \n*/ Foo.bar.baz = function(){}",
+					line: '* @name  ',
+					prefix: "Foo", 
+					offset: 12,
+					callback: done};
+				testProposals(options, [
+				     ['Foo.bar.baz', 'Foo.bar.baz - The name of the function']
+				]);
+			});
+			/**
+			 * Tests no proposals for assignment expression
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test name tag completion 6a", function(done) {
+				var options = {
+					buffer: "/**\n* @name f \n*/Foo.bar.baz = function(){}",
+					line: '* @name f ',
+					prefix: "", 
+					offset: 14,
+					callback: done};
+				testProposals(options, []);
+			});
+			/**
+			 * Tests func decl param name proposals no prefix, no type
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 1", function(done) {
+				var options = {
+					buffer: "/**\n* @param  \n*/ function a(a, b, c){}",
+					line: '* @param  ',
+					prefix: "", 
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - Function parameter'],
+				     ['b', 'b - Function parameter'],
+				     ['c', 'c - Function parameter']
+				]);
+			});
+			
+			/**
+			 * Tests func decl param name proposals no prefix, no type
+			 * @since 10.0
+			 */
+			it("test param name completion whitespace 1", function(done) {
+				var options = {
+					buffer: "/**\n* @param  \n*/function a(a, b, c){}",
+					line: '* @param  ',
+					prefix: "", 
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				  ['a', 'a - Function parameter'],
+				  ['b', 'b - Function parameter'],
+				  ['c', 'c - Function parameter']
+				]);
+			});
+			
+			/**
+			 * Tests func decl param name proposals no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 2", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type} \n*/ function a(a, b, c){}",
+					line: '* @param {type} ',
+					prefix: "", 
+					offset: 20,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - Function parameter'],
+				     ['b', 'b - Function parameter'],
+				     ['c', 'c - Function parameter']
+				]);
+			});
+			/**
+			 * Tests func decl param name proposals a prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 3", function(done) {
+				var options = {
+					buffer: "/**\n* @param a \n*/ function a(aa, bb, cc){}", 
+					line: '* @param a ',
+					prefix: "a", 
+					offset: 14,
+					callback: done};
+				testProposals(options, [
+				     ['aa', 'aa - Function parameter']
+				]);
+			});
+			/**
+			 * Tests no proposals for after name
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 4", function(done) {
+				var options = {
+					buffer: "/**\n* @param f  \n*/ function a(aa, bb, cc){}", 
+					line: '* @param f  ',
+					prefix: "", 
+					offset: 15,
+					callback: done};
+				testProposals(options, []);
+			});
+			/**
+			 * Tests object property func expr param name proposals no prefix, no type
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 5", function(done) {
+				var options = {
+					buffer: "var o = {/**\n* @param  \n*/f: function a(a, b, c){}}", 
+					line: '* @param  ',
+					prefix: "", 
+					offset: 22,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - Function parameter'],
+				     ['b', 'b - Function parameter'],
+				     ['c', 'c - Function parameter']
+				]);
+			});
+			/**
+			 * Tests object property func expr param name proposals no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 6", function(done) {
+				var options = {
+					buffer: "var o = {/**\n* @param {type} \n*/f: function a(a, b, c){}}", 
+					line: '* @param {type} ',
+					prefix: "", 
+					offset: 29,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - Function parameter'],
+				     ['b', 'b - Function parameter'],
+				     ['c', 'c - Function parameter']
+				]);
+			});
+			/**
+			 * Tests object property func expr param name proposals a prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 7", function(done) {
+				var options = {
+					buffer: "var o = {/**\n* @param {type} a\n*/f: function a(aa, bb, cc){}}", 
+					line: '* @param {type} a',
+					prefix: "a", 
+					offset: 30,
+					callback: done};
+				testProposals(options, [
+				     ['aa', 'aa - Function parameter']
+				]);
+			});
+			/**
+			 * Tests object property func expr param name proposals a prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 8", function(done) {
+				var options = {
+					buffer: "var o = {/**\n* @param {type} a \n*/f: function a(aa, bb, cc){}}",
+					line: '* @param {type} a ',
+					prefix: "a", 
+					ofset: 31,
+					callback: done};
+				testProposals(options, []);
+			});
+			/**
+			 * Tests assingment func expr param name proposals no prefix, no type
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 9", function(done) {
+				var options = {
+					buffer: "/**\n* @param  \n*/ Foo.bar.baz = function a(a, b, c){}", 
+					line: '* @param  ',
+					prefix: "", 
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - Function parameter'],
+				     ['b', 'b - Function parameter'],
+				     ['c', 'c - Function parameter']
+				]);
+			});
+			/**
+			 * Tests assingment func expr param name proposals no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 10", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type} \n*/ Foo.bar.baz = function a(a, b, c){}", 
+					line: '* @param {type} ',
+					prefix: "", 
+					offset: 20,
+					callback: done};
+				testProposals(options, [
+				     ['a', 'a - Function parameter'],
+				     ['b', 'b - Function parameter'],
+				     ['c', 'c - Function parameter']
+				]);
+			});
+			/**
+			 * Tests assingment func expr param name proposals no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 10a", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type} a\n*/Foo.bar.baz = function a(aa, bb, cc){}", 
+					line: '* @param {type} a',
+					prefix: "a", 
+					offset: 21,
+					callback: done};
+				testProposals(options, [
+				     ['aa', 'aa - Function parameter']
+				]);
+			});
+			/**
+			 * Tests assingment func expr param name proposals no prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test param name completion 11", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type} d\n*/ Foo.bar.baz = function a(aa, bb, cc){}", 
+					line: '* @param {type} d',
+					prefix: "d", 
+					offset: 20,
+					callback: done};
+				testProposals(options, []);
+			});
+			
+			/**
+			 * Tests var decl func expr param name proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
+			 * @since 10.0
+			 */
+			it("test param name completion 12", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type} d\n*/var Foo.bar.baz = function a(aa, bb, cc){}", 
+					line: '* @param {type} d',
+					prefix: "d", 
+					offset: 20,
+					callback: done};
+				testProposals(options, []);
+			});
+			/**
+			 * Tests var decl func expr param name proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
+			 * @since 10.0
+			 */
+			it("test param name completion 13", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type} a\n*/var baz = function a(aa, bb, cc){}", 
+					line: '* @param {type} a',
+					prefix: "a", 
+					offset: 21,
+					callback: done};
+				testProposals(options, [
+					['aa', 'aa - Function parameter']
+				]);
+			});
+			
+			/**
+			 * Tests var decl func expr name proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
+			 * @since 10.0
+			 */
+			it("test param name completion 14", function(done) {
+				var options = {
+					buffer: "/**\n* @name \n*/var baz = function baz(aa, bb, cc){}", 
+					line: '* @name ',
+					prefix: "", 
+					offset: 12,
+					callback: done};
+				testProposals(options, [
+					['baz', 'baz - The name of the function']
+				]);
+			});
+			
+			/**
+			 * Tests var decl func expr name proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
+			 * @since 10.0
+			 */
+			it("test param name completion 15", function(done) {
+				var options = {
+					buffer: "/**\n* @name \n*/var baz = function foo(aa, bb, cc){}", 
+					line: '* @name ',
+					prefix: "", 
+					offset: 12,
+					callback: done};
+				testProposals(options, [
+					['foo', 'foo - The name of the function']
+				]);
+			});
+			
+			/**
+			 * Tests var decl func expr name proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
+			 * @since 10.0
+			 */
+			it("test param name completion 16", function(done) {
+				var options = {
+					buffer: "/**\n* @name b\n*/var baz = function foo(aa, bb, cc){}", 
+					line: '* @name ',
+					prefix: "b", 
+					offset: 13,
+					callback: done};
+				testProposals(options, [
+				]);
+			});
+			
+			/**
+			 * Tests one-line JSDoc completions
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439574
+			 * @since 7.0
+			 */
+			it("test one-line doc completion", function(done) {
+				var options = {
+					buffer: "Objects.mixin(Foo.prototype, /** @l  */{});", 
+					prefix: "@l",
+					line: 'Objects.mixin(Foo.prototype, /** @l  */{});',
+					offset: 35,
+					templates: true,
+					callback: done};
+				testProposals(options, [
+					 ['', 'Templates'],
+				     ['ends ', '@lends - Lends JSDoc tag'],
+				     ['icense ', '@license - License JSDoc tag']
+				]);
+			});
+			
+			/**
+			 * Tests object JSDoc completions
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test object doc completion 1", function(done) {
+				var options = {
+					buffer: "/**\n* @param {O \n*/", 
+					line: '* @param {O ',
+					prefix: "O", 
+					offset: 15,
+					callback: done};
+				testProposals(options, [
+				  //TODO   ['bject', 'Object', 'Object'],
+				]);
+			});
+			
+			/**
+			 * Tests object JSDoc completions
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test object doc completion 2", function(done) {
+				var options = {
+					buffer: "/**\n* @returns {I} \n*/",
+					line: '* @returns {I} ',
+					prefix: "I", 
+					offset: 17,
+					callback: done};
+				testProposals(options, [
+				  //TODO   ['nfinity', 'Infinity', 'Infinity'],
+				]);
+			});
+			
+			/**
+			 * Tests object JSDoc completions
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426185
+			 * @since 7.0
+			 */
+			it("test object doc completion 3", function(done) {
+				var options = {
+					buffer: "/*eslint-env amd*//**\n* @returns {I} \n*/", 
+					line: '* @returns {I} ',
+					prefix: "I", 
+					offset: 35,
+					callback: done};
+				testProposals(options, [
+				  //TODO   ['mage', 'Image', 'Image'],
+				  ///   ['nfinity', 'Infinity', 'Infinity']
+				]);
+			});
+		});
 	});
 });

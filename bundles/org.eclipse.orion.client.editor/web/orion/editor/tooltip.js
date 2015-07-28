@@ -361,6 +361,9 @@ function Tooltip (view) {
 			}
 			
 			if (newContentsDiv) {
+				if (this._tooltipContents) {
+					this._tooltipDiv.removeChild(this._tooltipContents);
+				}
 				this._tooltipContents = newContentsDiv;
 				this._tooltipDiv.appendChild(newContentsDiv);				
 			}
@@ -667,6 +670,7 @@ function Tooltip (view) {
 			if (data.title) {
 				var titleDiv = util.createElement(document, "div"); //$NON-NLS-0$;
 				titleDiv.innerHTML = this.hover.renderMarkDown ? this.hover.renderMarkDown(data.title) : data.title;
+				titleDiv.classList.add("hoverTooltipTitle"); //$NON-NLS-0$
 				sectionDiv.appendChild(titleDiv);
 			}
 			var contentDiv = util.createElement(document, "div"); //$NON-NLS-0$
@@ -844,7 +848,7 @@ function Tooltip (view) {
 				return html;
 			} else {
 				var tooltipHTML = util.createElement(document, "div"); //$NON-NLS-0$
-				var em = util.createElement(document, "em"); //$NON-NLS-0$
+				var em = util.createElement(document, "multi_anno"); //$NON-NLS-0$
 				em.appendChild(document.createTextNode(messages.multipleAnnotations));
 				tooltipHTML.appendChild(em);
 				for (var i = 0; i < annotations.length; i++) {

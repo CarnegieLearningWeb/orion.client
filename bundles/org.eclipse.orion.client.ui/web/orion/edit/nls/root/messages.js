@@ -13,6 +13,7 @@ define({//Default message bundle
 	"switchEditor": "Switch Editor", //$NON-NLS-1$ //$NON-NLS-0$
 	"Fetching": "Fetching: ${0}", //$NON-NLS-1$ //$NON-NLS-0$
 	"confirmUnsavedChanges": "There are unsaved changes. Do you still want to navigate away?", //$NON-NLS-1$ //$NON-NLS-0$
+	"searchFilesCommand": "Quick Search...", //$NON-NLS-1$ //$NON-NLS-0$
 	"searchFiles": "Quick Search in ${0}", //$NON-NLS-1$ //$NON-NLS-0$
 	"searchTerm": "Enter search term:", //$NON-NLS-1$ //$NON-NLS-0$
 	"unsavedChanges": "There are unsaved changes.", //$NON-NLS-1$ //$NON-NLS-0$
@@ -36,6 +37,9 @@ define({//Default message bundle
 	"gotoLinePrompt": "Go to line:", //$NON-NLS-1$ //$NON-NLS-0$
 	"Undo": "Undo", //$NON-NLS-1$ //$NON-NLS-0$
 	"Redo": "Redo", //$NON-NLS-1$ //$NON-NLS-0$
+	"Cut": "Cut", //$NON-NLS-1$ //$NON-NLS-0$
+	"Copy": "Copy", //$NON-NLS-1$ //$NON-NLS-0$
+	"Paste": "Paste", //$NON-NLS-1$ //$NON-NLS-0$
 	"Find": "Find...", //$NON-NLS-1$ //$NON-NLS-0$
 	"noResponse": "No response from server. Check your internet connection and try again.", //$NON-NLS-1$ //$NON-NLS-0$
 	"savingFile": "Saving file ${0}", //$NON-NLS-1$ //$NON-NLS-0$
@@ -46,9 +50,6 @@ define({//Default message bundle
 	"SplitVertical": "Split Vertical", //$NON-NLS-1$ //$NON-NLS-0$
 	"SplitHorizontal": "Split Horizontal", //$NON-NLS-1$ //$NON-NLS-0$
 	"SplitPipInPip": "Picture in Picture", //$NON-NLS-1$ //$NON-NLS-0$
-	//Added by Jon
-	"SplitPreview": "Preview Page", //$NON-NLS-1$ //$NON-NLS-0$
-	
 	"SplitModeTooltip": "Change split editor mode", //$NON-NLS-1$ //$NON-NLS-0$
 	"SidePanel": "Side Panel", //$NON-NLS-1$ //$NON-NLS-0$
 	"SidePanelTooltip": "Choose what to show in the side panel.", //$NON-NLS-1$ //$NON-NLS-0$

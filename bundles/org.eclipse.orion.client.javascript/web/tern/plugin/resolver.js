@@ -43,13 +43,18 @@ define([
 	 * @since 9.0
 	 */
 	function resolve(server, key, loc) {
+		if(_resolved[key].pending) {
+			//if we are waiting don't fire of another request
+			return;
+		}
   		server.startAsyncAction();
   		_resolved[key].pending = true;
 		server.options.getFile({logical: key, file: loc}, function(err, _file) {
-	 		_resolved[key].file = _file.file;
+			_resolved[key].file = _file.file;
 	   		_resolved[key].contents = _file.contents;
 	   		_resolved[key].logical = _file.logical;
-	   		delete _resolved.pending;
+	   		_resolved[key].err = err;
+	   		delete _resolved[key].pending;
 	   		server.finishAsyncAction(err);
 		});
 	}
@@ -92,16 +97,25 @@ define([
 	/**
 	 * @description Default callback to be used durning the post-parse phase of plugin loading
 	 * @param {TernServer} server The server
-	 * @param {Object} ast The backing AST that was just parsed 
+	 * @param {Object} ast The backing AST that was just parsed
+	 * @param {Object} ignores A mapping of names that can be ignored
 	 * @since 9.0
 	 */
-	function doPostParse(server, ast) {
+	function doPostParse(server, ast, ignores) {
 		if(Array.isArray(ast.dependencies) && ast.dependencies.length > 0) {
 			for(var i = 0; i < ast.dependencies.length; i++) {
 				var _d = ast.dependencies[i].value;
 				if(_d) {
-					if(_resolved[_d] !== undefined) {
+					if(typeof(_resolved[_d]) === 'object') {
 						continue; //we already resolved it or are trying, keep going
+					}
+					if(typeof(ignores) === 'object') {
+						if(ignores[_d]) {
+							continue;
+						}
+						if(typeof(ignores.node) === 'object' && ignores[_d]) {
+							continue;
+						}
 					}
 					_resolved[_d] = Object.create(null);
 				}
@@ -146,29 +160,29 @@ define([
     		if(node.parents && node.parents.length > 0) {
 	    		var parent = node.parents.pop();
 	    		switch(parent.type) {
-						case 'MemberExpression': {
-							return { kind : 'member'}; //$NON-NLS-1$
-						}
-						case 'VariableDeclarator': {
-							return null;
-						}
-						case 'FunctionDelcaration':
-						case 'FunctionExpression': {
-							if(offset < parent.body.range[0]) {
-								return null;						
-							}
-							break;
-						}
-						case 'Property': {
-							if(offset-1 >= parent.value.range[0] && offset-1 <= parent.value.range[1]) {
-								return { kind : 'prop'}; //$NON-NLS-1$
-							}
-							return null;
-						}
-						case 'SwitchStatement': {
-							return {kind: 'swtch'}; //$NON-NLS-1$
-						}
+					case 'MemberExpression': {
+						return { kind : 'member'}; //$NON-NLS-1$
 					}
+					case 'VariableDeclarator': {
+						return null;
+					}
+					case 'FunctionDelcaration':
+					case 'FunctionExpression': {
+						if(offset < parent.body.range[0]) {
+							return null;						
+						}
+						break;
+					}
+					case 'Property': {
+						if(offset-1 >= parent.value.range[0] && offset-1 <= parent.value.range[1]) {
+							return { kind : 'prop'}; //$NON-NLS-1$
+						}
+						return null;
+					}
+					case 'SwitchStatement': {
+						return {kind: 'swtch'}; //$NON-NLS-1$
+					}
+				}
 			}
     	}
 		return {kind:'top'}; //$NON-NLS-1$

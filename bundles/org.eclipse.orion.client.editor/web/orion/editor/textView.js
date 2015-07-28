@@ -1852,6 +1852,24 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			return rect;
 		},
 		/**
+		 * Copies the selected text to the clipboard in plain text format.
+		 * @returns {Boolean} <code>true</code> if the operation succeded.
+		 * @since 10.0
+		 */
+		copy: function() {
+			if (!this._clientDiv) { return false; }
+			return this._doCopy();
+		},
+		/**
+		 * Moves the selected text to the clipboard in plain text format.
+		 * @returns {Boolean} <code>true</code> if the operation succeded.
+		 * @since 10.0
+		 */
+		cut: function() {
+			if (!this._clientDiv) { return false; }
+			return this._doCut();
+		},
+		/**
 		 * Destroys the text view. 
 		 * <p>
 		 * Removes the view from the page and frees all resources created by the view.
@@ -2861,6 +2879,18 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 		 */
 		onBlur: function(blurEvent) {
 			return this.dispatchEvent(blurEvent);
+		},
+		/**
+		 * Replaces the selection with the text on the clipboard or, if there is no selection, inserts the text at the current caret offset.
+		 * <p>
+		 * If the single mode is on and the clipboard text contains more than one line, all lines will be concatenated.
+		 * </p>
+		 * @returns {Boolean} <code>true</code> if the operation succeded.
+		 * @since 10.0
+		 */
+		paste: function() {
+			if (!this._clientDiv) { return false; }
+			return this._doPaste();
 		},
 		/**
 		 * Redraws the entire view, including rulers.
@@ -4915,8 +4945,10 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 		_doCut: function (e) {
 			var text = this.getSelectionText();
 			if (text) {
+				if (!this._setClipboardText(text, e)) {
+					return false;
+				}
 				this._doContent("");
-				return this._setClipboardText(text, e);
 			}
 			return true;
 		},
@@ -6778,12 +6810,13 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				clipboardText = [];
 				convertDelimiter(text, function(t) {clipboardText.push(t);}, function() {clipboardText.push(util.platformDelimiter);});
 				/*
-				* Note that setData() succeeds on Firefox 22 and greater, but the return value is not a boolean like IE and Chrome.
+				* Note that setData() succeeds on Firefox > 21 and WebKit, but the return value is not a boolean like IE.
 				*/
 				var success = clipboardData.setData(util.isIE ? "Text" : "text/plain", clipboardText.join("")); //$NON-NLS-1$ //$NON-NLS-2$
-				if (success || util.isFirefox > 21) {
+				if (success || (evt && (util.isFirefox > 21 || util.isWebkit))) {
 					return true;
 				}
+				if (!evt) return false;
 			}
 			var doc = this._parent.ownerDocument;
 			var child = util.createElement(doc, "pre"); //$NON-NLS-1$
