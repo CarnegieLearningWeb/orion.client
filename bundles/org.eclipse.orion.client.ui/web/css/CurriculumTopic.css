@@ -1,0 +1,321 @@
+/* Curriculum Template */
+#topicSummary1
+{
+background-color:#FFF788;
+border: 2px solid;
+border-color:#F0CC42;
+border-radius: 6px;
+padding:5px;
+}
+
+
+#topicSummary2
+{
+background-color:#84FF9D;
+border: 2px solid black;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableOuter1
+{
+background-color:#A0DDF9;
+border: 2px solid;
+border-color: #d5eef9;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableOuter2
+{
+background-color:#d5eef9;
+border: 2px solid;
+border-color: #A0DDF9;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableOuter2Backup
+{
+background-color:#6EC7F1;
+border: 2px solid;
+border-color: #A0DDF9;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableOuter2GreenBackup
+{
+background-color:#CAE6AB;
+border: 2px solid;
+border-color: #A2C47A;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableCodeDifference
+{
+background-color:#FFF788;
+border: 2px solid;
+border-color:#F0CC42;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+
+#tableProjectPageOuter
+{
+background-color:#B3A1D3;
+border: 2px solid;
+border-color:#D7CCEE;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+
+#tableProjectPageOuter2
+{
+background-color:#D7CCEE;
+border: 2px solid;
+border-color:#B3A1D3;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableGameDemo
+{
+background-color:#d5eef9;
+border: 2px solid;
+border-color: #A0DDF9;
+border-radius: 6px;
+padding:5px;
+
+}
+
+#gameDemoBorder{
+border:2px solid;
+border-color:#A0DDF9;
+height:240px
+}
+
+#tableGameDemoGray
+{
+background-color:#d5eef9;
+border: 2px solid;
+border-color: #A0DDF9;
+border-radius: 6px;
+padding:5px;
+}
+
+#header1Section
+{
+width:855px;
+background-color:#ECEAEB;
+border: 2px solid;
+border-radius: 6px;
+border-color:#BAB8B9;
+padding:5px;
+}
+
+
+#tableVideo1
+{
+background-color:#78d8fa;
+border: 2px solid black;
+border-radius: 6px;
+padding:5px;
+}
+
+#tableGameDemo2
+{
+background-color:#ECEAEB;
+border: 2px solid;
+border-radius: 6px;
+border-color:#BAB8B9;
+padding:5px;
+}
+
+
+#tableVideo2
+{
+background-color:#84FF9D;
+border: 2px solid black;
+border-radius: 6px;
+padding:5px;
+}
+
+
+#tableInfoTable
+{
+background-color:#FFF788;
+border: 2px solid;
+border-radius: 6px;
+border-color:#F0CC42;
+padding:5px;
+width:865px;
+}
+
+#tableDefinitions
+{
+background-color:#FFF788;
+border: 2px solid;
+border-radius: 6px;
+border-color:#F0CC42;
+padding:5px;
+width:865px;
+}
+
+
+#tableWarning
+{
+background-color:#FFF788;
+border: 2px solid;
+border-radius: 6px;
+border-color:#F0CC42;
+padding:5px;
+width:865px;
+}
+
+#tableCodeDifferences
+{
+background-color:#FFF788;
+border: 2px solid black;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableCodeBreakdown
+{
+background-color:#FFF788;
+border: 2px solid;
+border-radius: 6px;
+border-color:#F0CC42;
+padding:5px;
+width:865px;
+}
+
+
+
+#tableSaveAs
+{
+background-color:#84FF9D;
+border: 2px double;
+border-radius: 6px;
+padding:5px;
+width:865px;
+}
+
+#tableInner
+{
+background-color:white;
+border: 0px;
+border-color:gray;
+border-radius:4px;
+width:850px;
+}
+
+#tdInner
+{
+width : 418px;
+outline:2px solid;
+outline-color:#A0DDF9;
+outline-radius:4px;
+padding:5px;
+
+}
+
+#tdInner2
+{
+width:418px;
+outline:2px solid;
+outline-color:#d5eef9;
+padding:5px;
+}
+
+#tdInnerProjectUpdate
+{
+width : 418px;
+outline: 2px solid;
+outline-color:#B3A1D3;
+padding:5px;
+border: 2px solid;
+border-color:white;
+boder-radius:6px;
+}
+
+#tdInnerInfo
+{
+width : 418px;
+outline: 2px solid;
+outline-color:#FFF788;
+padding:5px;
+border: 2px solid;
+border-color:white;
+boder-radius:6px;
+}
+
+
+
+#tableProTip
+{
+background-color:#FFF788;
+border: 2px solid;
+border-radius: 6px;
+border-color:#F0CC42;
+padding:5px;
+width:865px;
+}
+
+#centeredImage300
+{
+border:1px solid black;
+width:300px;
+height:300px;
+margin-left:auto;
+margin-right:auto;
+}
+
+#centeredImage300_150
+{
+border:1px solid black;
+width:300px;
+height:150px;
+margin-left:auto;
+margin-right:auto;
+}
+
+#centeredImage150_300
+{
+border:1px solid black;
+width:250px;
+height:300px;
+margin-left:auto;
+margin-right:auto;
+}
+
+#centeredImage200_200
+{
+border:1px solid black;
+width:200px;
+height:200px;
+margin-left:auto;
+margin-right:auto;
+}
+
+
+#dottedLineSection
+{
+border:1px dashed;
+border-color:#E5E5E5;
+background-color:#f1f1f1;
+padding:3px;
+}
