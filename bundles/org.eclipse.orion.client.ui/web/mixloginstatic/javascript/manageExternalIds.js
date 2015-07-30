@@ -197,6 +197,7 @@ define(["i18n!orion/mixloginstatic/nls/messages", "orion/xhr", "orion/webui/litt
 		// Add OAuth Providers
 		providerElements.push(createProviderLink("Google OAuth", "../mixloginstatic/images/google.png", "", confirmOAuth.bind(null, "google")));
 		providerElements.push(createProviderLink("GitHub OAuth", "../mixloginstatic/images/GitHub-Mark-Light-32px.png", "githubImage", confirmOAuth.bind(null, "github")));
+		providerElements.push(createProviderLink("Clever OAuth", "../images/assets/sign-in-with-clever-full.png", "cleverImage", confirmOAuth.bind(null, "clever")));
 
 		var oauthContainer = document.getElementById("newExternalId");
 		providerElements.forEach(function(provider) {
