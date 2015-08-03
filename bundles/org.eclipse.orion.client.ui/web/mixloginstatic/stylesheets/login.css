@@ -385,6 +385,14 @@ input::-ms-reveal {
     background-color: #2B2B2B;
 }
 
+.clever-auth {
+    background-color: #2D66A8;
+}
+
+.clever-auth:hover {
+    background-color: #255389;
+}
+
 @media only screen and (max-width: 40em) {
     .auth-sections {
         -webkit-flex-direction: column;
@@ -455,6 +463,13 @@ input::-ms-reveal {
     background-image:url("../images/assets/github-logo.png");
     border-right: 1px solid #5d5d5d;
     display:none;
+}
+
+.clever-icon {
+    background-image:url("../images/assets/sign-in-with-clever-full.png");
+    background-size: 20px 20px !important;
+    background-position: 2px 2px;
+    border-right: 1px solid #214a7a;
 }
 
 .social-login-text {
