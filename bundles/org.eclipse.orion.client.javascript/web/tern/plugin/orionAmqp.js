@@ -23,59 +23,57 @@
 })(/* @callback */ function(infer, tern, resolver) {
 
 	var templates = [
-	/* eslint-disable missing-nls */
 		{
-			prefix: "amqp",
-			name: "amqp",
+			prefix: "amqp", //$NON-NLS-0$
+			name: "amqp", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false},
-			description: " - Node.js require statement for AMQP framework",
-			template: "var amqp = require('amqp');\n"
+			description: " - Node.js require statement for AMQP framework", //$NON-NLS-0$
+			template: "var amqp = require('amqp');\n" //$NON-NLS-0$
 		},
 		{
-			prefix: "amqp",
-			name: "amqp connection",
+			prefix: "amqp", //$NON-NLS-0$
+			name: "amqp connection", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false},
-			description: " - create a new AMQP connection ",
-			template: "var amqp = require('amqp');\n" +
-					  "var ${connection} = amqp.createConnection({\n" +  
-					  "\thost: ${host},\n" + 
-					  "\tport: ${port},\n" + 
-					  "\tlogin: ${login},\n" + 
-					  "\tpassword: ${password}\n" + 
-					  "});\n"
+			description: " - create a new AMQP connection ", //$NON-NLS-0$
+			template: "var amqp = require('amqp');\n" + //$NON-NLS-0$
+					  "var ${connection} = amqp.createConnection({\n" +  //$NON-NLS-0$ 
+					  "\thost: ${host},\n" +  //$NON-NLS-0$
+					  "\tport: ${port},\n" +  //$NON-NLS-0$
+					  "\tlogin: ${login},\n" +  //$NON-NLS-0$
+					  "\tpassword: ${password}\n" +  //$NON-NLS-0$
+					  "});\n"  //$NON-NLS-0$
 		},
 		{
-			prefix: "amqp",
-			name: "amqp on",
+			prefix: "amqp", //$NON-NLS-0$
+			name: "amqp on", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false},
-			description: " - create a new AMQP connection on statement",
-			template: "${connection}.on(${event}, function() {\n" +  
-					  "\t${cursor}\n" + 
-					  "});\n"
+			description: " - create a new AMQP connection on statement", //$NON-NLS-0$
+			template: "${connection}.on(${event}, function() {\n" +  //$NON-NLS-0$ 
+					  "\t${cursor}\n" +  //$NON-NLS-0$
+					  "});\n"  //$NON-NLS-0$
 		},
 		{
-			prefix: "amqp",
-			name: "amqp queue",
+			prefix: "amqp", //$NON-NLS-0$
+			name: "amqp queue", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false},
-			description: " - create a new AMQP connection queue statement",
-			template: "${connection}.queue(${id}, function(queue) {\n" + 
-					  "\tqueue.bind(\'#\'); //catch all messages\n" +
-					  "\tqueue.subscribe(function (message, headers, deliveryInfo) {\n" +
-					  "\t\t// Receive messages\n" +
-					  "\t});\n" +
-					  "\t${cursor}\n" + 
-					  "});\n"
+			description: " - create a new AMQP connection queue statement", //$NON-NLS-0$
+			template: "${connection}.queue(${id}, function(queue) {\n" +  //$NON-NLS-0$
+					  "\tqueue.bind(\'#\'); //catch all messages\n" + //$NON-NLS-0$
+					  "\tqueue.subscribe(function (message, headers, deliveryInfo) {\n" + //$NON-NLS-0$
+					  "\t\t// Receive messages\n" + //$NON-NLS-0$
+					  "\t});\n" + //$NON-NLS-0$
+					  "\t${cursor}\n" +  //$NON-NLS-0$
+					  "});\n"  //$NON-NLS-0$
 		},
 		{
-			prefix: "amqp",
-			name: "amqp exchange",
+			prefix: "amqp", //$NON-NLS-0$
+			name: "amqp exchange", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false},
-			description: " - create a new AMQP connection exchange",
-			template: "var exchange = ${connection}.exchange(${id}, {type: \'topic\'}, function(exchange) {\n" +  
-					  "\t${cursor}\n" + 
-					  "});\n"
+			description: " - create a new AMQP connection exchange", //$NON-NLS-0$
+			template: "var exchange = ${connection}.exchange(${id}, {type: \'topic\'}, function(exchange) {\n" +  //$NON-NLS-0$ 
+					  "\t${cursor}\n" +  //$NON-NLS-0$
+					  "});\n"  //$NON-NLS-0$
 		}
-		/* eslint-enable missing-nls */
 	];
 	
 	/**
@@ -83,8 +81,8 @@
 	 * @since 9.0
 	 * @callback
 	 */
-	function getTemplates(file, start, end, completions) {
-		var wordEnd = tern.resolvePos(file, end);
+	function getTemplates(file, query, completions) {
+		var wordEnd = tern.resolvePos(file, query.end);
 		var expr = infer.findExpressionAround(file.ast, null, wordEnd, file.scope);
 		var tmps = resolver.getTemplatesForNode(templates, expr);
 		if(tmps && tmps.length > 0) {
@@ -102,7 +100,7 @@
 	    return {
 	      defs : defs,
 	      passes: {
-	      	variableCompletion: getTemplates
+	      	completion: getTemplates
 	      }
 	    };
 	});
