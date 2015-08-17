@@ -235,7 +235,10 @@ define(["orion/Deferred", "orion/xhr", 'orion/EventTarget', 'orion/form'], funct
 				Password : password,
 				Reset: true
 			};
-			return xhr("POST", this.api + username, { //$NON-NLS-1$ //$NON-NLS-0$
+			console.log(this.api +"/"+ username);
+			//Added by Jon orion bug fix?
+			//was: return xhr("POST", this.api + username, {
+			return xhr("POST", this.api +"/"+ username, { //$NON-NLS-1$ //$NON-NLS-0$
 				headers : {
 					"Content-Type": "application/json; charset=UTF-8", //$NON-NLS-1$ //$NON-NLS-0$
 					"Orion-Version" : "1" //$NON-NLS-1$ //$NON-NLS-0$
