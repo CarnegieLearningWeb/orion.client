@@ -423,6 +423,8 @@ define([
 				this.changedItem(parent);
 				break;
 			case "fetch": //$NON-NLS-0$
+				if (this.ignoreFetch) return;
+				//$FALLTHROUGH$
 			case "push": //$NON-NLS-0$
 			case "pull": //$NON-NLS-0$
 			case "sync": //$NON-NLS-0$
@@ -919,7 +921,14 @@ define([
 							remotes.push(commandService.runCommand("eclipse.orion.git.fetchRemote", {Remote: remote, noAuth: true}, this));  //$NON-NLS-0$
 						}
 					});
-					if (remotes.length) return Deferred.all(remotes);
+					if (remotes.length) {
+						this.ignoreFetch = true;
+						var done = function() {
+							this.ignoreFetch = false;
+							this.changedItem();
+						}.bind(this);
+						return Deferred.all(remotes).then(done, done);
+					}
 				}
 			}
 			return new Deferred().resolve();

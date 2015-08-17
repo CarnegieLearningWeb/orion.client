@@ -9,8 +9,7 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  ******************************************************************************/
-/*eslint-env amd, mocha, node, browser*/
-/*global doctrine*/
+/*eslint-env amd, mocha, browser*/
 /* eslint-disable missing-nls */
 define([
 'javascript/contentAssist/ternAssist',
@@ -205,6 +204,138 @@ define([
 
 	describe('Tern Content Assist Tests', function() {
 		this.timeout(10000);
+		describe('Case-insensitive proposals', function() {
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473777
+			 */
+			it('test casing 1', function(done) {
+				var options = {
+					buffer: "[].fore",
+					prefix: "fore",
+					offset: 7,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'ecma5'],
+					['forEach(f, context?)', 'forEach(f, context?)']
+				]);
+			});
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473777
+			 */
+			it('test casing 2', function(done) {
+				var options = {
+					buffer: "[].isPrototypeo",
+					prefix: "isPrototypeo",
+					offset: 15,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'ecma5'],
+					['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool']
+				]);
+			});
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473777
+			 */
+			it('test casing 3', function(done) {
+				var options = {
+					buffer: "[].copyw",
+					prefix: "copyw",
+					offset: 8,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'ecma6'],
+					['copyWithin(target, start, end?)', 'copyWithin(target, start, end?)']
+				]);
+			});
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473777
+			 */
+			it('test casing 4', function(done) {
+				var options = {
+					buffer: "[].isprototypeo",
+					prefix: "isprototypeo",
+					offset: 15,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'ecma5'],
+					['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool']
+				]);
+			});
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473786
+			 */
+			it('test casing params 1', function(done) {
+				var options = {
+					buffer: "[].filter",
+					prefix: "filter",
+					offset: 9,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'ecma5'],
+					['filter(test, context?)', 'filter(test, context?)']
+				]);
+			});
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473786
+			 */
+			it('test casing params 2', function(done) {
+				var options = {
+					buffer: "new TypedArray(10).ev",
+					prefix: "ev",
+					offset: 21,
+					callback: done
+				};
+				testProposals(options, [
+					['', 'ecma6'],
+					['every(callback, thisArg?)', 'every(callback, thisArg?) : bool']
+				]);
+			});
+			it("test loosely match 1", function(done) {
+				var options = {
+					buffer: "var getAnotherThing = 0; gAT",
+					prefix: "gAT",
+					offset: 28,
+					callback: done};
+				return testProposals(options, [
+					//TODO Tern does not support camel case only ["getAnotherThing", "getAnotherThing : Number"]
+				]);
+			});
+			it("test loosely match 2", function(done) {
+				var options = {
+					buffer: "var getAnotherThing = 0; getan", 
+					prefix: "getan",
+					offset: 30,
+					callback: done};
+				return testProposals(options, [
+					["getAnotherThing", "getAnotherThing : number"]
+				]);
+			});
+			it("test loosely match 3", function(done) {
+				var options = {
+					buffer: "var getAnotherThing = 0; getaN", 
+					prefix: "getaN",
+					offset: 30,
+					callback: done};
+				return testProposals(options, [
+					["getAnotherThing", "getAnotherThing : number"]
+				]);
+			});
+			it("test loosely match 4", function(done) {
+				var options = {
+					buffer: "var getAnotherThing = 0; getAN",
+					prefix: "getAN",
+					offset: 30,
+					callback: done};
+				return testProposals(options, [
+					["getAnotherThing", "getAnotherThing : number"]
+				]);
+			});
+		});
 		describe('Complete Syntax', function() {
 			it("test no dupe 1", function(done) {
 				var options = {
@@ -238,7 +369,7 @@ define([
 					["coo", "coo : number"]
 				]);
 			});
-			it("test full file inferecing 1", function(done) {
+			it("test full file inferencing 1", function(done) {
 				var options = {
 					buffer: "x;\n var x = 0;", 
 					prefix: "x", 
@@ -248,7 +379,7 @@ define([
 					["x", "x : number"]
 				]);
 			});
-			it("test full file inferecing 2", function(done) {
+			it("test full file inferencing 2", function(done) {
 				var options = {
 					buffer: "function a() { x; }\n var x = 0;", 
 					prefix: "x", 
@@ -258,7 +389,7 @@ define([
 					["x", "x : number"]
 				]);
 			});
-			it("test full file inferecing 3", function(done) {
+			it("test full file inferencing 3", function(done) {
 				var options = {
 					buffer: "function a() { var y = x; y}\n var x = 0;", 
 					prefix: "y", 
@@ -268,7 +399,7 @@ define([
 					["y", "y : number"]
 				]);
 			});
-			it("test full file inferecing 4", function(done) {
+			it("test full file inferencing 4", function(done) {
 				var options = {
 					buffer: "function a() { var y = x.fff; y}\n var x = { fff : 0 };", 
 					prefix: "y", 
@@ -278,7 +409,7 @@ define([
 					["y", "y : number"]
 				]);
 			});
-			it("test full file inferecing 5", function(done) {
+			it("test full file inferencing 5", function(done) {
 				var options = {
 					buffer: "function a() { var y = x.fff; y}\n var x = {};\n x.fff = 8;", 
 					prefix: "y", 
@@ -288,7 +419,7 @@ define([
 					["y", "y : number"]
 				]);
 			});
-			it("test full file inferecing 6", function(done) {
+			it("test full file inferencing 6", function(done) {
 				var options = {
 					buffer: "function a() { x.fff = ''; var y = x.fff; y}\n" +
 					"var x = {};\n" +
@@ -300,7 +431,7 @@ define([
 					["y", "y : string|number"]
 				]);
 			});
-			it("test full file inferecing 7", function(done) {
+			it("test full file inferencing 7", function(done) {
 				var options = {
 					buffer: "function a() { x.fff = ''; var y = x(); y}\n" +
 					"var x = function() { return 8; }", 
@@ -311,7 +442,7 @@ define([
 					["y", "y : number"]
 				]);
 			});
-			it("test full file inferecing 8", function(done) {
+			it("test full file inferencing 8", function(done) {
 				var options = {
 					buffer: "function a() { x.fff = ''; var y = z(); y}\n" +
 					"var x = function() { return 8; }, z = x", 
@@ -323,7 +454,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 9", function(done) {
+			it("test full file inferencing 9", function(done) {
 				var options = {
 					buffer: "function a() {\n function b() {\n x.fff = '';\n }\n x.f\n}\n var x = {};", 
 					prefix: "f", 
@@ -333,7 +464,7 @@ define([
 					["fff", "fff : string"]
 				]);
 			});
-			it("test full file inferecing 10", function(done) {
+			it("test full file inferencing 10", function(done) {
 				var options = {
 					buffer: "function a() {\n function b() {\n x.fff = '';\n }\n var y = x;\n y.f\n }\n var x = {};", 
 					prefix: "f", 
@@ -344,7 +475,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 11a", function(done) {
+			it("test full file inferencing 11a", function(done) {
 				var options = {
 					buffer: "var x = {};\n function a() {\n var y = x;\n y.f\n function b() {\n x.fff = '';\n}\n}", 
 					prefix: "f", 
@@ -355,7 +486,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 11", function(done) {
+			it("test full file inferencing 11", function(done) {
 				var options = {
 					buffer: "function a() {\n var y = x;\n y.f\n function b() {\n x.fff = '';\n }\n }\n var x = {};", 
 					prefix: "f", 
@@ -366,7 +497,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 12", function(done) {
+			it("test full file inferencing 12", function(done) {
 				var options = {
 					buffer: "function a() {\n var y = x;\n y.f\n x.fff = '';\n }\n var x = {};", 
 					prefix: "f", 
@@ -377,7 +508,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 13", function(done) {
+			it("test full file inferencing 13", function(done) {
 				var options = {
 					buffer: "function b() {\n x.fff = '';\n }\n function a() {\n var y = x;\n y.f\n }\n var x = {};", 
 					prefix: "f", 
@@ -388,7 +519,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 14", function(done) {
+			it("test full file inferencing 14", function(done) {
 				var options = {
 					buffer: "function a() {\n  var y = x;\n y.f\n }\n function b() {\n x.fff = '';\n }\n var x = {};", 
 					prefix: "f", 
@@ -399,7 +530,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 15", function(done) {
+			it("test full file inferencing 15", function(done) {
 				var options = {
 					buffer: "function b() {\n x.fff = '';\n }\n function a() {\n x.f\n }\n var x = {};", 
 					prefix: "f", 
@@ -412,7 +543,7 @@ define([
 		
 			// should still find the fff property here evem though it
 			// is defined after and in another funxtion
-			it("test full file inferecing 16", function(done) {
+			it("test full file inferencing 16", function(done) {
 				var options = {
 					buffer: "function a() {\n x.f\n }\n function b() {\n x.fff = '';\n }\n var x = {};", 
 					prefix: "f", 
@@ -422,7 +553,7 @@ define([
 					["fff", "fff : string"]
 				]);
 			});
-			it("test full file inferecing 17", function(done) {
+			it("test full file inferencing 17", function(done) {
 				var options = {
 					buffer: "function a() {\n x.f\n function b() {\n x.fff = '';\n }\n }\n var x = {};", 
 					prefix: "f", 
@@ -433,7 +564,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 18", function(done) {
+			it("test full file inferencing 18", function(done) {
 				var options = {
 					buffer: "function a() {\n x.fff = '';\n function b() {\n x.f\n }\n }\n var x = {};", 
 					prefix: "f", 
@@ -444,7 +575,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 19", function(done) {
+			it("test full file inferencing 19", function(done) {
 				var options = {
 					buffer: "function a() {\n function b() {\n x.f\n }\n x.fff = '';\n }\n var x = {};", 
 					prefix: "f", 
@@ -456,7 +587,7 @@ define([
 			});
 		
 			// don't find anything because assignment is in same scope, but after
-			it("test full file inferecing 20", function(done) {
+			it("test full file inferencing 20", function(done) {
 				var options = {
 					buffer: "x.\n" +
 					"var x = {};\n" +
@@ -469,7 +600,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 21", function(done) {
+			it("test full file inferencing 21", function(done) {
 				var options = {
 					buffer: "function a() {\n x.fff = '';\n }\n x.\n var x = {}; ", 
 					prefix: "f", 
@@ -480,7 +611,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 22", function(done) {
+			it("test full file inferencing 22", function(done) {
 				var options = {
 					buffer: "x.\n" +
 					"function a() {\n" +
@@ -495,7 +626,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 26", function(done) {
+			it("test full file inferencing 26", function(done) {
 				var options = {
 					buffer: "function a() {\n function b() {\n var fff = x();\n f;\n }\n }\n function x() { return ''; }", 
 					prefix: "f", 
@@ -503,23 +634,33 @@ define([
 					callback: done};
 				return testProposals(options, [
 					["fff", "fff : string"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 		
 			// Not inferencing String because function decl comes after reference in same scope
-			it("test full file inferecing 27", function(done) {
+			it("test full file inferencing 27", function(done) {
 				var options = {
 					buffer: "var fff = x();\n f;\n function x() { return ''; }", 
 					prefix: "f", 
 					offset: 17,
 					callback: done};
 				return testProposals(options, [
-					["fff", "fff : string"]
+					["fff", "fff : string"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 		
 			// Not gonna work because of recursive
-			it("test full file inferecing 28", function(done) {
+			it("test full file inferencing 28", function(done) {
 				var options = {
 					buffer: "function x() {\n var fff = x();\n f;\n return ''; }", 
 					prefix: "f", 
@@ -527,10 +668,15 @@ define([
 					callback: done};
 				return testProposals(options, [
 					["fff", "fff : string"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 		
-			it("test full file inferecing 29", function(done) {
+			it("test full file inferencing 29", function(done) {
 				var options = {
 					buffer: "function a() {\n function b() {\n var fff = x();\n f;\n }\n }\n var x = function() { return ''; }", 
 					prefix: "f", 
@@ -538,23 +684,33 @@ define([
 					callback: done};
 				return testProposals(options, [
 					["fff", "fff : string"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 		
 			// Not working because function decl comes after reference in same scope
-			it("test full file inferecing 30", function(done) {
+			it("test full file inferencing 30", function(done) {
 				var options = {
 					buffer: "var fff = x();\n f;\n var x = function() { return ''; }", 
 					prefix: "f", 
 					offset: 17,
 					callback: done};
 				return testProposals(options, [
-					["fff", "fff : string"]
+					["fff", "fff : string"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 		
 			// Not gonna work because of recursive
-			it("test full file inferecing 31", function(done) {
+			it("test full file inferencing 31", function(done) {
 				var options = {
 					buffer: "var x = function() { var fff = x();\nf;return ''; }", 
 					prefix: "f", 
@@ -562,10 +718,15 @@ define([
 					callback: done};
 				return testProposals(options, [
 					["fff", "fff : string"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 		
-			it("test full file inferecing 32", function(done) {
+			it("test full file inferencing 32", function(done) {
 				var options = {
 					buffer: "x\n function x() { return ''; }", 
 					prefix: "x", 
@@ -576,7 +737,7 @@ define([
 				]);
 			});
 		
-			it("test full file inferecing 33", function(done) {
+			it("test full file inferencing 33", function(done) {
 				var options = {
 					buffer: "var xxx = {\n aaa: '',\n bbb: this.a\n};", 
 					prefix: "a", 
@@ -584,10 +745,14 @@ define([
 					callback: done};
 				return testProposals(options, [
 					//TODO bug in Tern? ["aaa", "aaa : string"]
+					['', 'ecma5'],
+					['Array(size)', 'Array(size)'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', 'ArrayBuffer(length)']
 				]);
 			});
 		
-			it("test full file inferecing 34", function(done) {
+			it("test full file inferencing 34", function(done) {
 				var options = {
 					buffer: "var xxx = {\n" +
 					"	bbb: this.a,\n" +
@@ -597,6 +762,10 @@ define([
 					offset: 24,
 					callback: done};
 				return testProposals(options, [
+					['', 'ecma5'],
+					['Array(size)', 'Array(size)'],
+					['', 'ecma6'],
+					['ArrayBuffer(length)', 'ArrayBuffer(length)']
 					//TODO bug in Tern? ["aaa", "aaa : string"]
 				]);
 			});
@@ -808,6 +977,466 @@ define([
 					["xxyz", "xxyz : number"]
 				]);
 			});
+			
+			it("test @type var type 1", function(done) {
+				var options = {
+					buffer: "/** @type {Number}*/var xx;x", 
+					prefix: "x",
+					offset: 28,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"],
+				]);
+			});
+			it("test @type var type 2", function(done) {
+				var options = {
+					buffer: "/** @type {String}*//** @type {Number}*/var xx;x", 
+					prefix: "x",
+					offset: 48,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type var type 3", function(done) {
+				var options = {
+					buffer: "/** @type {Number}*//** @type {String}*/var xx;x", 
+					prefix: "x",
+					offset: 48,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type var type 4", function(done) {
+				var options = {
+					buffer: "/** @type {Number}*/\n// @type {String}\nvar xx;x", 
+					prefix: "x",
+					offset: 47,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"],
+				]);
+			});
+			it("test @type var type 5", function(done) {
+				var options = {
+					buffer: "/** @type {Number}*/\n//* @type {String}\nvar xx;x", 
+					prefix: "x",
+					offset: 48,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"],
+				]);
+			});
+			it("test @type var type 6", function(done) {
+				var options = {
+					buffer: "/** @type {String}*/var yy;/** @type {Number}*/var xx;x", 
+					prefix: "x",
+					offset: 55,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type var type 7", function(done) {
+				var options = {
+					buffer: "/** @type {String}*/var yy;\n/** @type {Number}*/var xx;x", 
+					prefix: "x",
+					offset: 56,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"],
+				]);
+			});
+			it("test @type var type 8", function(done) {
+				var options = {
+					buffer: "/** @type {Number}*/var xx;/** @type {String}*/xx;x", 
+					prefix: "x",
+					offset: 51,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"],
+				]);
+			});
+			it("test @type var type 9", function(done) {
+				var options = {
+					buffer: "/** @type {{foo:String}}*/var xx;xx.f", 
+					prefix: "f",
+					offset: 37,
+					callback: done};
+				return testProposals(options, [
+					["foo", "foo : string"],
+				]);
+			});
+			it("test @type var type 10", function(done) {
+				var options = {
+					buffer: "/** @type {{foo:string,foo2:number}}*/var xx;xx.f", 
+					prefix: "f",
+					offset: 49,
+					callback: done};
+				return testProposals(options, [
+					["foo", "foo : string"],
+					["foo2", "foo2 : number"]
+				]);
+			});
+			it("test @type var type 11", function(done) {
+				var options = {
+					buffer: "/** @returns {String}\n@type {Number}*/var xx;x", 
+					prefix: "x",
+					offset: 46,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"]
+				]);
+			});
+			it("test @type var type 12", function(done) {
+				var options = {
+					buffer: "/** @param {String} f\n@type {Number}*/var xx;x", 
+					prefix: "x",
+					offset: 46,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : number"]
+				]);
+			});
+			it("test @type var type 13", function(done) {
+				var options = {
+					buffer: "/** @return {Number}*/var xx = function() { };x", 
+					prefix: "x",
+					offset: 47,
+					callback: done};
+				return testProposals(options, [
+				//TODO we should see a return type here
+					["xx()", "xx()"]
+				]);
+			});
+			it("test @type var type 14", function(done) {
+				var options = {
+					buffer: "var xx;\n /** @type String\n@param Number ss*/\n xx = function(yy) { y };", 
+					prefix: "y",
+					offset: 67,
+					callback: done};
+				return testProposals(options, [
+					["yy", "yy : any"]
+				]);
+			});
+			it("test @type var type 15", function(done) {
+				var options = {
+					buffer: "var xx;\n /** @param {Number} ss\n@return {String}*/\n xx = function(yy) { y };", 
+					prefix: "y",
+					offset: 73,
+					callback: done};
+				return testProposals(options, [
+					["yy", "yy : any"]
+				]);
+			});
+			/**
+			 *  @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=459499
+			 */
+			it("test @type var type 16", function(done) {
+				var options = {
+					buffer: "/** @type {String}\n@returns {Number}*/var xx = function() { };x", 
+					prefix: "x",
+					offset: 63,
+					callback: done};
+				return testProposals(options, [
+					//TODO should be a standin type for return
+					["xx()", "xx()"]
+				]);
+			});
+			it("test @type var type 17", function(done) {
+				var options = {
+					buffer: "/** @type {Number} xx2 */var flar = '';fla", 
+					prefix: "fla",
+					offset: 42,
+					callback: done};
+				return testProposals(options, [
+					["flar", "flar : string|number"]
+				]);
+			});
+			it("test @type var type 18", function(done) {
+				var options = {
+					buffer: "/** @type {Number} xx2 */var flar;flar = '';fla", 
+					prefix: "fla",
+					offset: 47,
+					callback: done};
+				return testProposals(options, [
+					["flar", "flar : string|number"]
+				]);
+			});
+			it("test @type var type 19", function(done) {
+				var options = {
+					buffer: "/** @type {Number} xx2 */var flar;flar = iDontKnow();fla", 
+					prefix: "fla",
+					offset: 56,
+					callback: done};
+				return testProposals(options, [
+					["flar", "flar : number"]
+				]);
+			});
+			// SCRIPTED-138 jsdoc support for functions parameters that are in object literals
+			it("test @type var type 20", function(done) {
+				var options = {
+					buffer: "var obj = {\n  /** @param {String} foo */\n fun : function(foo) { foo }\n}", 
+					prefix: "foo",
+					offset: 67,
+					callback: done};
+				return testProposals(options, [
+					["foo", "foo : string"]
+				]);
+			});
+			it("test @type var type 21", function(done) {
+				var options = {
+					buffer: "var obj = {\n/** @type {String} foo */\nfoo : undefined};obj.f", 
+					prefix: "f",
+					offset: 60,
+					callback: done};
+				return testProposals(options, [
+					["foo", "foo : string"]
+				]);
+			});
+			it("test @type var type 22", function(done) {
+				var options = {
+					buffer: "var obj = { Fun : function() { this.yyy = 9; } };\n/** @type {obj.Fun} */ var xxx;x", 
+					prefix: "x",
+					offset: 82,
+					callback: done};
+				return testProposals(options, [
+					["xxx()", "xxx()"]
+				]);
+			});
+			it("test @type var type 23", function(done) {
+				var options = {
+					buffer: "/** @type {[Number]} */ var xxx;xxx[0].toF", 
+					prefix: "toF",
+					offset: 42,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 24", function(done) {
+				var options = {
+					buffer: "/** @type {[Number,String]} */ var xxx;xxx[0].toF", 
+					prefix: "toF",
+					offset: 49,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 25", function(done) {
+				var options = {
+					buffer: "/** @type {Array.<Number>} */ var xxx;xxx[0].toF", 
+					prefix: "toF",
+					offset: 48,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 26", function(done) {
+				var options = {
+					buffer: "/** @type {[Number]} */ var xxx;xxx[0].toF", 
+					prefix: "toF",
+					offset: 42,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 27", function(done) {
+				var options = {
+					buffer: "/** @type {Array.<{foo:Number}>} */ var xxx;xxx[0].foo.toF", 
+					prefix: "toF",
+					offset: 58,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 28", function(done) {
+				var options = {
+					buffer: "/** @type {Array.<Array.<Number>>} */ var xxx;xxx[0][0].toF", 
+					prefix: "toF",
+					offset: 59,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 29", function(done) {
+				var options = {
+					buffer: "/** @type {Array.<Array.<Array.<Number>>>} */ var xxx;xxx[0][0][bar].toF", 
+					prefix: "toF",
+					offset: 72,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 30", function(done) {
+				var options = {
+					buffer: "/** @type {...Number} */ var xxx;xxx[0].toF", 
+					prefix: "toF",
+					offset: 43,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 31", function(done) {
+				var options = {
+					buffer: "/** @type {...Array.<Number>} */ var xxx;xxx[0][0].toF", 
+					prefix: "toF",
+					offset: 54,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 32", function(done) {
+				var options = {
+					buffer: "var jjj = {};/** @type {Number} */jjj.x = '';x.toF", 
+					prefix: "toF",
+					offset: 50,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 33", function(done) {
+				var options = {
+					buffer: "var jjj = {x:false};/** @type {Number} */jjj.x = '';x.toF", 
+					prefix: "toF",
+					offset: 57,
+					callback: done};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test @type var type 34", function(done) {
+				var options = {
+					buffer: "var obj = { Fun : function() {} };\n/** @type {obj.Fun} */ var xxx;x", 
+					prefix: "x",
+					offset: 67,
+					callback: done};
+				return testProposals(options, [
+					//TODO we should have a standin type 
+					["xxx()", "xxx()"]
+				]);
+			});
+			it("test @type tag union", function(done) {
+				var options = {
+					buffer: "/** @type {String|Number}*/var xx;x", 
+					prefix: "x",
+					offset: 35,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : string|number"],
+				]);
+			});
+			it("test @type tag optional 1", function(done) {
+				var options = {
+					buffer: "/** @type {?String}*/var xx;x", 
+					prefix: "x",
+					offset: 29,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type tag optional 2", function(done) {
+				var options = {
+					buffer: "/** @type {String?}*/var xx;x", 
+					prefix: "x",
+					offset: 29,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type tag optional 3", function(done) {
+				var options = {
+					buffer: "/** @type {!String}*/var xx;x", 
+					prefix: "x",
+					offset: 29,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type tag optional 4", function(done) {
+				var options = {
+					buffer: "/** @type {String!}*/var xx;x", 
+					prefix: "x",
+					offset: 29,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type tag any 1", function(done) {
+				var options = {
+					buffer: "/** @type {[]}*/var xx;x", 
+					prefix: "x",
+					offset: 24,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
+			it("test @type tag array 1", function(done) {
+				var options = {
+					buffer: "/** @type {Array.<number>}*/var xx;x", 
+					prefix: "x",
+					offset: 36,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : [number]"],
+				]);
+			});
+			it("test @type tag array 2", function(done) {
+				var options = {
+					buffer: "/** @type {Array.<String>}*/var xx;x", 
+					prefix: "x",
+					offset: 36,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : [string]"],
+				]);
+			});
+			it("test @type tag array 3", function(done) {
+				var options = {
+					buffer: "/** @type {[String]}*/var xx;x", 
+					prefix: "x",
+					offset: 30,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : [string]"],
+				]);
+			});
+			it("test @type tag array 3", function(done) {
+				var options = {
+					buffer: "/** @type {[?]}*/var xx;x", 
+					prefix: "x",
+					offset: 25,
+					callback: done};
+				return testProposals(options, [
+					["xx", "xx : any"],
+				]);
+			});
 		});
 		describe('Incomplete Syntax', function() {
 			/**
@@ -821,7 +1450,12 @@ define([
 					callback: done
 				};
 				testProposals(options, [
-					["foo", "foo : foo"]
+					["foo", "foo : foo"],
+					['', 'ecma6'],
+					['Float32Array(length)', 'Float32Array(length)'],
+					['Float64Array(length)', 'Float64Array(length)'],
+					['', 'ecma5'],
+					['Function(body)', 'Function(body) : fn()']
 				]);
 			});
 			/**
@@ -836,8 +1470,125 @@ define([
 				};
 				testProposals(options, [
 					["", "ecma5", ""],
-					["undefined", "undefined : any"]
+					['URIError(message)', 'URIError(message)'],
+					["undefined", "undefined : any"],
+					['', 'ecma6'],
+					['Uint16Array()', 'Uint16Array()'],
+					['Uint32Array()', 'Uint32Array()'],
+					['Uint8Array()', 'Uint8Array()'],
+					['Uint8ClampedArray()', 'Uint8ClampedArray()']
 				]);
+			});
+			it("test tolerant parsing function 1", function(done) {
+				var options = {
+					buffer: "var xxxyyy = {}; function foo() { if (xx", 
+					prefix: "xx",
+					offset: 40,
+					callback: done};
+				return testProposals(options, [["xxxyyy", "xxxyyy : xxxyyy"]]);
+			});	
+		
+			it("test tolerant parsing function 2", function(done) {
+				var options = {
+					buffer: "function foo() { var xxxyyy = false; if (!xx",
+					prefix: "xx",
+					offset: 44,
+					callback: done};
+				return testProposals(options, [["xxxyyy", "xxxyyy : bool"]]);
+			});	
+		
+			it("test tolerant parsing function 3", function(done) {
+				var options = {
+					buffer: "function foo(xxxyyy) {if (!xx",
+					prefix: "xx",
+					offset: 29,
+					callback: done};
+				return testProposals(options, [["xxxyyy", "xxxyyy : any"]]);
+			});	
+		
+			it("test tolerant parsing function 4", function(done) {
+				var options = {
+					buffer: "var x = { bazz: 3 }; function foo() { if (x.b",
+					prefix: "b",
+					offset: 45,
+					callback: done};
+				return testProposals(options, [["bazz", "bazz : number"]]);
+			});	
+		
+			it("test tolerant parsing function 5", function(done) {
+				var options = {
+					buffer: "function foo(p) { p.ffffff = false; while (p.ff",
+					prefix: "ff",
+					offset: 47,
+					callback: done};
+				return testProposals(options, [["ffffff", "ffffff"]]);
+			});	
+		
+			it("test tolerant parsing function 6", function(done) {
+				var options = {
+					buffer: "function foo(p) { p.ffffff = false; if (p) { while (p.ff", 
+					prefix: "ff",
+					offset: 56,
+					callback: done};
+				return testProposals(options, [["ffffff", "ffffff"]]);
+			});	
+		
+			it("test tolerant parsing function 7", function(done) {
+				var options = {
+					buffer: "function foo(p) { p.ffffff = false; if (p) { for (var q in p.ff",
+					prefix: "ff",
+					offset: 63,
+					callback: done};
+				return testProposals(options, [["ffffff", "ffffff"]]);
+			});	
+		
+			it("test tolerant parsing function 8", function(done) {
+				var options = {
+					buffer: "function foo(p) { p.ffffff = false; if (p) { for (var q in p) { while (p.ff",
+					prefix: "ff",
+					offset: 75,
+					callback: done};
+				return testProposals(options, [["ffffff", "ffffff"]]);
+			});	
+		
+			it("test tolerant parsing function 9", function(done) {
+				var options = {
+					buffer: "function f(s) {} f(JSON.str",
+					prefix: "str",
+					offset: 27,
+					callback: done};
+				return testProposals(options, [
+					["",  "ecma5"],
+					["stringify(value)", "stringify(value) : string"]
+				]);
+			});	
+		
+			it("test tolerant parsing function 10", function(done) {
+				var options = {
+					buffer: "function f(a,b) {} f(0,JSON.str",
+					prefix: "str",
+					offset: 31,
+					callback: done};
+				return testProposals(options, [
+					["",  "ecma5"],
+					["stringify(value)", "stringify(value) : string"]
+				]);
+			});
+			it("test tolerant parsing function 11", function(done) {
+				var options = {
+					buffer: "var xxyy = 10; with(xx",
+					prefix: "xx",
+					offset: 22,
+					callback: done};
+				return testProposals(options, [["xxyy", "xxyy : number"]]);
+			});
+			it("test tolerant parsing function 12", function(done) {
+				var options = {
+					buffer: "var xxyy = 10; do {} while(xx",
+					prefix: "xx",
+					offset: 29,
+					callback: done};
+				return testProposals(options, [["xxyy", "xxyy : number"]]);
 			});
 		});
 		describe('Simple File Completions', function() {
@@ -1549,6 +2300,392 @@ define([
 					["the", "the : number"]
 				]);
 			});
+			it("test function return types 1", function(done) {
+				var options = {
+					buffer: "function first() { return 9; };first().toF", 
+					prefix: "toF",
+					offset: 42,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 2", function(done) {
+				var options = {
+					buffer: "var obj = { first : function () { return 9; } };obj.first().toF", 
+					prefix: "toF",
+					offset: 63,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 3", function(done) {
+				var options = {
+					buffer: "function first() { return { ff : 9 }; };first().ff.toF", 
+					prefix: "toF",
+					offset: 54,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 4", function(done) {
+				var options = {
+					buffer: "function first() { return function() { return 9; }; };var ff = first();ff().toF", 
+					prefix: "toF",
+					offset: 79,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 5", function(done) {
+				var options = {
+					buffer: "function first() { return function() { return 9; }; };first()().toF", 
+					prefix: "toF",
+					offset: 67,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 6", function(done) {
+				var options = {
+					buffer: "function first() { if(true) { return 8; } };first().toF", 
+					prefix: "toF",
+					offset: 55,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 7", function(done) {
+				var options = {
+					buffer: "function first() { if(true) { return ''; } else  { return 8; } };first().toF", 
+					prefix: "toF",
+					offset: 76,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 8", function(done) {
+				var options = {
+					buffer: "function first() { while(true) { return 1; } };first().toF", 
+					prefix: "toF",
+					offset: 58,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 9", function(done) {
+				var options = {
+					buffer: "function first() { do { return 1; } while(true); };first().toF", 
+					prefix: "toF",
+					offset: 62,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 10", function(done) {
+				var options = {
+					buffer: "function first() { for (var i; i < 10; i++) { return 1; } };first().toF", 
+					prefix: "toF",
+					offset: 71,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 11", function(done) {
+				var options = {
+					buffer: "function first() { for (var i in k) { return 1; } };first().toF", 
+					prefix: "toF",
+					offset: 63,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 12", function(done) {
+				var options = {
+					buffer: "function first() { try { return 1; } catch(e) { } };first().toF", 
+					prefix: "toF",
+					offset: 63,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 13", function(done) {
+				var options = {
+					buffer: "function first() { try { return 1; } catch(e) { } finally { } };first().toF", 
+					prefix: "toF",
+					offset: 75,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 14", function(done) {
+				var options = {
+					buffer: "function first() { try { return ''; } catch(e) { return 9; } finally { } };first().toF", 
+					prefix: "toF",
+					offset: 86,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 15", function(done) {
+				var options = {
+					buffer: "function first() { try { return ''; } catch(e) { return ''; } finally { return 9; } };first().toF", 
+					prefix: "toF",
+					offset: 97,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 16", function(done) {
+				var options = {
+					buffer: "function first() { switch (v) { case a: return 9; } };first().toF", 
+					prefix: "toF",
+					offset: 65,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 17", function(done) {
+				var options = {
+					buffer: "function first() { switch (v) { case b: return ''; case a: return 1; } };first().toF", 
+					prefix: "toF",
+					offset: 84,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 18", function(done) {
+				var options = {
+					buffer: "function first() { switch (v) { case b: return ''; default: return 1; } };first().toF", 
+					prefix: "toF",
+					offset: 85,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 19", function(done) {
+				var options = {
+					buffer: "function first() { while(true) { a;b;return 9; } };first().toF", 
+					prefix: "toF",
+					offset: 62,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 20", function(done) {
+				var options = {
+					buffer: "function first() { while(true) { while(false) { ;return 9; } } };first().toF", 
+					prefix: "toF",
+					offset: 76,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test function return types 21", function(done) {
+				var options = {
+					buffer: "function first() { return { a : 9, b : '' }; };fir", 
+					prefix: "fir",
+					offset: 50,
+					callback: done
+				};
+				return testProposals(options, [
+					["first()", "first()"]
+				]);
+			});
+			it("test function return types 22", function(done) {
+				var options = {
+					buffer: "function first () {return function () {var a = { a : 9, b : '' };return a;}}fir", 
+					prefix: "fir",
+					offset: 79,
+					callback: done
+				};
+				return testProposals(options, [
+					["first()", "first() : a"]
+				]);
+			});
+			it("test function return types 23", function(done) {
+				var options = {
+					buffer: "function first () {return function () {var a = { a : 9, b : '' };return a;}}first().a", 
+					prefix: "a",
+					offset: 85,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["apply(this, args)", "apply(this, args)"]
+				]);
+			});
+			it("test function return types 24", function(done) {
+				var options = {
+					buffer: "function first () {return function () {var a = { aa : 9, b : '' };return a;}}first()().a", 
+					prefix: "a",
+					offset: 88,
+					callback: done
+				};
+				return testProposals(options, [
+					["aa", "aa : number"]
+				]);
+			});
+			it("test function return types 25", function(done) {
+				var options = {
+					buffer: "var first = function() { return 9; };first.a", 
+					prefix: "a",
+					offset: 44,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["apply(this, args)", "apply(this, args)"]
+				]);
+			});
+			it("test function return types 26", function(done) {
+				var options = {
+					buffer: "var first = function() { return 9; };first().toF", 
+					prefix: "toF",
+					offset: 48,
+					callback: done
+				};
+				return testProposals(options, [
+					['', 'ecma5'],
+					["toFixed(digits)", "toFixed(digits) : string"]
+				]);
+			});
+			it("test implicit inference 1", function(done) {
+				var options = {
+					buffer: "xxx;xx", 
+					prefix: "xx",
+					offset: 6,
+					callback: done
+				};
+				return testProposals(options, [
+					//TODO we should find 'xxx' ["xxx", "xxx : any"]
+				]);
+			});
+			it("test implicit inference 2", function(done) {
+				var options = {
+					buffer: "xxx.yyy = 0;xxx.yy", 
+					prefix: "yy",
+					offset: 18,
+					callback: done
+				};
+				return testProposals(options, [
+					//TODO we should find 'yyy' ["yyy", "yyy : number"]
+				]);
+			});
+			it("test implicit inference 3", function(done) {
+				var options = {
+					buffer: "xxx; xxx.yyy = 0;xxx.yy", 
+					prefix: "yy",
+					offset: 23,
+					callback: done
+				};
+				return testProposals(options, [
+					//TODO we should find 'yyy' ["yyy", "yyy : number"]
+				]);
+			});
+			it("test implicit inference 4", function(done) {
+				var options = {
+					buffer: "xxx = 0;xx", 
+					prefix: "xx",
+					offset: 10,
+					callback: done
+				};
+				return testProposals(options, [
+					["xxx", "xxx : number"]
+				]);
+			});
+			it("test implicit inference 5", function(done) {
+				var options = {
+					buffer: "function inner() { xxx = 0; }xx", 
+					prefix: "xx",
+					offset: 31,
+					callback: done
+				};
+				return testProposals(options, [
+					["xxx", "xxx : number"]
+				]);
+			});
+			it("test implicit inference 6", function(done) {
+				var options = {
+					buffer: "var obj = { foo : function inner() { xxx = 0; } }xx", 
+					prefix: "xx",
+					offset: 51,
+					callback: done
+				};
+				return testProposals(options, [
+					["xxx", "xxx : number"]
+				]);
+			});
+			it("test implicit inference 7", function(done) {
+				var options = {
+					buffer: "var xxx;var obj = { foo : function inner() { xxx = 0; } }xx", 
+					prefix: "xx",
+					offset: 59,
+					callback: done
+				};
+				return testProposals(options, [
+					["xxx", "xxx : number"]
+				]);
+			});
 			it("test this reference 1", function(done) {
 				var options = {
 					buffer: "var xxxx;\nthis.x", 
@@ -1585,7 +2722,11 @@ define([
 					["isFinite(value)", "isFinite(value) : bool"],
 					["isNaN(value)", "isNaN(value) : bool"],
 					["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
-					//["Infinity", "Infinity : number"],
+					["Infinity", "Infinity : number"],
+					['', 'ecma6'],
+					['Int16Array(length)', 'Int16Array(length)'],
+					['Int32Array(length)', 'Int32Array(length)'],
+					['Int8Array(length)', 'Int8Array(length)']
 				]);
 			});
 			it("test for loop 2", function(done) {
@@ -1601,7 +2742,11 @@ define([
 					["isFinite(value)", "isFinite(value) : bool"],
 					["isNaN(value)", "isNaN(value) : bool"],
 					["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
-					//["Infinity", "Infinity : number"]
+					["Infinity", "Infinity : number"],
+					['', 'ecma6'],
+					['Int16Array(length)', 'Int16Array(length)'],
+					['Int32Array(length)', 'Int32Array(length)'],
+					['Int8Array(length)', 'Int8Array(length)']
 				]);
 			});
 			it("test for loop 3", function(done) {
@@ -1617,7 +2762,11 @@ define([
 					["isFinite(value)", "isFinite(value) : bool"],
 					["isNaN(value)", "isNaN(value) : bool"],
 					["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
-					//["Infinity", "Infinity : number"],
+					["Infinity", "Infinity : number"],
+					['', 'ecma6'],
+					['Int16Array(length)', 'Int16Array(length)'],
+					['Int32Array(length)', 'Int32Array(length)'],
+					['Int8Array(length)', 'Int8Array(length)']
 				]);
 			});
 			it("test while loop 1", function(done) {
@@ -1663,10 +2812,11 @@ define([
 					callback: done
 				};
 				return testProposals(options, [
-					//TODO does not propose Error
 					//["eee", "eee : Error"],
 					['exports', 'exports : exports'],
 					["", "ecma5"],
+					['Error(message)', 'Error(message)'],
+					['EvalError(message)', 'EvalError(message)'],
 					["encodeURI(uri)", "encodeURI(uri) : string"],
 					["encodeURIComponent(uri)", "encodeURIComponent(uri) : string"],
 					["eval(code)", "eval(code)"]
@@ -1787,6 +2937,8 @@ define([
 						//proposal, description
 						['', 'Keywords'],
 						["function", "function - Keyword"],
+						['', 'ecma5'],
+						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"], 
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"]
 						]);
@@ -1808,6 +2960,8 @@ define([
 						//proposal, description
 						['', 'Keywords'],
 						["function", "function - Keyword"],
+						['', 'ecma5'],
+						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"], 
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
 						]);
@@ -1829,6 +2983,8 @@ define([
 						//proposal, description
 						['', 'Keywords'],
 						["function", "function - Keyword"],
+						['', 'ecma5'],
+						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"], 
 						['ction(parameter) {\n\t\n}', 'function - member function expression'],
 						]);
@@ -1850,6 +3006,8 @@ define([
 						//proposal, description
 						['', 'Keywords'],
 						["function", "function - Keyword"],
+						['', 'ecma5'],
+						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"], 
 						['ction(parameter) {\n\t\n}', 'function - member function expression'],
 						]);
@@ -1871,6 +3029,8 @@ define([
 						//proposal, description
 						['', 'Keywords'],
 						["function", "function - Keyword"],
+						['', 'ecma5'],
+						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"], 
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
 						]);
@@ -1896,9 +3056,11 @@ define([
 						['try', 'try - Keyword'],
 						["typeof", "typeof - Keyword"],
 						['', 'ecma5'],
+						['TypeError(message)', 'TypeError(message)'],
 						["toLocaleString()", "toLocaleString() : string"],
 						["toString()", "toString() : string"],
-						
+						['', 'ecma6'],
+						['TypedArray(length)', 'TypedArray(length)']
 						]);
 			});
 			/**
@@ -1936,7 +3098,10 @@ define([
 				return testProposals(options, [
 						//proposal, description
 						['', 'Keywords'],
-						["new", "new - Keyword"]
+						["new", "new - Keyword"],
+						['', 'ecma5'],
+						['Number(value)', 'Number(value) : number'],
+						['NaN', 'NaN : number']
 						]);
 			});
 		});
@@ -2340,7 +3505,8 @@ define([
 					callback: done};
 				testProposals(options, [
 					['', 'redis'],
-				    ['createClient(port_arg, host_arg?, options?)', 'createClient(port_arg, host_arg?, options?) : RedisClient']
+				    ['createClient(port_arg, host_arg?, options?)', 'createClient(port_arg, host_arg?, options?) : RedisClient'],
+				    ['ClientOpts', 'ClientOpts : any']
 				]);
 			});
 			
@@ -2373,6 +3539,7 @@ define([
 					callback: done};
 				testProposals(options, [
 					['', 'pg'],
+					['Client(connection)', 'Client(connection)'],
 				    ['connect(connection, callback)', 'connect(connection, callback)'],
 				]);
 			});
@@ -3049,6 +4216,315 @@ define([
 				testProposals(options, [
 				  //TODO   ['mage', 'Image', 'Image'],
 				  ///   ['nfinity', 'Infinity', 'Infinity']
+				]);
+			});
+		});
+		describe('Node.js Tests', function() {
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('node awareness 1', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/gl", 
+					prefix: "gl", 
+					offset: 21,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					['global', 'global : <top>']
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('node awareness 2', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/gl", 
+					prefix: "gl", 
+					offset: 21,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					['global', 'global : <top>']
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('node awareness 3', function(done) {
+				var options = {
+					buffer: "/*eslint-env amd*/ require('fs').mk", 
+					prefix: "mk", 
+					offset: 35,
+					callback: done};
+				testProposals(options, [
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('node awareness 4', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ require('fs').mkd", 
+					prefix: "mkd", 
+					offset: 37,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					['mkdir(path, mode?, callback?)', 'mkdir(path, mode?, callback?)'],
+					['mkdirSync(path, mode?)', 'mkdirSync(path, mode?)']
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('node awareness 5', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser*/ require('fs').mkd", 
+					prefix: "mkd", 
+					offset: 40,
+					callback: done};
+				testProposals(options, [
+				]);
+			});
+			it('node awareness 6', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ proc", 
+					prefix: "proc", 
+					offset: 24,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					['process', 'process : process']
+				]);
+			});
+			it('node awareness 7', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ process.co", 
+					prefix: "co", 
+					offset: 30,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					['config', 'config : process.config']
+				]);
+			});
+			it('node awareness 8', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ var x = require('fs');x.o", 
+					prefix: "o", 
+					offset: 45,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					["open(path, flags, mode?, callback?)", "open(path, flags, mode?, callback?)"],
+					["openSync(path, flags, mode?)", "openSync(path, flags, mode?) : number"]
+				]);
+			});
+			it('node awareness 9', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ process.stdout.wr", 
+					prefix: "wr", 
+					offset: 37,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					["write(chunk, encoding?, callback?)", "write(chunk, encoding?, callback?) : bool"]
+				]);
+			});
+			it('node awareness 10', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ require('buffer').IN", 
+					prefix: "IN", 
+					offset: 40,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					["INSPECT_MAX_BYTES", "INSPECT_MAX_BYTES : number"]
+				]);
+			});
+			it('node awareness 11', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ var x = new Buffer(10);x.cop", 
+					prefix: "cop", 
+					offset: 48,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					["copy(targetBuffer, targetStart?, sourceStart?, sourceEnd?)", "copy(targetBuffer, targetStart?, sourceStart?, sourceEnd?)"]
+				]);
+			});
+			it('node awareness 12', function(done) {
+				var options = {
+					buffer: "/*eslint-env node*/ Buffer.isB", 
+					prefix: "isB", 
+					offset: 30,
+					callback: done};
+				testProposals(options, [
+					['', 'node'],
+					["isBuffer(obj)", "isBuffer(obj) : bool"]
+				]);
+			});
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473964
+			 * @since 10.0
+			 */
+			it('node assumed awareness 1', function(done) {
+				var options = {
+					buffer: "require('fs').mkdirS", 
+					prefix: "mkdirS", 
+					offset: 20,
+					callback: done};
+				testProposals(options, [
+				//TODO this will pass ['', 'node'],
+				//	["mkdirSync(path, mode?)", "mkdirSync(path, mode?)"]
+				]);
+			});
+		});
+		describe('Browser Tests', function() {
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('browser awareness 1', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */ win", 
+					prefix: "win", 
+					offset: 27,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					["window", "window : <top>"]
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('browser awareness 2', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */ cons", 
+					prefix: "cons", 
+					offset: 28,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					["console", "console : console"]
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('browser awareness 3', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser, node */ win", 
+					prefix: "win", 
+					offset: 33,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					["window", "window : <top>"]
+				]);
+			});
+			/**
+			 * Tests support for the eslint-env directive to find global objects
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
+			 * @since 7.0
+			 */
+			it('browser awareness 4', function(done) {
+				var options = {
+					buffer: "/*eslint-env node, browser */ win", 
+					prefix: "win", 
+					offset: 33,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					["window", "window : <top>"]
+				]);
+			});
+			it('browser awareness 5', function(done) {
+				var options = {
+					buffer: "win", 
+					prefix: "win", 
+					offset: 3,
+					callback: done};
+				testProposals(options, [
+				]);
+			});
+			it('browser awareness 6', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */ locat", 
+					prefix: "locat", 
+					offset: 29,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					['location', 'location : location']
+				]);
+			});
+			it('browser awareness 7', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */ location = 5; locat", 
+					prefix: "locat", 
+					offset: 43,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					['location', 'location : location|number']
+				]);
+			});
+			it('browser awareness 8', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */window.xx = 9;x", 
+					prefix: "x", 
+					offset: 38,
+					callback: done};
+				testProposals(options, [
+					['xx', 'xx : number'],
+					['', 'browser'],
+					['XMLDocument()', 'XMLDocument()'],
+					['XMLHttpRequest()', 'XMLHttpRequest()'],
+					['XPathResult()', 'XPathResult()']
+				]);
+			});
+			it('browser awareness 9', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */var xx = 9;window.x", 
+					prefix: "x", 
+					offset: 42,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					['XMLDocument()', 'XMLDocument()'],
+					['XMLHttpRequest()', 'XMLHttpRequest()'],
+					['XPathResult()', 'XPathResult()']
+				]);
+			});
+			it('browser awareness 10', function(done) {
+				var options = {
+					buffer: "/*eslint-env browser */var xx = 9; this.x", 
+					prefix: "x", 
+					offset: 41,
+					callback: done};
+				testProposals(options, [
+					['', 'browser'],
+					['XMLDocument()', 'XMLDocument()'],
+					['XMLHttpRequest()', 'XMLHttpRequest()'],
+					['XPathResult()', 'XPathResult()']
 				]);
 			});
 		});

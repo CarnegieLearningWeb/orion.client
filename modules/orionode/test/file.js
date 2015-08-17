@@ -24,7 +24,7 @@ var app = testData.createApp()
 			}));
 
 function byName(a, b) {
-	return String.prototype.localeCompare(a.Name, b.Name);
+	return String.prototype.localeCompare.call(a.Name, b.Name);
 }
 
 /**
@@ -112,6 +112,19 @@ describe('File API', function() {
 					.post(url)
 					.set('X-HTTP-Method-Override', 'PATCH')
 					.type('json')
+					.send({ diff: [{ start: 0, end: 1, text: "j" }] })
+					.expect(200)
+					.end(function(err, res) {
+						assert.ifError(err);
+						app.request().get(url).expect(200, 'jello world', done);
+					});
+				});
+				it('applies a patch with JSON + charset Content-Type', function(done) {
+					var url = PREFIX + '/project/fizz.txt';
+					app.request()
+					.post(url)
+					.set('X-HTTP-Method-Override', 'PATCH')
+					.type('application/json;charset=UTF-8')
 					.send({ diff: [{ start: 0, end: 1, text: "j" }] })
 					.expect(200)
 					.end(function(err, res) {

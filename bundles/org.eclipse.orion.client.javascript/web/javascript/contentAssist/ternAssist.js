@@ -551,7 +551,7 @@ define([
 				}
 				this.timeout = setTimeout(function() {
 					if(deferred) {
-						deferred.resolve(Messages['noProposalsTimedOut']);
+						deferred.resolve([]/*Messages['noProposalsTimedOut']*/);
 					}
 					this.timeout = null;
 				}, 5000);
@@ -695,6 +695,8 @@ define([
         	var _h = Hover.formatMarkdownHover(completion.doc);
         	if(_h) {
         		obj.content += _h.content;	
+        	} else {
+        		obj.content += proposal.name;
         	}
         }
         if(completion.url) {
@@ -761,7 +763,9 @@ define([
 					aftercolon = true;
 				} else if(char === ',') {
 					index++; //eat the space
-					aftercolon = false;
+					if(parencount < 1) {
+						aftercolon = false;
+					}
 				} else if(!aftercolon && parencount < 1) {
 					param += char;
 				}
@@ -866,7 +870,7 @@ define([
 	        proposals.push({
 					proposal: '',
 					description: key, //$NON-NLS-0$
-					style: 'noemphasis_title_keywords', //$NON-NLS-0$
+					style: 'noemphasis_title', //$NON-NLS-0$
 					unselectable: true
 				});
 	        proposals = proposals.concat(_p[key].sort(sorter));

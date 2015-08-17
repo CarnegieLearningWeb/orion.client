@@ -19,7 +19,6 @@ define([
 	
 	var cachedContext;
 	var deferred;
-	var origin;
 	
 	/**
 	 * @description Creates a new open declaration command
@@ -39,25 +38,20 @@ define([
 		this.cuprovider = cuProvider;
 		this.openMode = openMode;
 		this.ternworker.addEventListener('message', function(evnt) {
-			if (!this.doMe)
-				return;
 			if(typeof(evnt.data) === 'object') {
 				var _d = evnt.data;
 				if(_d.request === 'definition') {
 					if(_d.declaration && (typeof(_d.declaration.start) === 'number' && typeof(_d.declaration.end) === 'number')) {
-						if(origin !== _d.declaration.file) {
-							var options = {start: _d.declaration.start,
-											end: _d.declaration.end,
-											mode: this.openMode
-											};
-							deferred.resolve(cachedContext.openEditor(_d.declaration.file, options));
-						} else {
-							deferred.resolve(cachedContext.setSelection(_d.declaration.start, _d.declaration.end, true));
+						var options = Object.create(null);
+						options.start = _d.declaration.start;
+						options.end = _d.declaration.end;
+						if(this.openMode != null && typeof(this.openMode) !== 'undefined') {
+							options.mode = this.openMode;
 						}
+						deferred.resolve(cachedContext.openEditor(_d.declaration.file, options));
 					} else {
 						deferred.resolve(cachedContext.setStatus(Messages['noDeclFound']));
 					}
-					this.doMe = false;
 				}
 			}
 		}.bind(this));
@@ -67,7 +61,6 @@ define([
 	Objects.mixin(OpenDeclarationCommand.prototype, {
 		/* override */
 		execute: function(editorContext, options) {
-			this.doMe = true;
 		    var that = this;
 		    if(options.contentType.id === 'application/javascript') {
 		        return that.astManager.getAST(editorContext).then(function(ast) {
@@ -102,7 +95,6 @@ define([
 				}
 				this.timeout = null;
 			}, 5000);
-			origin = options.input;
 			var files = [{type: 'full', name: options.input, text: ast.source}]; //$NON-NLS-1$
 			this.ternworker.postMessage({request:'definition', args:{params:{offset: options.offset}, files: files, meta:{location: options.input}}}); //$NON-NLS-1$
 			return deferred;

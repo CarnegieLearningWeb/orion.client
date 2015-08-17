@@ -9,14 +9,19 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*jslint node:true*/
+/*eslint-env node */
 var connect = require('connect'),
     path = require('path'),
     AppContext = require('./lib/node_apps').AppContext,
     orionFile = require('./lib/file'),
+    orionLogin = require('./lib/login'),
     orionNode = require('./lib/node'),
     orionWorkspace = require('./lib/workspace'),
+    orionGit = require('./lib/git'),
     orionNodeStatic = require('./lib/orionode_static'),
     orionStatic = require('./lib/orion_static'),
+    orionTasks = require('./lib/tasks'),
+    orionSearch = require('./lib/search'),
     term = require('term.js');
 
 var LIBS = path.normalize(path.join(__dirname, 'lib/')),
@@ -42,6 +47,10 @@ function startServer(options) {
 				orionClientRoot: ORION_CLIENT,
 				maxAge: options.maxAge
 			}))
+			.use(orionLogin())
+            .use(orionTasks.orionTasksAPI({
+                root: '/task'
+            }))
 			// API handlers
 			.use(orionFile({
 				root: '/file',
@@ -49,6 +58,16 @@ function startServer(options) {
 			}))
 			.use(orionWorkspace({
 				root: '/workspace',
+				fileRoot: '/file',
+				workspaceDir: workspaceDir
+			}))
+			.use(orionGit({ 
+				root: '/gitapi',
+				fileRoot: '/file',
+				workspaceDir: workspaceDir
+			}))
+			.use(orionSearch({
+				root: '/filesearch',
 				fileRoot: '/file',
 				workspaceDir: workspaceDir
 			}))

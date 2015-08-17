@@ -73,6 +73,14 @@ define({//Default message bundle
 	'closeTagDescription': ' - Close the ${0} tag',
 	'openCommentName': 'Open comment',
 	'closeCommentName': 'Close comment',
+	'obsoleteTag': '*Obsolete: This tag is obsolete. Its use is discouraged since it may not work in some browsers.*\n\n',
+	'obsoleteTagDesc': ' [Obsolete]',
+	'obsoleteAttr': '*Obsolete: This attribute is obsolete since ${0}. Its use is discouraged.*\n\n',
+	'obsoleteAttrDesc': ' [Obsolete]',
+	'formeventsHeader': 'Form Events',
+	'keyboardeventsHeader': 'Keyboard Events',
+	'mouseeventsHeader': 'Mouse Events',
+	'windoweventsHeader': 'Window Events',
 	
 	//CSS content assist
 	'ruleTemplateDescription': 'rule - class selector rule',

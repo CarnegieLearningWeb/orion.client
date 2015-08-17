@@ -35,6 +35,7 @@ define([
 'logger',
 'javascript/commands/generateDocCommand',
 'javascript/commands/openDeclaration',
+'javascript/commands/openImplementation',
 'javascript/commands/renameCommand',
 'orion/editor/stylers/application_javascript/syntax',
 'orion/editor/stylers/application_json/syntax',
@@ -43,7 +44,8 @@ define([
 'i18n!javascript/nls/messages',
 'orion/URL-shim'
 ], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist, 
-			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, RenameCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
+			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
+			RenameCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
 
     var provider = new PluginProvider({
 		name: javascriptMessages['pluginName'], //$NON-NLS-1$
@@ -106,7 +108,9 @@ define([
     	function WrappedWorker(script, onMessage, onError) {
     		/*if(typeof(SharedWorker) === 'function') {
     			this.shared = true;
-    			this.worker = new SharedWorker(new URL(script, window.location.href).href);
+    			var wUrl = new URL(script, window.location.href);
+    			wUrl.query.set("worker-language", navigator.language);
+    			this.worker = new SharedWorker(wUrl.href);
     			this.worker.port.onmessage = onMessage;
     			this.worker.port.onerror = onError;
     			this.worker.port.start();
@@ -137,7 +141,7 @@ define([
     	/**
     	 * Object of contributed environments
     	 * 
-    	 * TODO will need to listen to updated tern plugin settings once enbaled to clear this cache
+    	 * TODO will need to listen to updated tern plugin settings once enabled to clear this cache
     	 */
     	var contributedEnvs;
     	
@@ -152,20 +156,20 @@ define([
 		    						var _l = _d.args.file.logical;
 		    						scriptresolver.getWorkspaceFile(_l).then(function(files) {
 		    							if(files && files.length > 0) {
-		    								var rel = scriptresolver.resolveRelativeFiles(_l, files, {location: _d.args.file.file, contentType: {name: 'JavaScript'}});
+		    								var rel = scriptresolver.resolveRelativeFiles(_l, files, {location: _d.args.file.file, contentType: {name: 'JavaScript'}}); //$NON-NLS-1$
 		    								if(rel && rel.length > 0) {
 			    								return fileClient.read(rel[0].location).then(function(contents) {
 			    									ternWorker.postMessage({request: 'read', args:{contents:contents, file:rel[0].location, logical:_l, path:rel[0].path}});	 //$NON-NLS-1$
 			    								});
 		    								} else {
-		    									ternWorker.postMessage({request: 'read', args: {logical:_l, error: 'Failed to read file '+_l}}); //$NON-NLS-1$
+		    									ternWorker.postMessage({request: 'read', args: {logical:_l, error: 'Failed to read file '+_l}}); //$NON-NLS-1$ //$NON-NLS-2$
 		    								}
 		    							} else {
-		    								ternWorker.postMessage({request: 'read', args: {logical:_l, error: 'Failed to read file '+_l}}); //$NON-NLS-1$
+		    								ternWorker.postMessage({request: 'read', args: {logical:_l, error: 'Failed to read file '+_l}}); //$NON-NLS-1$ //$NON-NLS-2$
 		    							}
 		    						},
 		    						function(err) {
-		    							ternWorker.postMessage({request: 'read', args: {logical: _l, message: err.toString(), error: 'Failed to read file '+_l}}); //$NON-NLS-1$
+		    							ternWorker.postMessage({request: 'read', args: {logical: _l, message: err.toString(), error: 'Failed to read file '+_l}}); //$NON-NLS-1$ //$NON-NLS-2$
 		    						});	
 		    					} else {
 		    						var file = _d.args.file;
@@ -174,11 +178,11 @@ define([
 			    									ternWorker.postMessage({request: 'read', args:{contents:contents, file:file}});	 //$NON-NLS-1$
 			    								},
 			    								function(err) {
-			    									ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$
+			    									ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$ //$NON-NLS-2$
 			    								});
 			    					}
 		    						catch(err) {
-		    							ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$
+		    							ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$ //$NON-NLS-2$
 		    						}
 		    					}
 		    					break;
@@ -200,7 +204,6 @@ define([
 									prefs.put("tern/plugins", JSON.stringify(props)); //$NON-NLS-1$
 									prefs.sync(true);
 								}) : new Deferred().resolve();
-								break;
 		    				}
 		    				case 'environments': {
 		    					contributedEnvs = _d.envs;
@@ -266,7 +269,7 @@ define([
     	/**
     	 * Register the mark occurrences support
     	 */
-    	provider.registerService("orion.edit.occurrences", new Occurrences.JavaScriptOccurrences(astManager, CUProvider),  //$NON-NLS-1$
+    	provider.registerService("orion.edit.occurrences", new Occurrences.JavaScriptOccurrences(astManager, CUProvider), //$NON-NLS-1$
     			{
     		contentType: ["application/javascript", "text/html"]	//$NON-NLS-1$ //$NON-NLS-2$
     			});
@@ -336,29 +339,17 @@ define([
     		contentType: ['application/javascript']  //$NON-NLS-1$
     			}
     	);
-    	
+   /* 	
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new OpenDeclCommand.OpenDeclarationCommand(astManager, scriptresolver, ternWorker, CUProvider, "tab"),  //$NON-NLS-1$
+    			new OpenImplCommand.OpenImplementationCommand(astManager, scriptresolver, ternWorker, CUProvider),  //$NON-NLS-1$
     			{
-    		name: javascriptMessages["openDeclTabName"],  //$NON-NLS-1$
-    		tooltip : javascriptMessages['openDeclTooltip'],  //$NON-NLS-1$
-    		id : "open.js.decl.newtab",  //$NON-NLS-1$
-    		key : [ 114, true, false, false, false],  //$NON-NLS-1$
+    		name: javascriptMessages["openImplName"],  //$NON-NLS-1$
+    		tooltip : javascriptMessages['openImplTooltip'],  //$NON-NLS-1$
+    		id : "open.js.impl",  //$NON-NLS-1$
     		contentType: ['application/javascript']  //$NON-NLS-1$
     			}
     	);
-    	
-    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new OpenDeclCommand.OpenDeclarationCommand(astManager, scriptresolver, ternWorker, CUProvider, "split"),  //$NON-NLS-1$
-    			{
-    		name: javascriptMessages["openDeclSplitName"],  //$NON-NLS-1$
-    		tooltip : javascriptMessages['openDeclTooltip'],  //$NON-NLS-1$
-    		id : "open.js.decl.split",  //$NON-NLS-1$
-    		key : [ 114, true, true, false, false],  //$NON-NLS-1$
-    		contentType: ['application/javascript']  //$NON-NLS-1$
-    			}
-    	);
-
+    */	
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			new RenameCommand.RenameCommand(astManager, ternWorker, scriptresolver), 
     			{

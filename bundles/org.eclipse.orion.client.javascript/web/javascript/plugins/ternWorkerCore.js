@@ -20,15 +20,7 @@ if(sear) {
 	}
 } 
 requirejs.config({locale: lang});
-require({
-	baseUrl: "../../", //$NON-NLS-1$
-	paths: {
-		i18n: 'requirejs/i18n', //$NON-NLS-1$
-		json: 'requirejs/json', //$NON-NLS-1$
-		esprima: "esprima/esprima" //$NON-NLS-1$
-	}
-},
-[
+require([
 	'tern/lib/tern',
 	'tern/plugin/doc_comment',
 	'tern/plugin/orionAmqp',
@@ -42,6 +34,7 @@ require({
 	'tern/plugin/orionRedis',
 	'tern/plugin/orionRequire',
 	'tern/plugin/ternPlugins',
+	'tern/plugin/openImplementation',
 	'json!tern/defs/ecma5.json',
 	'json!tern/defs/ecma6.json',
 	'json!tern/defs/browser.json',
@@ -51,13 +44,15 @@ require({
 	'javascript/handlers/ternOccurrencesHandler',
 	'javascript/handlers/ternRenameHandler',
 	'javascript/handlers/ternPluginsHandler',
+	'javascript/handlers/ternRefsHandler',
+	'javascript/handlers/ternImplementationHandler',
 	'i18n!javascript/nls/workermessages',
 	'orion/i18nUtil'
 ],
 /* @callback */ function(Tern, docPlugin, orionAMQPPlugin, angularPlugin,/* componentPlugin,*/ orionExpressPlugin, orionMongoDBPlugin,
 							orionMySQLPlugin, orionNodePlugin, orionPostgresPlugin, orionRedisPlugin, orionRequirePlugin, ternPluginsPlugin, 
-							ecma5, ecma6, browser, AssistHandler, DeclarationHandler, HoverHandler, OccurrencesHandler, RenameHandler, PluginsHandler, 
-							Messages, i18nUtil) {
+							openImplPlugin, ecma5, ecma6, browser, AssistHandler, DeclarationHandler, HoverHandler, OccurrencesHandler, 
+							RenameHandler, PluginsHandler, RefsHandler, ImplHandler, Messages, i18nUtil) {
     
     var ternserver, pendingReads = Object.create(null);
     
@@ -149,6 +144,12 @@ require({
                     	description: Messages['ternPluginsPluginDescription'],
                     	version: '1.0', //$NON-NLS-1$
                     	removable: false
+                    },
+                    openImplementation: {
+                    	name : Messages['openImplPluginName'],
+                    	description: Messages['openImplPluginDescription'],
+                    	version: '1.0', //$NON-NLS-1$
+                    	removable: false
                     }
                 },
                 getFile: _getFile
@@ -187,6 +188,14 @@ require({
                     case 'rename': {
                         RenameHandler.computeRename(ternserver, _d.args, post);
                         break;
+                    }
+                    case 'refs': {
+                    	RefsHandler.computeRefs(ternserver, _d.args, post);
+                    	break;
+                    }
+                    case 'implementation': {
+                    	ImplHandler.computeImplementation(ternserver, _d.args, post);
+                    	break;
                     }
                     case 'addFile': {
                     	ternserver.addFile(_d.args.file, _d.args.source);

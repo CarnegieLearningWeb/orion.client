@@ -16,10 +16,11 @@ define([
 	'webtools/util',
 	'javascript/util',
 	'webtools/attributes',
+	'webtools/deprecatedAttributes',
 	'webtools/tags',
 	'i18n!webtools/nls/messages',
 	'orion/i18nUtil'
-], function(mTemplates, Objects, util, jsUtil, Attributes, Tags, Messages, i18nUtil) {
+], function(mTemplates, Objects, util, jsUtil, Attributes, Deprecated, Tags, Messages, i18nUtil) {
 
 	var simpleDocTemplate = new mTemplates.Template("", Messages['simpleDocDescription'],
 		"<!DOCTYPE html>\n" + //$NON-NLS-0$
@@ -166,28 +167,7 @@ define([
 					//already sorted, only templates. hack until we break out template computation
 					return proposals;
 				}
-				return proposals.sort(function(l,r) {
-					//sort by relevance and then by name
-					if(typeof(l.relevance) === 'undefined') {
-						l.relevance = 1;
-					}
-					if(typeof(r.relevance) === 'undefined') {
-						r.relevance = 1;
-					}
-					if (l.relevance > r.relevance) {
-						return -1;
-					} else if (r.relevance > l.relevance) {
-						return 1;
-					}
-					var ldesc = l.name;
-					var rdesc = r.name;
-					if (ldesc < rdesc) {
-						return -1;
-					} else if (rdesc < ldesc) {
-						return 1;
-					}
-					return 0;
-				});
+				return proposals;
 			});
 		},
 		/**
@@ -325,10 +305,10 @@ define([
 							}
 							idx++;
 						}
-	 				}
- 				} else if(node.type === 'attr') {
- 					return offset >= node.range[0] || offset <= node.range[1];
- 				}
+					}
+				} else if(node.type === 'attr') {
+					return offset >= node.range[0] || offset <= node.range[1];
+				}
 			}
 			return false;
 		},
@@ -360,63 +340,71 @@ define([
 		 * @returns returns {Array.<Object>} The array of proposals
 		 */
 		getTags: function(source, params) {
-			// TODO It looks like tags.js is missing around 6 tags, including <a>
 			var tags = Tags.tagTemplates;
 			var proposals = [];
 			for(var j = 0; j < tags.length; j++) {
 				var tag = tags[j];
 				var namePrefix = params.prefix ? params.prefix : "";
 				var leadingBracket = false;
-		        if (source.charAt(params.offset - namePrefix.length - 1) === '<'){
-		        	leadingBracket = true;
-		        }
+				if (source.charAt(params.offset - namePrefix.length - 1) === '<'){
+					leadingBracket = true;
+				}
 				if(jsUtil.looselyMatches(namePrefix, tag.name)) {
 					var hover = Object.create(null);
 					hover.type = 'markdown'; //$NON-NLS-1$
-			        hover.content = tag.doc ? tag.doc : "";
-			        if(tag.url) {
-			        	hover.content += i18nUtil.formatMessage(Messages['onlineDocumentation'], tag.url);
-			        }
-			        var proposalText = "";
-			        var desc = "";
-			        // TODO Allow tags to have custom templates
-			        tag.type = 'single'; //$NON-NLS-1$
-			        switch (tag.type) {
-			        	case 'single':
-			        		proposalText = "<" + tag.name + "></" + tag.name + ">"; //$NON-NLS-1$
-			        		desc = " - " + proposalText; //$NON-NLS-1$
-			        		if (leadingBracket){
-			        			proposalText = proposalText.substring(1);
-			        		}
-			        		break;
-			        	case 'multi':
-			        		proposalText = "<" + tag.name + ">\n\n</" + tag.name + ">"; //$NON-NLS-1$
-			        		desc = " - " + proposalText; //$NON-NLS-1$
-			        		if (leadingBracket){
-			        			proposalText = proposalText.substring(1);
-			        		}
-			        		break;
-			        	case 'empty':
-			        		proposalText = "<" + tag.name + "/>"; //$NON-NLS-1$
-			        		desc = " - " + proposalText; //$NON-NLS-1$
-			        		if (leadingBracket){
-			        			proposalText = proposalText.substring(1);
-			        		}
-			        		break;
-			        	default:
-			        		proposalText = "<" + tag.name + ">";
-			        		desc = " - " + proposalText; //$NON-NLS-1$
-			        		if (leadingBracket){
-			        			proposalText = proposalText.substring(1);
-			        		}
-			        		break;
-			        }
-			        var proposal = this.makeComputedProposal(proposalText, tag.name, desc, hover, params.prefix); //$NON-NLS-1$
-			        // The prefix not being includes prevents content assist staying open while typing
-//			        if (source.charAt(params.offset - prefix.length - 1) === '<'){
-//			        	prefix = '<' + prefix;
-//			        	proposal.prefix = prefix;
-//			        }
+					hover.content = "";
+					if (tag.category === "Obsolete and deprecated elements"){
+						hover.content += Messages['obsoleteTag'];
+					}
+					if (tag.doc){
+						hover.content += tag.doc;
+					}
+					if(tag.url) {
+						hover.content += i18nUtil.formatMessage(Messages['onlineDocumentation'], tag.url);
+					}
+					var proposalText = "";
+					var desc = "";
+					// TODO Allow tags to have custom templates
+					tag.type = 'single'; //$NON-NLS-1$
+					switch (tag.type) {
+						case 'single':
+							proposalText = "<" + tag.name + "></" + tag.name + ">"; //$NON-NLS-1$
+//							desc = " - " + proposalText; //$NON-NLS-1$
+							if (leadingBracket){
+								proposalText = proposalText.substring(1);
+							}
+							break;
+						case 'multi':
+							proposalText = "<" + tag.name + ">\n\n</" + tag.name + ">"; //$NON-NLS-1$
+//							desc = " - " + proposalText; //$NON-NLS-1$
+							if (leadingBracket){
+								proposalText = proposalText.substring(1);
+							}
+							break;
+						case 'empty':
+							proposalText = "<" + tag.name + "/>"; //$NON-NLS-1$
+//							desc = " - " + proposalText; //$NON-NLS-1$
+							if (leadingBracket){
+								proposalText = proposalText.substring(1);
+							}
+							break;
+						default:
+							proposalText = "<" + tag.name + ">";
+//							desc = " - " + proposalText; //$NON-NLS-1$
+							if (leadingBracket){
+								proposalText = proposalText.substring(1);
+							}
+							break;
+					}
+					if (tag.category === "Obsolete and deprecated elements"){
+						desc += Messages['obsoleteTagDesc'];
+					}
+					var proposal = this.makeComputedProposal(proposalText, tag.name, desc, hover, params.prefix); //$NON-NLS-1$
+					// The prefix not being includes prevents content assist staying open while typing
+//					if (source.charAt(params.offset - prefix.length - 1) === '<'){
+//						prefix = '<' + prefix;
+//						proposal.prefix = prefix;
+//					}
 					proposal.escapePosition = params.offset - namePrefix.length + tag.name.length + 2;
 					if(leadingBracket){
 						proposal.escapePosition--;
@@ -437,28 +425,118 @@ define([
 		getAttributesForNode: function(node, params) {
 			var attrs = Attributes.getAttributesForNode(node);
 			var proposals = [];
+			if(Array.isArray(attrs.global)) {
+				proposals = proposals.concat(this.addProposals(node, attrs.global, params));
+			}
+			if(Array.isArray(attrs.formevents)) {
+				var arr = this.addProposals(node, attrs.formevents, params);
+				if(arr.length > 0) {
+					proposals.push({
+							proposal: '',
+							description: Messages['formeventsHeader'],
+							style: 'noemphasis_title', //$NON-NLS-1$
+							unselectable: true,
+							kind: 'html' //$NON-NLS-1$
+					});
+					proposals = proposals.concat(arr);
+				}
+
+			}
+			if(Array.isArray(attrs.keyboardevents)) {
+				arr = this.addProposals(node, attrs.keyboardevents, params);
+				if(arr.length > 0) {
+					proposals.push({
+							proposal: '',
+							description: Messages['keyboardeventsHeader'],
+							style: 'noemphasis_title', //$NON-NLS-1$
+							unselectable: true,
+							kind: 'html' //$NON-NLS-1$
+					});
+					proposals = proposals.concat(arr);
+				}
+
+			}
+			if(Array.isArray(attrs.mouseevents)) {
+				arr = this.addProposals(node, attrs.mouseevents, params);
+				if(arr.length > 0) {
+					proposals.push({
+							proposal: '',
+							description: Messages['mouseeventsHeader'],
+							style: 'noemphasis_title', //$NON-NLS-1$
+							unselectable: true,
+							kind: 'html' //$NON-NLS-1$
+						});
+					proposals = proposals.concat(arr);
+				}
+
+			}
+			if(Array.isArray(attrs.windowevents) && attrs.windowevents.length > 0) {
+				arr = this.addProposals(node, attrs.windowevents, params);
+				if(arr.length > 0) {
+					proposals.push({
+							proposal: '',
+							description: Messages['windoweventsHeader'],
+							style: 'noemphasis_title', //$NON-NLS-1$
+							unselectable: true,
+							kind: 'html' //$NON-NLS-1$
+						});
+					proposals = proposals.concat(arr);
+				}
+
+			}
+			return proposals;	
+		},
+		
+		addProposals: function addProposals(node, attrs, params) {
+			var proposals = [];
 			for(var j = 0; j < attrs.length; j++) {
 				var attr = attrs[j];
 				var prefix = params.prefix ? params.prefix : "";
 				if(jsUtil.looselyMatches(prefix, attr.name) && !this._hasAttribute(node, attr.name)) {
+					var deprecated = Deprecated.isAttributeDeprecated(node.name, attr.name);
 					var hover = Object.create(null);
-					 hover.type = 'markdown'; //$NON-NLS-1$
-			         hover.content = attr.doc ? attr.doc : "";
-			        if(attr.url) {
-			        	hover.content += i18nUtil.formatMessage(Messages['onlineDocumentation'], attr.url);
-			        }
-			        var desc = " "; //$NON-NLS-1$
-			        if (attr.category){
-			        	// TODO The doc and categories are not translatable
-			        	desc = " - " + attr.category; //$NON-NLS-1$
-			        }
-			        var proposalText = attr.name+'=""'; //$NON-NLS-1$
-			        var proposal = this.makeComputedProposal(proposalText, attr.name, desc, hover, prefix); //$NON-NLS-1$
+					var desc = "";
+					hover.type = 'markdown'; //$NON-NLS-1$
+					hover.content = "";
+					if (deprecated){
+						hover.content += i18nUtil.formatMessage(Messages['obsoleteAttr'], deprecated);
+						desc += Messages['obsoleteAttrDesc'];
+					}
+					if (attr.doc){
+						hover.content += attr.doc;
+					}
+					if(attr.url) {
+						hover.content += i18nUtil.formatMessage(Messages['onlineDocumentation'], attr.url);
+					}
+					var proposalText = attr.name+'=""'; //$NON-NLS-1$
+					var proposal = this.makeComputedProposal(proposalText, attr.name, desc, hover, prefix); //$NON-NLS-1$
 					proposal.escapePosition = params.offset - prefix.length + attr.name.length + 2;
 					proposals.push(proposal);
 				}
 			}
-			return proposals;	
+			proposals.sort(function(l,r) {
+				//sort by relevance and then by name
+				if(typeof(l.relevance) === 'undefined') {
+					l.relevance = 1;
+				}
+				if(typeof(r.relevance) === 'undefined') {
+					r.relevance = 1;
+				}
+				if (l.relevance > r.relevance) {
+					return -1;
+				} else if (r.relevance > l.relevance) {
+					return 1;
+				}
+				var ldesc = l.name;
+				var rdesc = r.name;
+				if (ldesc < rdesc) {
+					return -1;
+				} else if (rdesc < ldesc) {
+					return 1;
+				}
+				return 0;
+			});
+			return proposals;
 		},
 		
 		/**
