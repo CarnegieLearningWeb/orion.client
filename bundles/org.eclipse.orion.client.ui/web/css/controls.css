@@ -8,7 +8,7 @@
 }
 
 .navlink:hover {
-	color: #00AED1;
+	color: #F58B0F;
 }
 
 .navlink > span {
@@ -55,7 +55,7 @@
 
 .dragOver {
 	color: white !important;
-	background: #1bb199;
+	background: #0b6481;
 	outline: #AAA 2px dotted !important;
 }
 

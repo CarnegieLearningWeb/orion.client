@@ -5,7 +5,7 @@
 /* Page color */
 
 .orionPage {
-	background-color: #26343F;
+	background-color: #0b6481;
 	width: 100%;
 	height: 100%;
 }
@@ -86,7 +86,7 @@ a:hover {
 
 .checkedRow {
 	color: white !important;
-	background-color: #1bb199 !important;
+	background-color: #0b6481 !important;
 }
 
 .checkedRow.disabledRow {
@@ -150,7 +150,7 @@ a:hover {
 	color: #FFFFFF !important;
 	font-weight: bold;
 	position: relative;
-	background: #1bb199 !important;
+	background: #0b6481 !important;
 }
 
 /* Breadcrumbs */
@@ -267,10 +267,12 @@ a.breadcrumb.currentLocation {
 
 .mainToolbar {
 	color: white;
- 	background: #26343f;
+ 	/* background: #26343f; */
  	padding-left: 2px;
  	padding-right: 5px;
 	white-space: nowrap;
+	
+ 	background: #0b6481;
 }
 
 /* Filesystem switcher toolbar */
@@ -413,8 +415,8 @@ a.breadcrumb.currentLocation {
 }
 
 .primaryButton{
-	background: #1bb199;
-	border-color: #1bb199;
+	background: #0b6481;
+	border-color: #0b6481;
 	color: white;
 }
 
@@ -745,7 +747,7 @@ a.breadcrumb.currentLocation {
 
 .dropdownMenu .dropdownMenuItemSelected {
 	background-color: rgba(27,177,153, 0.1);
-	border-left-color: #1BB199;
+	border-left-color: #0b6481;
 }
 
 .dropdownMenuItem .check {
@@ -1155,7 +1157,7 @@ a.breadcrumb.currentLocation {
 }
 
 .outlineExplorer .treeIterationCursorRow_Dotted {
-	background-color: #1BB199;
+	background-color: #0b6481;
 }
 
 .outlineExplorer .treeIterationCursorRow_Dotted .modelDecorationSprite {
@@ -1167,8 +1169,8 @@ a.breadcrumb.currentLocation {
 }
 
 .contentassist .selected {
-	background-color: #1BB199 !important;
-	background: #1BB199 !important;
+	background-color: #0b6481 !important;
+	background: #0b6481 !important;
 	border-radius: 0; 
 	color: #FFF;
 }
