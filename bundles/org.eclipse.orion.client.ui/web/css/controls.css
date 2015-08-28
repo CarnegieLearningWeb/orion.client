@@ -8,7 +8,7 @@
 }
 
 .navlink:hover {
-	color: #F58B0F;
+	color: #00AED1;
 }
 
 .navlink > span {
@@ -33,7 +33,7 @@
 .navlinkonpage:hover {
 	text-decoration: none;
 	border-bottom: 1px dotted;
-	color: #F58B0F;
+	color: #00AED1;
 }
 
 /* ----- side panel ----- */
@@ -54,7 +54,8 @@
 }
 
 .dragOver {
-	background: #ffffd8;
+	color: white !important;
+	background: #1bb199;
 	outline: #AAA 2px dotted !important;
 }
 
@@ -141,7 +142,7 @@
 .dismissButton {
 	border: 1px solid transparent;
 	background: transparent;
-	color: #666;
+	color: white;
 	cursor: pointer;
     border-radius: 1px;
 	padding: 2px;
@@ -411,7 +412,7 @@ textarea.parameterInput {
 }
 
 .slideParameters {
-	background-color: #C0E6FF;
+	background-color: #5fc8b7;
 }
 
 .mainToolbar .slideContainer {
@@ -512,6 +513,19 @@ textarea.parameterInput {
 	padding-right: 0;
 }
 
+.keyAssistBindingInput {
+	font-size: 10pt;
+	font-weight: bold;
+	color: #efc100;
+	background: #263238;
+	border: none;
+	outline: none;
+	height: 100%;
+	text-align: right;
+	margin: 0;
+	padding: 0;
+}
+
 .keyAssistList {
 	width: 100%;
 	border-collapse: collapse;
@@ -521,25 +535,50 @@ textarea.parameterInput {
 .keyAssistItem {
 }
 
+.keyAssistItem.selected {
+	color: black;
+	background: rgba(255, 255, 255, 0.3);
+}
+
 .keyAssistItem:hover {
 	color: black;
 	background: rgba(255, 255, 255, 0.3);
+}
+
+.keyAssistEditButton {
+	display: block;
+	visibility: hidden;
+	font-size: 13px !important;
+	color: white !important;
+}
+
+.keyAssistEditButtonVisible {
+	visibility: visible;
+}
+
+.keyAssistActions {
+	border-top-right-radius: 4px;
+	border-bottom-right-radius: 4px;
+}
+
+.keyAssistItem:hover .keyAssistEditButton  {
+	visibility: visible;
+}
+
+.keyAssistSpacer {
+	width: 16px;
+	height: 14px;
+	border-top-left-radius: 4px;
+	border-bottom-left-radius: 4px;
 }
 
 .keyAssistFloat h2 {
 	color: gold;
 }
 
-.keyAssistItem.selected {
-	color: black;
-	background: rgba(255, 255, 255, 0.6);
-}
-
 .keyAssistName {
 	text-align: left;
 	padding: 3px;
-	border-top-left-radius: 4px;
-	border-bottom-left-radius: 4px;
 }
 
 .keyAssistAccel {
@@ -549,8 +588,7 @@ textarea.parameterInput {
 	color: #efc100;
 	text-align: right;
 	padding: 3px;
-	border-top-right-radius: 4px;
-	border-bottom-right-radius: 4px;
+	min-width: 150px;
 }
 
 .inputCompletionContainer {
@@ -710,16 +748,20 @@ textarea.parameterInput {
 	border-radius:4px;
 }
 
-.treeIterationCursorRow {
-	background-color: white;
+.lightSectionTreeTableRow {
+	background-color: #FFFFFF;
 }
 
-#auxpane .treeIterationCursorRow {
-	background-color: #37474F;
+.darkSectionTreeTableRow {
+	background-color: #f5f7f9;
+}
+
+.treeIterationCursorRow {
+	background-color: rgba(27, 177, 153, 0.3);
 }
 
 .treeIterationCursorRow_Dotted {
-	background-color: white;
+	background-color: rgba(27, 177, 153, 0.3);
 }
 
 .searchCmdGroupMargin {
@@ -888,7 +930,7 @@ textarea.parameterInput {
 }
 
 .centralNavigation:hover{
-	color: #F58B0F;
+	color: #00AED1;
 }
 
 .navigationLabel{
@@ -1061,7 +1103,7 @@ textarea.parameterInput {
 }
 
 .treeTableRow span.core-sprite-closedarrow:hover, .treeTableRow span.core-sprite-openarrow:hover {
-	color: #F58B0F;
+	color: #00AED1;
 }
 
 .searchOutlineContainer {
@@ -1213,14 +1255,6 @@ textarea.parameterInput {
 	background: none !important;
 }
 
-.lightSectionTreeTableRow {
-	background-color: #FFFFFF;
-}
-
-.darkSectionTreeTableRow {
-	background-color: #f5f7f9;
-}
-
 .lightTreeTableRow, .darkTreeTableRow {
 	border-bottom: 1px solid #dadada;
 }
@@ -1275,7 +1309,7 @@ textarea.parameterInput {
 }
 
 .uploadCancelButton:hover {
-	color: #F58B0F;
+	color: #00AED1;
 }
 
 .progressBar.continuous {

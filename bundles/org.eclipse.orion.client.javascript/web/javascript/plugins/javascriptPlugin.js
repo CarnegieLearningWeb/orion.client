@@ -1,10 +1,10 @@
 /*******************************************************************************
  * @license
  * Copyright (c) 2013, 2015 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials are made 
- * available under the terms of the Eclipse Public License v1.0 
- * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
- * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
+ * All rights reserved. This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License v1.0
+ * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
+ * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html).
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -37,15 +37,16 @@ define([
 'javascript/commands/openDeclaration',
 'javascript/commands/openImplementation',
 'javascript/commands/renameCommand',
+'javascript/commands/refsCommand',
 'orion/editor/stylers/application_javascript/syntax',
 'orion/editor/stylers/application_json/syntax',
 'orion/editor/stylers/application_schema_json/syntax',
 'orion/editor/stylers/application_x-ejs/syntax',
 'i18n!javascript/nls/messages',
 'orion/URL-shim'
-], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist, 
+], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist,
 			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
-			RenameCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
+			RenameCommand, RefsCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
 
     var provider = new PluginProvider({
 		name: javascriptMessages['pluginName'], //$NON-NLS-1$
@@ -54,7 +55,7 @@ define([
 	});
 
     Bootstrap.startup().then(function(core) {
-    	
+
     	/**
     	 * Register the JavaScript content types
     	 */
@@ -84,7 +85,7 @@ define([
     	 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=462878
     	 */
     	Metrics.initFromRegistry(core.serviceRegistry);
-    	
+
     	/**
     	 * make sure the RecoveredNode is ignored
     	 * @since 9.0
@@ -94,7 +95,7 @@ define([
     	 * Create the file client early
     	 */
     	var fileClient = new FileClient.FileClient(core.serviceRegistry);
-    	
+
     	/**
     	 * Create the script resolver
     	 * @since 8.0
@@ -104,7 +105,7 @@ define([
     	 * Create the AST manager
     	 */
     	var astManager = new ASTManager.ASTManager(Esprima);
-    	
+
     	function WrappedWorker(script, onMessage, onError) {
     		/*if(typeof(SharedWorker) === 'function') {
     			this.shared = true;
@@ -119,108 +120,150 @@ define([
  				var wUrl = new URL(script, window.location.href);
     			wUrl.query.set("worker-language", navigator.language);   			 //$NON-NLS-1$
     			this.worker = new Worker(wUrl.href);
-    			this.worker.onmessage = onMessage;
-    			this.worker.onerror = onError;
+    			this.worker.onmessage = onMessage.bind(this);
+    			this.worker.onerror = onError.bind(this);
     			this.worker.postMessage('start_server'); //$NON-NLS-1$
+    			this.messageId = 0;
+    			this.callbacks = Object.create(null);
     	//	}
     	}
-    	
-    	WrappedWorker.prototype.postMessage = function(msg) {
+
+    	WrappedWorker.prototype.postMessage = function(msg, f) {
+			if(msg != null && typeof(msg) === 'object') {
+				if(typeof(msg.messageID) !== 'number') {
+					//don't overwrite an id from a tern-side request
+					msg.messageID = this.messageId++;
+					this.callbacks[msg.messageID] = f;
+				}
+			}
     		if(this.shared) {
     			this.worker.port.postMessage(msg);
     		} else {
     			this.worker.postMessage(msg);
     		}
     	};
-    	
-    	WrappedWorker.prototype.addEventListener = function(msg, handler) {
-    		this.worker.addEventListener(msg, handler);	
-    	};
-    	
+
     	var prefService = core.serviceRegistry.getService("orion.core.preference"); //$NON-NLS-1$
     	/**
     	 * Object of contributed environments
-    	 * 
+    	 *
     	 * TODO will need to listen to updated tern plugin settings once enabled to clear this cache
     	 */
     	var contributedEnvs;
-    	
-    	// Start the worker
+
+		var handlers ={
+			'read': doRead,
+			'server_ready': getPrefs
+		};
+
+		// Start the worker
     	var ternWorker = new WrappedWorker("ternWorker.js",  //$NON-NLS-1$
-		    	function(evnt) {
-		    		if(typeof(evnt.data) === 'object') {
-		    			var _d  = evnt.data;
-		    			switch(_d.request) {
-		    				case 'read': {
-		    					if(typeof(_d.args.file) === 'object') {
-		    						var _l = _d.args.file.logical;
-		    						scriptresolver.getWorkspaceFile(_l).then(function(files) {
-		    							if(files && files.length > 0) {
-		    								var rel = scriptresolver.resolveRelativeFiles(_l, files, {location: _d.args.file.file, contentType: {name: 'JavaScript'}}); //$NON-NLS-1$
-		    								if(rel && rel.length > 0) {
-			    								return fileClient.read(rel[0].location).then(function(contents) {
-			    									ternWorker.postMessage({request: 'read', args:{contents:contents, file:rel[0].location, logical:_l, path:rel[0].path}});	 //$NON-NLS-1$
-			    								});
-		    								} else {
-		    									ternWorker.postMessage({request: 'read', args: {logical:_l, error: 'Failed to read file '+_l}}); //$NON-NLS-1$ //$NON-NLS-2$
-		    								}
-		    							} else {
-		    								ternWorker.postMessage({request: 'read', args: {logical:_l, error: 'Failed to read file '+_l}}); //$NON-NLS-1$ //$NON-NLS-2$
-		    							}
-		    						},
-		    						function(err) {
-		    							ternWorker.postMessage({request: 'read', args: {logical: _l, message: err.toString(), error: 'Failed to read file '+_l}}); //$NON-NLS-1$ //$NON-NLS-2$
-		    						});	
-		    					} else {
-		    						var file = _d.args.file;
-		    						try {
-			    						return fileClient.read(file).then(function(contents) {
-			    									ternWorker.postMessage({request: 'read', args:{contents:contents, file:file}});	 //$NON-NLS-1$
-			    								},
-			    								function(err) {
-			    									ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$ //$NON-NLS-2$
-			    								});
-			    					}
-		    						catch(err) {
-		    							ternWorker.postMessage({request: 'read', args: {file: file, message: err.toString(), error: 'Failed to read file '+file}}); //$NON-NLS-1$ //$NON-NLS-2$
-		    						}
-		    					}
-		    					break;
-		    				}
-		    				case 'installed_plugins': {
-		    					var plugins = _d.plugins;
-		    					return prefService ? prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
-									var props = prefs.get("tern/plugins"); //$NON-NLS-1$
-									if (!props) {
-										props = Object.create(null);
-									} else if(typeof(props) === 'string') {
-										props = JSON.parse(props);
-									}
-									var keys = Object.keys(plugins);
-									for(var i = 0; i < keys.length; i++) {
-										var key = keys[i];
-										props[key] = plugins[key];
-									}
-									prefs.put("tern/plugins", JSON.stringify(props)); //$NON-NLS-1$
-									prefs.sync(true);
-								}) : new Deferred().resolve();
-		    				}
-		    				case 'environments': {
-		    					contributedEnvs = _d.envs;
-		    					break;
-		    				}
-		    			}
-		    		} else if(typeof(evnt.data) === 'string') {
-			    		if(evnt.data === 'server_ready') {
-			    			ternWorker.postMessage({request: 'installed_plugins'}); //$NON-NLS-1$
-		    				ternWorker.postMessage({request: 'environments'}); //$NON-NLS-1$
-			    		}
-			    	}
-		    	}, 
-		    	function(err) {
-		    		Logger.log(err);	
-		    	});
-    	
+	    	function(evnt) {
+	    		var _d = evnt.data;
+				if(typeof(_d) === 'object') {
+					var id  = _d.messageID;
+					var f = this.callbacks[id];
+					if(typeof(f) === 'function') {
+						f(_d);
+						delete this.callbacks[id];
+					}
+					var _handler = handlers[_d.request];
+					if(typeof(_handler) === 'function') {
+						_handler(_d);
+					}
+				} else if(typeof(evnt.data) === 'string') {
+					_handler = handlers[evnt.data];
+					if(typeof(_handler) === 'function') {
+						_handler(_d);
+					}
+		    	}
+	    	},
+	    	function(err) {
+	    		Logger.log(err);
+	    });
+
+		/**
+		 * @description Handler for Tern read requests
+		 * @param {Object} request Therequest from Tern
+		 * @since 10.0
+		 */
+		function doRead(request) {
+			var response = {request: 'read', messageID: request.messageID, args: {}}; //$NON-NLS-1$
+			if(typeof(request.args.file) === 'object') {
+				var _l = request.args.file.logical;
+				response.args.logical = _l;
+				scriptresolver.getWorkspaceFile(_l).then(function(files) {
+					if(files && files.length > 0) {
+						var rel = scriptresolver.resolveRelativeFiles(_l, files, {location: request.args.file.file, contentType: {name: 'JavaScript'}}); //$NON-NLS-1$
+						if(rel && rel.length > 0) {
+							return fileClient.read(rel[0].location).then(function(contents) {
+								response.args.contents = contents;
+								response.args.file = rel[0].location;
+								response.args.path = rel[0].path;
+								ternWorker.postMessage(response);
+							});
+						} else {
+							response.args.error = 'Failed to read file '+_l;
+							ternWorker.postMessage(response);
+						}
+					} else {
+						response.args.error = 'Failed to read file '+_l;
+						ternWorker.postMessage(response);
+					}
+				},
+				function(err) {
+					response.args.error = 'Failed to read file '+_l;
+					response.args.message = err.toString();
+					ternWorker.postMessage(response);
+				});
+			} else {
+				var file = request.args.file;
+				response.args.file = file;
+				try {
+					return fileClient.read(file).then(function(contents) {
+								response.args.contents = contents;
+								ternWorker.postMessage(response);
+							},
+							function(err) {
+								response.args.message = err.toString();
+								response.args.error = 'Failed to read file '+file;
+								ternWorker.postMessage(response);
+							});
+				}
+				catch(err) {
+					response.args.message = err.toString();
+					response.args.error = 'Failed to read file '+file;
+					ternWorker.postMessage(response);
+				}
+			}
+		}
+
+		/**
+		 * @description Pre-loads the tern plugin prefs
+		 * @param {Object} request The request
+		 * @since 10.0
+		 */
+		function getPrefs() {
+			ternWorker.postMessage({request: 'installed_plugins'}, function(response) { //$NON-NLS-1$
+				var plugins = response.plugins;
+				return prefService ? prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
+					var props = prefs.get("tern/plugins"); //$NON-NLS-1$
+					if (!props) {
+						props = Object.create(null);
+					} else if(typeof(props) === 'string') {
+						props = JSON.parse(props);
+					}
+					var keys = Object.keys(plugins);
+					for(var i = 0; i < keys.length; i++) {
+						var key = keys[i];
+						props[key] = plugins[key];
+					}
+					prefs.put("tern/plugins", JSON.stringify(props)); //$NON-NLS-1$
+					prefs.sync(true);
+				}) : new Deferred().resolve();
+			});
+		}
+
     	/**
 	     * @description Queries the Tern server to return all contributed environment names from the installed plugins
 	     * @returns {Object} The object of contributed environments or null
@@ -229,23 +272,16 @@ define([
 	    function getEnvironments() {
     		var envDeferred = new Deferred();
     		if(!contributedEnvs) {
-	    		ternWorker.addEventListener('message', function(evnt) {
-	    			var _d  = evnt.data;
-	    			switch(_d.request) {
-	    				case 'environments': {
-	    					contributedEnvs = _d.envs;
-	    					envDeferred.resolve(_d.envs);
-	    					break;
-	    				}
-	    			}
-	    		}, false);
-    			ternWorker.postMessage({request: 'environments'}); //$NON-NLS-1$
+    			ternWorker.postMessage({request: 'environments'}, function(response) { //$NON-NLS-1$
+					contributedEnvs = response.envs;
+	    			envDeferred.resolve(response.envs);
+    			});
     		} else {
     			return envDeferred.resolve(contributedEnvs);
     		}
     		return envDeferred;
     	}
-    	
+
     	provider.registerService("orion.edit.contentassist", new TernAssist.TernContentAssist(astManager, ternWorker, getEnvironments),  //$NON-NLS-1$
     			{
     				contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
@@ -255,7 +291,7 @@ define([
     				charTriggers: "[.]",  //$NON-NLS-1$
     				excludedStyles: "(string.*)"  //$NON-NLS-1$
     		});
-    	
+
     	/**
     	 * Register the jsdoc-based outline
     	 */
@@ -265,7 +301,7 @@ define([
     		title: javascriptMessages['sourceOutlineTitle'],  //$NON-NLS-1$
     		id: "orion.javascript.outliner.source"  //$NON-NLS-1$
     			});
-    	
+
     	/**
     	 * Register the mark occurrences support
     	 */
@@ -273,7 +309,7 @@ define([
     			{
     		contentType: ["application/javascript", "text/html"]	//$NON-NLS-1$ //$NON-NLS-2$
     			});
-    	
+
     	/**
     	 * Register the hover support
     	 */
@@ -284,7 +320,7 @@ define([
     			});
 
     	var validator = new EslintValidator(astManager, CUProvider);
-    	
+
     	/**
     	 * Register the ESLint validator
     	 */
@@ -293,7 +329,7 @@ define([
     		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     		pid: 'eslint.config'  //$NON-NLS-1$
     			});
-    			
+
     	/**
     	 * Register AST manager as Model Change listener
     	 */
@@ -305,7 +341,7 @@ define([
     		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
-    	
+
     	/**
     	 * register the compilation unit provider as a listener
     	 */
@@ -317,9 +353,9 @@ define([
     		contentType: ["text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new GenerateDocCommand.GenerateDocCommand(astManager), 
+    			new GenerateDocCommand.GenerateDocCommand(astManager),
     			{
     		name: javascriptMessages["generateDocName"],  //$NON-NLS-1$
     		tooltip : javascriptMessages['generateDocTooltip'],  //$NON-NLS-1$
@@ -328,7 +364,7 @@ define([
     		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			new OpenDeclCommand.OpenDeclarationCommand(astManager, scriptresolver, ternWorker, CUProvider, "replace"),  //$NON-NLS-1$
     			{
@@ -336,35 +372,79 @@ define([
     		tooltip : javascriptMessages['openDeclTooltip'],  //$NON-NLS-1$
     		id : "open.js.decl",  //$NON-NLS-1$
     		key : [ 114, false, false, false, false],  //$NON-NLS-1$
-    		contentType: ['application/javascript']  //$NON-NLS-1$
+    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
     			}
     	);
-   /* 	
+
+		provider.registerServiceProvider("orion.edit.command.category", {}, { //$NON-NLS-1$
+			  id : "js.references", //$NON-NLS-1$
+	          name: javascriptMessages['referencesMenuName'],
+	          tooltip : javascriptMessages['referencesMenuTooltip']
+		});
+		//TODO
+		if ("true" === localStorage.getItem("darklaunch")) {
+			var refscommand = new RefsCommand(ternWorker, scriptresolver);
+
+	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+	    			{
+						execute: function(editorContext, options) {
+							options.kind ='workspace'; //$NON-NLS-1$
+							refscommand.execute(editorContext, options);
+						}
+					},
+	    			{
+	    		name: javascriptMessages["workspaceRefsName"],  //$NON-NLS-1$
+	    		tooltip : javascriptMessages['workspaceRefsTooltip'],  //$NON-NLS-1$
+	    		parentPath: "js.references", //$NON-NLS-1$
+	    		id : "workspace.js.refs",  //$NON-NLS-1$
+	    		key : [ "g", true, true, false, false],  //$NON-NLS-1$
+	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+	    			}
+	    	);
+	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+	    			{
+						execute: function(editorContext, options) {
+							options.kind ='project'; //$NON-NLS-1$
+							refscommand.execute(editorContext, options);
+						}
+					},
+	    			{
+	    		name: javascriptMessages["projectRefsName"],  //$NON-NLS-1$
+	    		tooltip : javascriptMessages['projectRefsTooltip'],  //$NON-NLS-1$
+	    		parentPath: "js.references", //$NON-NLS-1$
+	    		id : "project.js.refs",  //$NON-NLS-1$
+	    		key : [ "k", true, true, false, false],  //$NON-NLS-1$
+	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+	    			}
+	    	);
+		}
+		//TODO
+		if ("true" === localStorage.getItem("darklaunch")) {
+	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+	    			new OpenImplCommand.OpenImplementationCommand(astManager, scriptresolver, ternWorker, CUProvider),  //$NON-NLS-1$
+	    			{
+	    		name: javascriptMessages["openImplName"],  //$NON-NLS-1$
+	    		tooltip : javascriptMessages['openImplTooltip'],  //$NON-NLS-1$
+	    		id : "open.js.impl",  //$NON-NLS-1$
+	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+	    			}
+	    	);
+		}
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new OpenImplCommand.OpenImplementationCommand(astManager, scriptresolver, ternWorker, CUProvider),  //$NON-NLS-1$
-    			{
-    		name: javascriptMessages["openImplName"],  //$NON-NLS-1$
-    		tooltip : javascriptMessages['openImplTooltip'],  //$NON-NLS-1$
-    		id : "open.js.impl",  //$NON-NLS-1$
-    		contentType: ['application/javascript']  //$NON-NLS-1$
-    			}
-    	);
-    */	
-    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new RenameCommand.RenameCommand(astManager, ternWorker, scriptresolver), 
+    			new RenameCommand.RenameCommand(astManager, ternWorker, scriptresolver),
     			{
     		name: javascriptMessages['renameElement'],  //$NON-NLS-1$
     		tooltip : javascriptMessages['renameElementTooltip'],  //$NON-NLS-1$
     		id : "rename.js.element",  //$NON-NLS-1$
     		key : [ 'R', false, true, !Util.isMac, Util.isMac],  //$NON-NLS-1$
-    		contentType: ['application/javascript']  //$NON-NLS-1$
+    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
     			}
     	);
 
     	var quickFixComputer = new QuickFixes.JavaScriptQuickfixes(astManager);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["removeExtraSemiFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -375,9 +455,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["addFallthroughCommentFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -388,7 +468,7 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			{
         			execute: function(editorContext, context) {
@@ -396,7 +476,7 @@ define([
         				    context.annotation.fixid = 'no-fallthrough-break'; //$NON-NLS-1$
         				}
         				return quickFixComputer.execute(editorContext, context);
-        			} 
+        			}
     		    },
     			{
         			name: javascriptMessages["addBBreakFixName"],  //$NON-NLS-1$
@@ -408,9 +488,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["addEmptyCommentFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -421,9 +501,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["addESLintEnvFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -434,9 +514,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["noReservedKeysFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -447,9 +527,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["useIsNanFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -460,9 +540,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["addESLintGlobalFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -473,7 +553,7 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			{
     		execute: function(editorContext, context) {
@@ -483,7 +563,7 @@ define([
     			}
     			return quickFixComputer.execute(editorContext, context);
     		}
-    			}, 
+    			},
     			{
     				name: javascriptMessages["removeUnusedParamsFixName"],  //$NON-NLS-1$
     				scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -494,9 +574,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["commentCallbackFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -507,9 +587,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["eqeqeqFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -520,9 +600,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["unreachableFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -533,9 +613,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["sparseArrayFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -546,9 +626,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["semiFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -559,9 +639,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["unusedVarsUnusedFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -572,9 +652,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["unusedFuncDeclFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -585,9 +665,9 @@ define([
                     ]
     			}
     	);
-    	
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			quickFixComputer, 
+    			quickFixComputer,
     			{
         			name: javascriptMessages["noCommaDangleFixName"],  //$NON-NLS-1$
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
@@ -611,7 +691,7 @@ define([
                     ]
                 }
         );
-        
+
         provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
                 quickFixComputer,
                 {
@@ -635,7 +715,7 @@ define([
     	provider.registerService("orion.cm.managedservice", validator, {pid: "eslint.config.potential"}); //$NON-NLS-1$ //$NON-NLS-2$
     	provider.registerService("orion.cm.managedservice", validator, {pid: "eslint.config.practices"}); //$NON-NLS-1$ //$NON-NLS-2$
     	provider.registerService("orion.cm.managedservice", validator, {pid: "eslint.config.codestyle"}); //$NON-NLS-1$ //$NON-NLS-2$
-    	
+
     	/**
     	 * ESLint settings
     	 */
@@ -653,7 +733,7 @@ define([
  				 	        	   tags: "validation javascript js eslint".split(" "),  //$NON-NLS-1$  //$NON-NLS-1$
  				 	        	   category: 'javascript', //$NON-NLS-1$
  				 	        	   categoryLabel: javascriptMessages['javascriptValidation'],
- 				 	        	   properties: [{	id: "no-cond-assign",  //$NON-NLS-1$ 
+ 				 	        	   properties: [{	id: "no-cond-assign",  //$NON-NLS-1$
     			 	        	                	name: javascriptMessages["noCondAssign"],
     			 	        	                	type: "number", //$NON-NLS-1$
     			 	        	                	defaultValue: error, //$NON-NLS-1$
@@ -928,7 +1008,7 @@ define([
 				 	        	                }]
 				 	        	}]
     			});
-    	
+
     	/**
     	 * Register syntax styling for js, json and json schema content
     	 */

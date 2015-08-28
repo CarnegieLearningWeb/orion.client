@@ -1,10 +1,10 @@
 /*******************************************************************************
  * @license
  * Copyright (c) 2015 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials are made 
- * available under the terms of the Eclipse Public License v1.0 
- * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
- * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
+ * All rights reserved. This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License v1.0
+ * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
+ * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html).
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
@@ -15,13 +15,12 @@ define([
 'javascript/finder',
 'orion/Deferred',
 'javascript/compilationUnit',
-'i18n!javascript/nls/messages',
-'orion/i18nUtil'
-], function(Objects, Finder, Deferred, CU, Messages, i18nUtil) {
-	
+'i18n!javascript/nls/messages'
+], function(Objects, Finder, Deferred, CU, Messages) {
+
 	var deferred;
 	var cachedContext;
-	
+
 	/**
 	 * @description Creates a new rename command
 	 * @constructor
@@ -35,38 +34,11 @@ define([
 		this.astManager = ASTManager;
 		this.ternworker = ternWorker;
 		this.scriptResolver = scriptResolver;
-		this.ternworker.addEventListener('message', function(evnt) {
-			if(typeof(evnt.data) === 'object') {
-				var _d = evnt.data;
-				if(_d.request === 'rename') {
-					var changes = _d.changes;
-					if(changes && changes.changes && changes.changes.length > 0) {
-						var ranges = changes.changes;
-						// turn the ranges into offset / length
-						var offsets = [ranges.length];
-						for (var i = 0; i < ranges.length; i++) {
-							offsets[i] = {
-								offset: ranges[i].start,
-								length: ranges[i].end - ranges[i].start
-							};
-						}
-						var groups = [{data: {}, positions: offsets}];
-						var linkModel = {groups: groups};
-						deferred.resolve(cachedContext.exitLinkedMode());
-						deferred.resolve(cachedContext.enterLinkedMode(linkModel));
-					} else if(typeof(_d.error) === 'string') {
-						cachedContext.setStatus({Severity: 'Warning', Message: _d.error}); //$NON-NLS-1$
-					}
-					deferred.resolve();
-					deferred = null;
-				}
-			}
-		});
 		this.timeout = null;
 	}
-	
+
 	Objects.mixin(RenameCommand.prototype, {
-		/* 
+		/*
 		 * override
 		 * @callback
 		 */
@@ -83,20 +55,20 @@ define([
 			            if(blocks && blocks.length > 0) {
 			                var cu = new CU(blocks, {location:options.input, contentType:options.contentType});
 	    			        if(cu.validOffset(offset)) {
-	    			        	return that._doRename(editorContext, options); 
+	    			        	return that._doRename(editorContext, options);
 	    			        }
 				        }
 			        });
 			    }
 			});
 		},
-		
+
 		/**
 		 * @description Actually do the work
 		 * @function
 		 * @private
 		 * @param {orion.editor.EditorContext} editorContext The editor context
-		 * @param {Object} params The parameters 
+		 * @param {Object} params The parameters
 		 * @returns {Deferred} A deferred to resolve
 		 */
 		_doRename: function _doRename(editorContext, params) {
@@ -115,12 +87,35 @@ define([
 					that.timeout = null;
 				}, 5000);
 				var files = [{type:'full', name:params.input, text:text}]; //$NON-NLS-1$
-				that.ternworker.postMessage({request:'rename', args:{params:{offset: params.offset}, files: files, meta:{location: params.input}, newname:''}}); //$NON-NLS-1$
+				that.ternworker.postMessage(
+					{request:'rename', args:{params:{offset: params.offset}, files: files, meta:{location: params.input}, newname:''}}, //$NON-NLS-1$
+					function(response) {
+						var changes = response.changes;
+						if(changes && changes.changes && changes.changes.length > 0) {
+							var ranges = changes.changes;
+							// turn the ranges into offset / length
+							var offsets = [ranges.length];
+							for (var i = 0; i < ranges.length; i++) {
+								offsets[i] = {
+									offset: ranges[i].start,
+									length: ranges[i].end - ranges[i].start
+								};
+							}
+							var groups = [{data: {}, positions: offsets}];
+							var linkModel = {groups: groups};
+							deferred.resolve(cachedContext.exitLinkedMode());
+							deferred.resolve(cachedContext.enterLinkedMode(linkModel));
+						} else if(typeof(response.error) === 'string') {
+							cachedContext.setStatus({Severity: 'Warning', Message: response.error}); //$NON-NLS-1$
+						}
+						deferred.resolve();
+						deferred = null;
+					});
 				return deferred;
 			});
 		}
 	});
-	
+
 	return {
 		RenameCommand : RenameCommand
 	};

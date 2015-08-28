@@ -58,7 +58,7 @@ define([], function() {
 		 */
 		this.close = function() {
 			if (state !== OPENED) {
-				throw 'Already closed'; //$NON-NLS-0$
+				throw new Error('Already closed'); //$NON-NLS-0$
 			}
 			state = CLOSED;
 			serviceRegistry.removeEventListener('registered', addedListener); //$NON-NLS-0$
@@ -92,10 +92,20 @@ define([], function() {
 		 * Begins tracking services.
 		 * @name orion.ServiceTracker#open
 		 * @function
+		 * @param {Boolean} [all=true] When <tt>true</tt>, this ServiceTracker receives an initial block of serviceAdded
+		 * calls for any services currently present in the registry, and then for any subsequent registrations.
+		 * When <tt>false</tt>, this ServiceTracker is invoked only for subsequent serviceAdded events.
+		 *
+		 * <p>Clients can use <tt>all === false</tt> when they wish to respond only to future events, and
+		 * <tt>all === true</tt> when they wish to quickly "catch up" with trackable services that were
+		 * registered prior to {@link #open} being called.</p>
 		 */
-		this.open = function() {
+		this.open = function(all) {
+			if (typeof all === 'undefined') { //$NON-NLS-0$
+				all = true;
+			}
 			if (state !== CLOSED) {
-				throw 'Already open'; //$NON-NLS-0$
+				throw new Error('Already open'); //$NON-NLS-0$
 			}
 			state = OPENED;
 			var self = this;
@@ -114,12 +124,14 @@ define([], function() {
 			};
 			serviceRegistry.addEventListener('registered', addedListener); //$NON-NLS-0$
 			serviceRegistry.addEventListener('unregistering', removedListener); //$NON-NLS-0$
-			serviceRegistry.getServiceReferences(objectClass).forEach(function(serviceRef) {
-				add.call(self, serviceRef);
-				if (typeof self.onServiceAdded === 'function') { //$NON-NLS-0$
-					return self.onServiceAdded(serviceRef, serviceRegistry.getService(serviceRef));
-				}
-			});
+			if (all) {
+				serviceRegistry.getServiceReferences(objectClass).forEach(function(serviceRef) {
+					add.call(self, serviceRef);
+					if (typeof self.onServiceAdded === 'function') { //$NON-NLS-0$
+						return self.onServiceAdded(serviceRef, serviceRegistry.getService(serviceRef));
+					}
+				});
+			}
 			if (typeof this.onOpen === 'function') {
 				this.onOpen();
 			}

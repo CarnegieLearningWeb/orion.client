@@ -18,8 +18,14 @@ define(function() {
 	        doctrine: 'doctrine/doctrine'
 		}
 	});
-	function errback(error) {
-		alert("The following error happens. Please try again later.\n" + error);
+	function errback(err) {
+	    if (err.requireType === 'timeout') {
+			try {
+				alert("RequireJS error: Timeout occured loading module " + err.requireModules + ".\n\nPlease try refreshing the page.");
+			} catch (er) {
+			}
+	    } 
+	    throw err;
 	}
 	return {
 		errback: errback
