@@ -11,6 +11,8 @@
 /*eslint-env amd, browser*/
 /*global URL*/
 define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(domReady, xhr, lib, common) {
+	deleteInitialSessionCookie();
+
 	function getRedirect() {
 		var regex = new RegExp('[\\?&]redirect=([^&#]*)');
 		var results = regex.exec(window.location.href);
@@ -52,6 +54,21 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 			}
 		}, function(error) {
 		});
+	}
+
+	function deleteInitialSessionCookie() {
+		var i;
+		var currItem;
+		var results = {};
+		var cookies = document.cookie.split(';');
+
+		for (i = 0; i < cookies.length; i++) {
+			currItem = cookies[i].split('=');
+			results[currItem[0].trim()] = currItem[1].trim();
+		}
+
+		var cookieName = results.JSESSIONID;
+		document.cookie = "JSESSIONID=; Path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
 	}
 
 	domReady(function() {
