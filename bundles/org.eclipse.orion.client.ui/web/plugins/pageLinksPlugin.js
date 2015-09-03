@@ -179,14 +179,15 @@ define([
 			category: "user.0"
 		});
 		
-		provider.registerService("orion.page.link.user", null, {
-			id: "orion.report.bug",
-			order: 30,
-			name: widgetMessages["Report a Bug"],
-			nls: "orion/widgets/nls/messages",
-			uriTemplate: "https://bugs.eclipse.org/bugs/enter_bug.cgi?product=Orion&component=Client",
-			category: "user.0"
-		});
+		// Hide this menu option from the User menu
+		// provider.registerService("orion.page.link.user", null, {
+		// 	id: "orion.report.bug",
+		// 	order: 30,
+		// 	name: widgetMessages["Report a Bug"],
+		// 	nls: "orion/widgets/nls/messages",
+		// 	uriTemplate: "https://bugs.eclipse.org/bugs/enter_bug.cgi?product=Orion&component=Client",
+		// 	category: "user.0"
+		// });
 		
 		provider.registerService("orion.page.link.user", null, {
 			id: "orion.student.list",

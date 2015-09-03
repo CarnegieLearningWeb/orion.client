@@ -1073,7 +1073,8 @@ exports.setUpEditor = function(serviceRegistry, pluginRegistry, preferences, rea
 			setup.editorViewers.push(setup.createEditorViewer());
 			setup.setActiveEditorViewer(setup.editorViewers[0]);
 			if (enableSplitEditor) {
-				setup.createSplitMenu();
+				// Hide the split menu in the header menu
+				// setup.createSplitMenu();
 				setup.setSplitterMode(MODE_SINGLE);
 			}
 			setup.load();

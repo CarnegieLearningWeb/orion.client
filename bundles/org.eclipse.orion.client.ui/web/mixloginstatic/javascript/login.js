@@ -60,15 +60,22 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 		var i;
 		var currItem;
 		var results = {};
-		var cookies = document.cookie.split(';');
+		var cookieLength = document.cookie.length;
 
-		for (i = 0; i < cookies.length; i++) {
-			currItem = cookies[i].split('=');
-			results[currItem[0].trim()] = currItem[1].trim();
+		if (cookieLength > 0) {
+			var cookies = document.cookie.split(';');
+
+			for (i = 0; i < cookies.length; i++) {
+				currItem = cookies[i].split('=');
+
+				results[currItem[0]] = currItem[1];
+			}
+
+			if (results.hasOwnProperty('JSESSIONID')) {
+				var cookieName = results.JSESSIONID;
+				document.cookie = "JSESSIONID=; Path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+			}
 		}
-
-		var cookieName = results.JSESSIONID;
-		document.cookie = "JSESSIONID=; Path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
 	}
 
 	domReady(function() {
