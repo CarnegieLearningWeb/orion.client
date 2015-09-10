@@ -125,7 +125,7 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 		}
 
 		// FIX the hrefs of the various forms here.
-		document.getElementById("signInWithGoogle").href = common.createOAuthLink("google");
+		// document.getElementById("signInWithGoogle").href = common.createOAuthLink("google");
 		
 		//Added by Jon
 		//document.getElementById("signInWithGitHub").href = common.createOAuthLink("github");
