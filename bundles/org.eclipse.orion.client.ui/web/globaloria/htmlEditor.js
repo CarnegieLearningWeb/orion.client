@@ -189,7 +189,7 @@ define([
 
         var currentFile = window.location.hash.slice(1,window.location.hash.length);
         //TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
-        currentFile  = currentFile.replace(new RegExp('25', 'g'),'');
+        currentFile  = currentFile.replace(new RegExp('\%2025', 'g'),'\%20');
         currentFile  = currentFile.replace(',editor=orion.editor.html','');
         var port     = ":"+window.location.port;
         var protocol = window.location.protocol+"//";
