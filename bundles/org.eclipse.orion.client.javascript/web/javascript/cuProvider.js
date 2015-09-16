@@ -16,22 +16,31 @@ define([
 ], function(LRU, CU) {
 
 	var _cache = new LRU(10);
+	var _useCache = true;
 	var inputChanged = null;
 
 	/**
 	 * @description fetches or creates a compilation unit for the given information
-	 * @param {Array.<object>} sourceblocks The blocks of source
+	 * @param {Function} sourceblocks a function that returns the blocks of source
 	 * @param {Object} metadata The file metadata
 	 * @param {orion.editor.EditorContext} editorContext The editor context
 	 * @returns {javascript.CompilationUnit} The compilation unit for the given information
 	 */
-	function getCompilationUnit(sourceblocks, metadata, editorContext) {
-		var cu = _cache.get(metadata.location);
-		if(cu) {
-			return cu;
+	function getCompilationUnit(getSourceBlocks, metadata, editorContext) {
+		if (_useCache){
+			var cu = _cache.get(metadata.location);
+			if(cu) {
+				return cu;
+			}
 		}
-		cu = new CU(sourceblocks, metadata, editorContext);
-		_cache.put(metadata.location, cu);
+		var blocks = getSourceBlocks();
+		if (!blocks){
+			blocks = [];
+		}
+		cu = new CU(blocks, metadata, editorContext);
+		if (_useCache){
+			_cache.put(metadata.location, cu);
+		}
 		return cu;
 	}
 
@@ -41,13 +50,22 @@ define([
 	 * @see https://wiki.eclipse.org/Orion/Documentation/Developer_Guide/Plugging_into_the_editor#orion.edit.model
 	 */
 	function onModelChanging(evnt) {
-	    if(inputChanged) {
-	        //TODO haxxor, eat the first model changing event which immediately follows
-	        //input changed
-	        inputChanged = null;
-	    } else {
-	        _cache.remove(_getKey(evnt.file));
-	    }
+		if(inputChanged) {
+			//TODO haxxor, eat the first model changing event which immediately follows
+			//input changed
+			inputChanged = null;
+		} else {
+			_cache.remove(_getKey(evnt.file));
+		}
+	}
+	
+	/**
+	 * Allows a caller to turn off the cache cuProvider is using, creating a new CU each time one is requested.
+	 * Intended for use in testing where no onModelChanging events are fired.
+	 * @param useCache whether to use the cache (default) or not
+	 */
+	function setUseCache(useCache){
+		_useCache = useCache;
 	}
 
 	/**
@@ -56,10 +74,10 @@ define([
 	 * @since 8.0
 	 */
 	function _getKey(metadata) {
-      if(!metadata || !metadata.location) {
-          return 'unknown'; //$NON-NLS-1$
-      }
-      return metadata.location;
+	  if(!metadata || !metadata.location) {
+		  return 'unknown'; //$NON-NLS-1$
+	  }
+	  return metadata.location;
 	}
 
 	/**
@@ -68,12 +86,13 @@ define([
 	 * @see https://wiki.eclipse.org/Orion/Documentation/Developer_Guide/Plugging_into_the_editor#orion.edit.model
 	 */
 	function onInputChanged(evnt) {
-	    inputChanged = evnt;
+		inputChanged = evnt;
 	}
 
 	return {
 		getCompilationUnit: getCompilationUnit,
 		onModelChanging: onModelChanging,
-		onInputChanged: onInputChanged
+		onInputChanged: onInputChanged,
+		setUseCache: setUseCache
 	};
 });

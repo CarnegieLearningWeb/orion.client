@@ -55,7 +55,9 @@ define([
        setSearchLocation: function(searchLocation) {
        		this.searchLocation = searchLocation;
        },
-
+	   getSearchLocation: function() {
+	   		return this.searchLocation || this.fileclient.fileServiceRootURL();
+	   },
        _getFile : function _getFile(name, options) {
            var files = this.cache.get(name);
            if(files) {
@@ -172,8 +174,8 @@ define([
 		       			if(idx > -1) {
 			      			p1 = loc.slice(0, idx);
 			      		}
-			      		_p = _p.replace('/', '\/');
-			      		var reg = new RegExp(_p+"$");
+			      		var _test = _p.replace(/[/?|{}()*.#$^]/g, '\\$&'); //$NON-NLS-1$
+			      		var reg = new RegExp(_test+"$");
 			      		if(reg.test(p1)) {
 			      			_files.push(file);
 			      		}
@@ -214,12 +216,20 @@ define([
        			if(idx > -1) {
 	      			p1 = loc.slice(0, idx);
 	      		}
+	      		if(path2 === p1) {
+	      			return true; //could be that only the extension was missing from the other path
+	      		}
 	      		idx = path2.lastIndexOf('.');
        			var p2 = path2;
        			if(idx > -1) {
 	      			p2 = path2.slice(0, idx);
 	      		}
-	      		return p1 === p2;
+	      		if(p1 === p2) {
+	      			return true;
+	      		} else if(p1 === decodeURIComponent(p2)) {
+	      			return true;
+	      		}
+	      		return false;
        		}
        },
 

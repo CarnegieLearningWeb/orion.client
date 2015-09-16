@@ -138,6 +138,15 @@ a:hover {
 	color: white;
 }
 
+.checkedRow .commandButton {
+	color: white;
+	border-color: white;
+}
+
+.checkedRow .commandImage {
+	color: white;
+}
+
 .navRow > td:first-child {
 	/* border-left: 6px solid transparent; THIS CAUSES PIXELATION PROBLEMS! */
 }
@@ -378,10 +387,6 @@ a.breadcrumb.currentLocation {
 	color:white;
 }
 
-.mainToolbar .commandImage {
-	color:white;
-}
-
 .commandButton {
 	color: #00AED1;
 	border: 1px solid #00AED1;
@@ -448,7 +453,7 @@ a.breadcrumb.currentLocation {
 	border: 1px solid #ccc;
 }
 
-.mainToolbar .commandImage {
+.mainToolbar .commandImage.dropdownTrigger {
 	color: white;
 }
 
@@ -554,11 +559,13 @@ a.breadcrumb.currentLocation {
 	padding-left: 3px;
 	padding-right: 2px;
 	background-color: #FFF;
+	color: #808080;
 }
 
 .orionSwitchInner:after {
 	padding-right: 3px;
 	background-color: #eee;
+	color: #808080;
 	text-align: right;
 }
 
@@ -1136,16 +1143,6 @@ a.breadcrumb.currentLocation {
 	border-color: white;
 	color: white;
 	margin-bottom: 2px;
-}
-
-.extraActions:not(:empty) {
-	margin-right: 10px !important;
-	padding-left: 10px !important;
-	margin-top: 0;
-	margin-bottom: 0;
-	padding-top: 7px;
-	height: 37px;
-	border-left: 1px solid #1B252E !important;
 }
 
 .core-sprite-git-logo {

@@ -12,14 +12,14 @@
 /*global define document console window*/
 /*eslint forin:true regexp:false sub:true*/
 
-define(['i18n!orion/search/nls/messages', 'require', 'orion/Deferred', 'orion/webui/littlelib', 'orion/contentTypes', 'orion/i18nUtil', 'orion/explorers/explorer', 
+define(['i18n!orion/search/nls/messages', 'orion/Deferred', 'orion/webui/littlelib', 'orion/contentTypes', 'orion/i18nUtil', 'orion/explorers/explorer', 
 	'orion/fileClient', 'orion/commands', 'orion/searchUtils', 'orion/compare/compareView', 
 	'orion/highlight', 'orion/webui/tooltip', 'orion/explorers/navigatorRenderer', 'orion/extensionCommands',
-	'orion/searchModel', 'orion/crawler/searchCrawler', 'orion/explorers/fileDetailRenderer'
+	'orion/searchModel', 'orion/gSearchClient', 'orion/explorers/fileDetailRenderer'
 ],
-function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClient, mCommands, 
+function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClient, mCommands, 
 	mSearchUtils, mCompareView, mHighlight, mTooltip, 
-	navigatorRenderer, extensionCommands, mSearchModel, mSearchCrawler, mFileDetailRenderer
+	navigatorRenderer, extensionCommands, mSearchModel, mGSearchClient, mFileDetailRenderer
 ) {
     /* Internal wrapper functions*/
     function _empty(nodeToEmpty) {
@@ -132,6 +132,19 @@ function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, m
 		return link;
     };
     
+	SearchResultRenderer.prototype.generateDetailDecorator = function(item, spanHolder) {
+		if(typeof item.confidence !== "number") {
+			return;
+		}
+		var classNames = ["confidenceDecorator"];
+		if(item.confidence >= 100) {
+			classNames.push("confidenceHigh"); //$NON-NLS-0$
+		} else {
+			classNames.push("confidenceLow"); //$NON-NLS-0$
+		}
+    	_createSpan(classNames, null, spanHolder, item.confidence + "%");
+	};
+	
     SearchResultRenderer.prototype.generateDetailLink = function(item) {
         var helper = null;
         if (this.explorer.model._provideSearchHelper) {
@@ -491,10 +504,6 @@ function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, m
         this._commandService.registerCommandContribution("searchPageActions", "orion.search.nextResult", 4); //$NON-NLS-1$ //$NON-NLS-0$
         this._commandService.registerCommandContribution("searchPageActions", "orion.search.prevResult", 5); //$NON-NLS-1$ //$NON-NLS-0$
         this._commandService.registerCommandContribution("searchPageActions", "orion.search.switchFullPath", 6); //$NON-NLS-1$ //$NON-NLS-0$
-    };
-
-    InlineSearchResultExplorer.prototype.setCrawling = function(crawling) {
-        this._crawling = crawling;
     };
 
     InlineSearchResultExplorer.prototype._fileExpanded = function(fileIndex, detailIndex) {
@@ -917,7 +926,8 @@ function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, m
     InlineSearchResultExplorer.prototype._startUp = function() {
 		var pagingParams = this.model.getPagingParams();
 		if(this.model._provideSearchHelper){
-			window.document.title = this.model._provideSearchHelper().displayedSearchTerm + " - " +  i18nUtil.formatMessage(messages["${0} matches"], pagingParams.totalNumber);//$NON-NLS-0$
+			this._inlineSearchPane.newDocumentTitle = this.model._provideSearchHelper().displayedSearchTerm + " - " +  i18nUtil.formatMessage(messages["${0} matches"], pagingParams.totalNumber);//$NON-NLS-0$
+			window.document.title = this._inlineSearchPane.newDocumentTitle;
 		}
 		if (pagingParams.numberOnPage === 0) {
 			var message = messages["No matches"];
@@ -1045,33 +1055,12 @@ function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, m
      	}.bind(this));
     };
 
-	InlineSearchResultExplorer.prototype._renderSearchResult = function(crawling, resultsNode, searchParams, jsonData, incremental) {
-		var foundValidHit = false;
-		var resultLocation = [];
+	InlineSearchResultExplorer.prototype._renderSearchResult = function(resultsNode, searchParams, searchResult, incremental) {
 		var node = lib.node(resultsNode);
 		lib.empty(node);
 		node.focus();
-		
-		if (jsonData.response.numFound > 0) {
-			for (var i=0; i < jsonData.response.docs.length; i++) {
-				var hit = jsonData.response.docs[i];
-				if (!hit.Directory) {
-					if (!foundValidHit) {
-						foundValidHit = true;
-					}
-					var loc = hit.Location;
-					var path = hit.Path;
-					if (!path) {
-						var rootURL = this.fileClient.fileServiceRootURL(loc);
-						path = loc.substring(rootURL.length); //remove file service root from path
-					}
-					resultLocation.push({linkLocation: require.toUrl("edit/edit.html") +"#" + loc, location: loc, path: path, name: hit.Name, lastModified: hit.LastModified}); //$NON-NLS-1$ //$NON-NLS-0$
-				}
-			}
-		}
-		this.setCrawling(crawling);
 		var that = this;
-        var searchModel = new mSearchModel.SearchResultModel(this.registry, this.fileClient, resultLocation, jsonData.response.numFound, searchParams, {
+        var searchModel = new mSearchModel.SearchResultModel(this.registry, this.fileClient, searchResult, searchResult.length, searchParams, {
             onMatchNumberChanged: function(fileItem) {
                 that.renderer.replaceFileElement(fileItem);
             }
@@ -1095,51 +1084,32 @@ function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, m
 	 * @param {Object} searchParams The search parameters to use for the search
 	 * @param {Searcher} searcher
 	 */
-	InlineSearchResultExplorer.prototype._search = function(resultsNode, searchParams, searcher) {
-		//For crawling search, temporary
-		//TODO: we need a better way to render the progress and allow user to be able to cancel the crawling search
-		var crawling = false;
-		var crawler;
-		
+	InlineSearchResultExplorer.prototype._search = function(resultsNode, searchParams, searchResult) {
 		lib.empty(resultsNode);
-		
+		if(searchResult) {
+			this._renderSearchResult(resultsNode, searchParams, searchResult);
+			window.setTimeout(function() {
+				this.expandAll();
+			}.bind(this), 10);
+			return;
+		}
 		//If there is no search keyword defined, then we treat the search just as the scope change.
 		if(typeof searchParams.keyword === "undefined"){ //$NON-NLS-0$
 			return;
 		}
-		
-		if (crawling) {
-			resultsNode.appendChild(document.createTextNode(""));
-			crawler = new mSearchCrawler.SearchCrawler(this.registry, this.fileClient, searchParams, {childrenLocation: searcher.getChildrenLocation()});
-			crawler.search( function(jsonData, incremental) {
-				this._renderSearchResult(crawling, resultsNode, searchParams, jsonData, incremental);
-			}.bind(this));
-		} else {
-			this.registry.getService("orion.page.message").setProgressMessage(messages["Searching..."]); //$NON-NLS-0$
-			try{
-				this.registry.getService("orion.page.progress").progress(this.fileClient.search(searchParams), "Searching " + searchParams.keyword).then( //$NON-NLS-1$ //$NON-NLS-0$
-					function(jsonData) {
-						this.registry.getService("orion.page.message").setProgressMessage(""); //$NON-NLS-0$
-						this._renderSearchResult(false, resultsNode, searchParams, jsonData);
-					}.bind(this),
-					function(error) {
-						var message = i18nUtil.formatMessage(messages["${0}. Try your search again."], error && error.error ? error.error : "Error"); //$NON-NLS-0$
-						this.registry.getService("orion.page.message").setProgressResult({Message: message, Severity: "Error"}); //$NON-NLS-0$
-					}.bind(this)
-				);
-			} catch(error) {
-				lib.empty(resultsNode);
-				resultsNode.appendChild(document.createTextNode(""));
-				if(typeof(error) === "string" && error.indexOf("search") > -1){ //$NON-NLS-1$ //$NON-NLS-0$
-					crawler = new mSearchCrawler.SearchCrawler(this.registry, this.fileClient, searchParams, {childrenLocation: searcher.getChildrenLocation()});
-					crawler.search( function(jsonData, incremental) {
-						this._renderSearchResult(true, resultsNode, searchParams, jsonData, incremental);
-					}.bind(this));
-				} else {
-					this.registry.getService("orion.page.message").setErrorMessage(error);	 //$NON-NLS-0$
-				}
+		this.registry.getService("orion.page.message").setProgressMessage(messages["Searching..."]); //$NON-NLS-0$
+		var gSearchClient = new mGSearchClient.GSearchClient({serviceRegistry: this.registry, fileClient: this.fileClient});
+		gSearchClient.search(searchParams).then(function(searchResult) {
+			this.registry.getService("orion.page.message").setProgressMessage(""); //$NON-NLS-0$
+			if(searchResult) {
+				this._renderSearchResult(resultsNode, searchParams, searchResult);
 			}
-		}
+		}.bind(this), function(error) {
+			var message = i18nUtil.formatMessage(messages["${0}. Try your search again."], error && error.error ? error.error : "Error"); //$NON-NLS-0$
+			this.registry.getService("orion.page.message").setProgressResult({Message: message, Severity: "Error"}); //$NON-NLS-0$
+		}.bind(this), function(jsonData, incremental) {
+			this._renderSearchResult(resultsNode, searchParams, gSearchClient.convert(jsonData, searchParams), incremental);
+		}.bind(this));
 	};
 
 	/**
@@ -1149,9 +1119,9 @@ function(messages, require, Deferred, lib, mContentTypes, i18nUtil, mExplorer, m
 	 * @param {String | DomNode} parentNode The parent node to display the results in
 	 * @param {Searcher} searcher
 	 */
-	InlineSearchResultExplorer.prototype.runSearch = function(searchParams, parentNode, searcher) {
+	InlineSearchResultExplorer.prototype.runSearch = function(searchParams, parentNode, searchResult) {
 		var parent = lib.node(parentNode);
-		this._search(parent, searchParams, searcher);
+		this._search(parent, searchParams, searchResult);
 	};
 
     InlineSearchResultExplorer.prototype.constructor = InlineSearchResultExplorer;

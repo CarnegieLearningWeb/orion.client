@@ -28,8 +28,40 @@
 		 * @callback
 		 */
 		run: function run(server, query) {
-			//TODO make the magic happen
+			var definition = this._getDefNode(server, query);
+			var prevDef;
+			while (definition) {
+				// If a 'findDef' finds itself we're done
+				if (prevDef && prevDef.start === definition.start && prevDef.end === definition.end) {
+					return {implementation: {start: definition.start, end: definition.end,
+												file: definition.sourceFile.name}};
+				}
+				prevDef = definition;
+				
+				if (definition.type === "Property") {					
+					definition = definition.value;
+				} else if (definition.type === "Identifier") {
+					query = {start: definition.start, end: definition.end,
+									type: "definition", //$NON-NLS-1$
+									file: definition.sourceFile.name};
+					definition = this._getDefNode(server, query);
+				} else if (definition.type === "MemberExpression") {
+					definition = definition.property;
+				}
+			}
 			return {implementation: {}};
+		},
+		_getDefNode: function(server, query) {
+			var theFile = server.fileMap[query.file];
+			var res = tern.findDef(server, query, theFile);
+			if (res) {
+				theFile = server.fileMap[res.file];
+				var theNode = infer.findExpressionAt(theFile.ast, res.start, null, null, function(type, node) {
+					return true;
+				});
+				return theNode.node;
+			}
+			return null;
 		}
 	});
 });

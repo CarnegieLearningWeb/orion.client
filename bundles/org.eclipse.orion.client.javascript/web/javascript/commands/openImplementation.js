@@ -12,10 +12,9 @@
  /*eslint-env amd, browser*/
 define([
 'orion/objects',
-'javascript/finder',
 'orion/Deferred',
 'i18n!javascript/nls/messages'
-], function(Objects, Finder, Deferred, Messages) {
+], function(Objects, Deferred, Messages) {
 
 	var cachedContext;
 	var deferred;
@@ -25,15 +24,13 @@ define([
 	 * @constructor
 	 * @public
 	 * @param {javascript.ASTManager} ASTManager The backing AST manager
-	 * @param {javascript.ScriptResolver} Resolver The backing script resolver
 	 * @param {TernWorker} ternWorker The running Tern worker
 	 * @param {javascript.CUProvider} cuProvider
 	 * @returns {javascript.commands.OpenDeclarationCommand} A new command
 	 * @since 10.0
 	 */
-	function OpenImplementationCommand(ASTManager, Resolver, ternWorker, cuProvider) {
+	function OpenImplementationCommand(ASTManager, ternWorker, cuProvider) {
 		this.astManager = ASTManager;
-		this.resolver = Resolver;
 		this.ternworker = ternWorker;
 		this.cuprovider = cuProvider;
 		this.timeout = null;
@@ -42,28 +39,13 @@ define([
 	Objects.mixin(OpenImplementationCommand.prototype, {
 		/* override */
 		execute: function(editorContext, options) {
-		    var that = this;
-		    if(options.contentType.id === 'application/javascript') {
-		        return that.astManager.getAST(editorContext).then(function(ast) {
-    				return that._findImpl(editorContext, options, ast);
-    			});
-		    } else {
-		        return editorContext.getText().then(function(text) {
-		            var offset = options.offset;
-		            var blocks = Finder.findScriptBlocks(text);
-		            if(blocks && blocks.length > 0) {
-		                var cu = that.cuprovider.getCompilationUnit(blocks, {location:options.input, contentType:options.contentType});
-    			        if(cu.validOffset(offset)) {
-    			            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
-    			               return that._findImpl(editorContext, options, ast, text);
-    			            });
-    			        }
-			        }
-		        });
-		    }
+			var that = this;
+			return editorContext.getText().then(function(text) {
+		     	return that._findImpl(editorContext, options, text);
+			});
 		},
 
-		_findImpl: function(editorContext, options, ast, htmlsource) {
+		_findImpl: function(editorContext, options, text) {
 			cachedContext = editorContext;
 			deferred = new Deferred();
 			if(this.timeout) {
@@ -76,7 +58,7 @@ define([
 				}
 				this.timeout = null;
 			}, 5000);
-			var files = [{type: 'full', name: options.input, text: htmlsource ? htmlsource : ast.source}]; //$NON-NLS-1$
+			var files = [{type: 'full', name: options.input, text: text}]; //$NON-NLS-1$
 			this.ternworker.postMessage(
 				{request:'implementation', args:{params:{offset: options.offset}, files: files, meta:{location: options.input}}}, //$NON-NLS-1$
 				function(response) {

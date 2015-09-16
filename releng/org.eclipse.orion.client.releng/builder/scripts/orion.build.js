@@ -30,13 +30,7 @@
         i18n: 'requirejs/i18n',
         domReady: 'requirejs/domReady',
         gcli: 'gcli/gcli',
-        util: 'gcli/util',
-        esprima: 'esprima/esprima',
-        estraverse: 'estraverse/estraverse',
-        escope: 'escope/escope',
-        logger: 'javascript/logger',
-        csslint: 'csslint/csslint',
-        doctrine: 'doctrine/doctrine'
+        util: 'gcli/util'
     },
     packages: [
         {
@@ -145,4 +139,4 @@
         });
         return modules;
     }())
-})
+});

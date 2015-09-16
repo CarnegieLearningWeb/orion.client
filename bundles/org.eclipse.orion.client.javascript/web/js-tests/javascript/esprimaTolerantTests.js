@@ -12,8 +12,8 @@
 /* eslint-disable missing-nls */
 define([
 	"chai/chai",
-	"esprima",
-	'estraverse',
+	"esprima/esprima",
+	'estraverse/estraverse',
 	'orion/util',
 	'mocha/mocha'  //must stay last, not a module
 ], function(chai, Esprima, Estraverse, Util) {

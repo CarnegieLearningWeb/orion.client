@@ -16,15 +16,15 @@ function(messages, Deferred, i18nUtil, mExplorer, mUiUtils, mSearchUtils) {
 
     /*** Internal model wrapper functions ***/
 
-    function _getFileModel(modelItem) {
-        if (!modelItem) {
-            return null;
-        }
-        if (modelItem.type === "file") { //$NON-NLS-0$
-            return modelItem;
-        }
-        return modelItem.parent;
-    }
+//    function _getFileModel(modelItem) {
+//        if (!modelItem) {
+//            return null;
+//        }
+//        if (modelItem.type === "file") { //$NON-NLS-0$
+//            return modelItem;
+//        }
+//        return modelItem.parent;
+//    }
 
     /*
      *	The model to support the search result.
@@ -80,7 +80,7 @@ function(messages, Deferred, i18nUtil, mExplorer, mUiUtils, mSearchUtils) {
             this.registry.getService("orion.page.progress").progress(this.fileClient.read(parentItem.location), "Getting file contents " + parentItem.name).then( //$NON-NLS-1$ //$NON-NLS-0$
 
             function(jsonData) {
-                mSearchUtils.searchWithinFile(this._searchHelper.inFileQuery, parentItem, jsonData, this._lineDelimiter, this.replaceMode(), this._searchHelper.params.caseSensitive);
+                mSearchUtils.searchWithinFile(this._searchHelper.inFileQuery, parentItem, jsonData, this.replaceMode(), this._searchHelper.params.caseSensitive);
                 if (this.onMatchNumberChanged) {
                     this.onMatchNumberChanged(parentItem);
                 }
@@ -141,23 +141,53 @@ function(messages, Deferred, i18nUtil, mExplorer, mUiUtils, mSearchUtils) {
      * The bottom layer is the detail matches within a file, whose type is "detail". It should have a property called parent which points to the file item.
      */
     SearchResultModel.prototype.buildResultModel = function() {
-        this._restoreGlobalStatus();
+        //this._restoreGlobalStatus();
         this._indexedFileItems = [];
         this.getListRoot().children = [];
         for (var i = 0; i < this._resultLocation.length; i++) {
-            var childNode = {
+        	var children = this._resultLocation[i].children;
+            var fileNode = {
                 parent: this.getListRoot(),
                 type: "file", //$NON-NLS-0$
                 name: this._resultLocation[i].name,
-                lastModified: this._resultLocation[i].lastModified, //$NON-NLS-0$
-                linkLocation: this._resultLocation[i].linkLocation,
+                children: children,
+                contents: this._resultLocation[i].contents,
+                //lastModified: this._resultLocation[i].lastModified, //$NON-NLS-0$
+                //linkLocation: this._resultLocation[i].linkLocation,
                 location: this._resultLocation[i].location,
                 parentLocation: mUiUtils.path2FolderName(this._resultLocation[i].location, this._resultLocation[i].name, true),
                 fullPathName: mUiUtils.path2FolderName(this._resultLocation[i].path, this._resultLocation[i].name)
             };
-            this._location2ModelMap[childNode.location] = childNode;
-            this.getListRoot().children.push(childNode);
-            this._indexedFileItems.push(childNode);
+            if(children) {//If the children is already generated, we need convert it back to UI model.
+            	var newChildren = [];
+            	children.forEach(function(child) {
+					for(var j = 0; j < child.matches.length; j++){
+						if(child.matches[j].confidence < 0) {
+							continue;
+						}
+						var matchNumber = j+1;
+						var newMatch = {confidence: child.matches[j].confidence, parent: fileNode, matches: child.matches, lineNumber: child.lineNumber, matchNumber: matchNumber, 
+							checked: child.matches[j].confidence === 100 ? true: false, type: "detail",
+							name: child.name, location: fileNode.location + "-" + child.lineNumber + "-" + matchNumber
+						};
+						newChildren.push(newMatch);
+					}
+            	});
+            	if(newChildren.length === 0) {
+            		continue;
+            	}
+ 				newChildren.sort(function(a, b) {
+ 					if(a.confidence === b.confidence) {
+ 						return a.lineNumber - b.lineNumber;
+ 					}
+					return b.confidence - a.confidence;
+				});
+           	
+            	fileNode.children = newChildren;
+            }
+            this._location2ModelMap[fileNode.location] = fileNode;
+            this.getListRoot().children.push(fileNode);
+            this._indexedFileItems.push(fileNode);
         }
     };
 
@@ -179,8 +209,8 @@ function(messages, Deferred, i18nUtil, mExplorer, mUiUtils, mSearchUtils) {
     SearchResultModel.prototype.getPagingParams = function() {
         return {
             totalNumber: this._totalNumber,
-            start: this._searchHelper.params.start,
-            rows: this._searchHelper.params.rows,
+            start: (typeof this._searchHelper.params.start === "undefined" ? 0 : this._searchHelper.params.start),
+            rows: (typeof this._searchHelper.params.rows === "undefined" ? this._totalNumber : this._searchHelper.params.rows),
             numberOnPage: this._numberOnPage
         };
     };
@@ -243,7 +273,7 @@ function(messages, Deferred, i18nUtil, mExplorer, mUiUtils, mSearchUtils) {
             return this.registry.getService("orion.page.progress").progress(this.fileClient.read(fileItem.location), "Getting file contents " + fileItem.Name).then( //$NON-NLS-1$ //$NON-NLS-0$
 
             function(jsonData) {
-                mSearchUtils.searchWithinFile(this._searchHelper.inFileQuery, fileItem, jsonData, this._lineDelimiter, this.replaceMode(), this._searchHelper.params.caseSensitive);
+                mSearchUtils.searchWithinFile(this._searchHelper.inFileQuery, fileItem, jsonData, this.replaceMode(), this._searchHelper.params.caseSensitive);
                 return fileItem;
             }.bind(this),
 
@@ -339,60 +369,60 @@ function(messages, Deferred, i18nUtil, mExplorer, mUiUtils, mSearchUtils) {
         this._indexedFileItems = validList;
     };
 
-    /**
-     * Store the current selected model in to a session storage. Optional.
-     * If defined, this function is called every time a selection on the model is changed by user.
-     */
-    SearchResultModel.prototype.storeLocationStatus = function(currentModel) {
-        if (currentModel) {
-            var fileItem = _getFileModel(currentModel);
-            if(!fileItem){
-				return;
-            }
-            window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentFileLocation"] = fileItem.location; //$NON-NLS-0$
-            if (currentModel.type === "file") { //$NON-NLS-0$
-                window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentDetailIndex"] = "none"; //$NON-NLS-1$ //$NON-NLS-0$
-            } else {
-                window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentDetailIndex"] = JSON.stringify(this._model2Index(currentModel)); //$NON-NLS-0$
-            }
-        }
-    };
-
-    /**
-     * Restore the previously selected model when the page is restored. Optional.
-     * If defined, this function is called every time when the page is loaded.
-     */
-    SearchResultModel.prototype.restoreLocationStatus = function() {
-        var currentFileLocation = window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentFileLocation"]; //$NON-NLS-0$
-        var fileModel = this._location2Model(currentFileLocation);
-        var currentDetailIndex = "none"; //$NON-NLS-0$
-        var detailIndexCached = window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentDetailIndex"]; //$NON-NLS-0$
-        if (typeof detailIndexCached === "string") { //$NON-NLS-0$
-            if (detailIndexCached.length > 0) {
-                currentDetailIndex = detailIndexCached;
-            }
-        }
-        return {
-            file: fileModel,
-            detail: currentDetailIndex
-        };
-    };
-    
-    /**
-     * Check if the given file content still contain the search term. Optional.
-     * If defined, the explorer will check all the files that has different time stamp between the search result and the file meta data. Then ask this function to do the final judge.
-     */
-    SearchResultModel.prototype.staleCheck = function(fileContentText) {
-        var lineString = fileContentText.toLowerCase();
-        var result;
-        if (this._searchHelper.inFileQuery.wildCard) {
-            result = mSearchUtils.searchOnelineRegEx(this._searchHelper.inFileQuery, lineString, true);
-        } else {
-            result = mSearchUtils.searchOnelineLiteral(this._searchHelper.inFileQuery, lineString, true);
-        }
-        return result;
-    };
-
+//    /**
+//     * Store the current selected model in to a session storage. Optional.
+//     * If defined, this function is called every time a selection on the model is changed by user.
+//     */
+//    SearchResultModel.prototype.storeLocationStatus = function(currentModel) {
+//        if (currentModel) {
+//            var fileItem = _getFileModel(currentModel);
+//            if(!fileItem){
+//				return;
+//            }
+//            window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentFileLocation"] = fileItem.location; //$NON-NLS-0$
+//            if (currentModel.type === "file") { //$NON-NLS-0$
+//                window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentDetailIndex"] = "none"; //$NON-NLS-1$ //$NON-NLS-0$
+//            } else {
+//                window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentDetailIndex"] = JSON.stringify(this._model2Index(currentModel)); //$NON-NLS-0$
+//            }
+//        }
+//    };
+//
+//    /**
+//     * Restore the previously selected model when the page is restored. Optional.
+//     * If defined, this function is called every time when the page is loaded.
+//     */
+//    SearchResultModel.prototype.restoreLocationStatus = function() {
+//        var currentFileLocation = window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentFileLocation"]; //$NON-NLS-0$
+//        var fileModel = this._location2Model(currentFileLocation);
+//        var currentDetailIndex = "none"; //$NON-NLS-0$
+//        var detailIndexCached = window.sessionStorage[this._searchHelper.params.keyword + "_search_result_currentDetailIndex"]; //$NON-NLS-0$
+//        if (typeof detailIndexCached === "string") { //$NON-NLS-0$
+//            if (detailIndexCached.length > 0) {
+//                currentDetailIndex = detailIndexCached;
+//            }
+//        }
+//        return {
+//            file: fileModel,
+//            detail: currentDetailIndex
+//        };
+//    };
+//    
+//    /**
+//     * Check if the given file content still contain the search term. Optional.
+//     * If defined, the explorer will check all the files that has different time stamp between the search result and the file meta data. Then ask this function to do the final judge.
+//     */
+//    SearchResultModel.prototype.staleCheck = function(fileContentText) {
+//        var lineString = fileContentText.toLowerCase();
+//        var result;
+//        if (this._searchHelper.inFileQuery.wildCard) {
+//            result = mSearchUtils.searchOnelineRegEx(this._searchHelper.inFileQuery, lineString, true);
+//        } else {
+//            result = mSearchUtils.searchOnelineLiteral(this._searchHelper.inFileQuery, lineString, true);
+//        }
+//        return result;
+//    };
+//
     /**
      * Filter the model by the given filter text. Optional.
      * If defined, the explorer will render a filter input box in the tool bar. Typing in the input field filters the result on the fly.

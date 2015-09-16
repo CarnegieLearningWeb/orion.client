@@ -20,8 +20,8 @@ define([
 'orion/Deferred',
 'orion/fileClient',
 'orion/metrics',
-'esprima',
-'estraverse',
+'esprima/esprima',
+'estraverse/estraverse',
 'javascript/scriptResolver',
 'javascript/astManager',
 'javascript/quickFixes',
@@ -32,12 +32,13 @@ define([
 'javascript/outliner',
 'javascript/cuProvider',
 'orion/util',
-'logger',
+'javascript/logger',
 'javascript/commands/generateDocCommand',
 'javascript/commands/openDeclaration',
 'javascript/commands/openImplementation',
 'javascript/commands/renameCommand',
 'javascript/commands/refsCommand',
+'orion/gSearchClient',
 'orion/editor/stylers/application_javascript/syntax',
 'orion/editor/stylers/application_json/syntax',
 'orion/editor/stylers/application_schema_json/syntax',
@@ -46,7 +47,7 @@ define([
 'orion/URL-shim'
 ], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist,
 			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
-			RenameCommand, RefsCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
+			RenameCommand, RefsCommand, mGSearchClient, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
 
     var provider = new PluginProvider({
 		name: javascriptMessages['pluginName'], //$NON-NLS-1$
@@ -130,7 +131,7 @@ define([
 
     	WrappedWorker.prototype.postMessage = function(msg, f) {
 			if(msg != null && typeof(msg) === 'object') {
-				if(typeof(msg.messageID) !== 'number') {
+				if(typeof(msg.messageID) !== 'number' && typeof(msg.ternID) !== 'number') {
 					//don't overwrite an id from a tern-side request
 					msg.messageID = this.messageId++;
 					this.callbacks[msg.messageID] = f;
@@ -164,7 +165,7 @@ define([
 					var id  = _d.messageID;
 					var f = this.callbacks[id];
 					if(typeof(f) === 'function') {
-						f(_d);
+						f(_d, _d.error);
 						delete this.callbacks[id];
 					}
 					var _handler = handlers[_d.request];
@@ -188,7 +189,7 @@ define([
 		 * @since 10.0
 		 */
 		function doRead(request) {
-			var response = {request: 'read', messageID: request.messageID, args: {}}; //$NON-NLS-1$
+			var response = {request: 'read', ternID: request.ternID, args: {}}; //$NON-NLS-1$
 			if(typeof(request.args.file) === 'object') {
 				var _l = request.args.file.logical;
 				response.args.logical = _l;
@@ -282,7 +283,7 @@ define([
     		return envDeferred;
     	}
 
-    	provider.registerService("orion.edit.contentassist", new TernAssist.TernContentAssist(astManager, ternWorker, getEnvironments),  //$NON-NLS-1$
+    	provider.registerService("orion.edit.contentassist", new TernAssist.TernContentAssist(astManager, ternWorker, getEnvironments, CUProvider),  //$NON-NLS-1$
     			{
     				contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     				nls: 'javascript/nls/messages',  //$NON-NLS-1$
@@ -355,7 +356,7 @@ define([
     	});
 
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new GenerateDocCommand.GenerateDocCommand(astManager),
+    			new GenerateDocCommand.GenerateDocCommand(astManager, CUProvider),
     			{
     		name: javascriptMessages["generateDocName"],  //$NON-NLS-1$
     		tooltip : javascriptMessages['generateDocTooltip'],  //$NON-NLS-1$
@@ -383,13 +384,17 @@ define([
 		});
 		//TODO
 		if ("true" === localStorage.getItem("darklaunch")) {
-			var refscommand = new RefsCommand(ternWorker, scriptresolver);
+			var refscommand = new RefsCommand(ternWorker, 
+							astManager,
+							scriptresolver,
+							CUProvider,
+							new mGSearchClient.GSearchClient({serviceRegistry: core.serviceRegistry, fileClient: fileClient}));
 
 	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
 	    			{
 						execute: function(editorContext, options) {
 							options.kind ='workspace'; //$NON-NLS-1$
-							refscommand.execute(editorContext, options);
+							return refscommand.execute(editorContext, options);
 						}
 					},
 	    			{
@@ -405,7 +410,7 @@ define([
 	    			{
 						execute: function(editorContext, options) {
 							options.kind ='project'; //$NON-NLS-1$
-							refscommand.execute(editorContext, options);
+							return refscommand.execute(editorContext, options);
 						}
 					},
 	    			{
@@ -421,17 +426,18 @@ define([
 		//TODO
 		if ("true" === localStorage.getItem("darklaunch")) {
 	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-	    			new OpenImplCommand.OpenImplementationCommand(astManager, scriptresolver, ternWorker, CUProvider),  //$NON-NLS-1$
+	    			new OpenImplCommand.OpenImplementationCommand(astManager, ternWorker, CUProvider),  //$NON-NLS-1$
 	    			{
 	    		name: javascriptMessages["openImplName"],  //$NON-NLS-1$
 	    		tooltip : javascriptMessages['openImplTooltip'],  //$NON-NLS-1$
 	    		id : "open.js.impl",  //$NON-NLS-1$
-	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+	    		contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+    		key : [ 114, true, false, false, false],  //$NON-NLS-1$
 	    			}
 	    	);
 		}
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new RenameCommand.RenameCommand(astManager, ternWorker, scriptresolver),
+    			new RenameCommand.RenameCommand(astManager, ternWorker, scriptresolver, CUProvider),
     			{
     		name: javascriptMessages['renameElement'],  //$NON-NLS-1$
     		tooltip : javascriptMessages['renameElementTooltip'],  //$NON-NLS-1$

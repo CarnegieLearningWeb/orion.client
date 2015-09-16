@@ -59,7 +59,7 @@ define([
 			        proposal.style = 'emphasis'; //$NON-NLS-1$
 					this.removePrefix(prefix, proposal);
 					proposal.kind = 'js'; //$NON-NLS-1$
-					if (kind.kind === 'jsdoc' || kind.kind === 'doc'){
+					if (k && (k === 'jsdoc' || k === 'doc')) {
 						//TODO proposal.tags = [{content: '@', cssClass: 'iconTagBlue'}]; //$NON-NLS-1$ //$NON-NLS-2$
 					}
 					proposals.push(proposal);
@@ -250,7 +250,7 @@ define([
 	 */
 	function createDocProposals(params, kind, ast, buffer, pluginenvs) {
 	    var proposals = [];
-	    if(typeof(kind) !== 'object') {
+	    if(!kind) {
 	    	return proposals;
 	    }
 	    if(kind.kind === 'jsdoc') {
@@ -458,11 +458,13 @@ define([
 	 * @param {javascript.ASTManager} astManager An AST manager to create ASTs with
 	 * @param {TernWorker} ternWorker The worker running Tern
 	 * @param {Function} pluginEnvironments The function to use to query the Tern server for contributed plugins
+	 * @param {Object} cuprovider The CU Provider that caches compilation units
 	 */
-	function TernContentAssist(astManager, ternWorker, pluginEnvironments) {
+	function TernContentAssist(astManager, ternWorker, pluginEnvironments, cuprovider) {
 		this.astManager = astManager;
 		this.ternworker = ternWorker;
 		this.pluginenvs = pluginEnvironments;
+		this.cuprovider = cuprovider;
 		this.timeout = null;
 	}
 
@@ -486,17 +488,17 @@ define([
 			return editorContext.getFileMetadata().then(function(meta) {
 			    if(meta.contentType.id === 'text/html') {
 			        return editorContext.getText().then(function(text) {
-			            var blocks = Finder.findScriptBlocks(text);
-			            if(blocks && blocks.length > 0) {
-			                var cu = new CU(blocks, meta);
-        			        if(cu.validOffset(params.offset)) {
-        			            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
-        			            	return that.pluginenvs().then(function(envs) {
-        			            		return that.doAssist(ast, params, meta, {ecma5:true, ecma6:true, browser:true}, envs, text);
-        			            	});
-                    			});
-        			        }
+			        	var cu = that.cuprovider.getCompilationUnit(function(){
+		            		return Finder.findScriptBlocks(text);
+		            	}, meta);
+    			        if(cu.validOffset(params.offset)) {
+    			            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
+    			            	return that.pluginenvs().then(function(envs) {
+    			            		return that.doAssist(ast, params, meta, {ecma5:true, ecma6:true, browser:true}, envs, text);
+    			            	});
+                			});
     			        }
+    			        return [];
 			        });
 			    } else {
 			        return that.astManager.getAST(editorContext).then(function(ast) {
@@ -530,9 +532,10 @@ define([
 				deferred = new Deferred();
 				deferred.proposals = proposals;
 				deferred.args = args;
-				
+				var that = this;
 				this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
 					function(response) {
+						clearTimeout(that.timeout);
 						if(deferred.proposals) {
 			        		deferred.resolve([].concat(sortProposals(response.proposals ? response.proposals : [], deferred.args), deferred.proposals));
 			        	} else {
@@ -550,7 +553,7 @@ define([
 						deferred.resolve([]/*Messages['noProposalsTimedOut']*/);
 					}
 					this.timeout = null;
-				}, 5000);
+				}, params.timeout ? params.timeout : 5000);
 				return deferred;
    			}
 		},

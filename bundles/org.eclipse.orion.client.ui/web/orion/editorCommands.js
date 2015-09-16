@@ -16,7 +16,6 @@ define([
 	'i18n!orion/edit/nls/messages',
 	'orion/i18nUtil',
 	'orion/webui/littlelib',
-	'orion/webui/dialogs/OpenResourceDialog',
 	'orion/widgets/input/DropDownMenu',
 	'orion/Deferred',
 	'orion/URITemplate',
@@ -33,7 +32,7 @@ define([
 	'orion/regex',
 	'orion/uiUtils',
 	'orion/util'
-], function(messages, i18nUtil, lib, openResource, DropDownMenu, Deferred, URITemplate, mCommands, mKeyBinding, mCommandRegistry, mExtensionCommands, mContentTypes, mSearchUtils, objects, mPageUtil, PageLinks, mAnnotations, regex, mUIUtils, util) {
+], function(messages, i18nUtil, lib, DropDownMenu, Deferred, URITemplate, mCommands, mKeyBinding, mCommandRegistry, mExtensionCommands, mContentTypes, mSearchUtils, objects, mPageUtil, PageLinks, mAnnotations, regex, mUIUtils, util) {
 
 	var exports = {};
 
@@ -176,6 +175,10 @@ define([
 			this._createClipboardCommands();
 			this._createSaveCommand();
 			return this._createEditCommands();
+		},
+		//TODO: We need a better way invoke side bar action 
+		setSideBar: function(sideBar) {
+			this.sideBar = sideBar;
 		},
 		getEditCommands: function() {
 			var commands = [];
@@ -886,8 +889,15 @@ define([
 						editorContext.setStatus = handleStatus;
 						
 						editor.focus();
-						serviceCall = service.execute(editorContext, context);
-						handleResult = null; // execute() returns nothing
+						serviceCall = service.execute(editorContext, context); 
+						handleResult = function(result){
+							if (result && result.searchParams && result.refResult) {
+								var refResult = result.refResult;
+								if(that.sideBar) {
+									that.sideBar.fillSearchPane(result.searchParams.keyword, {Location: result.searchParams.resource}, refResult, result.searchParams);
+								}
+							}
+						};
 					} else {
 						serviceCall = service.run(model.getText(selection.start,selection.end), model.getText(), selection, inputManager.getInput());
 						handleResult = function(result){

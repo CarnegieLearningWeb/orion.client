@@ -666,6 +666,7 @@ objects.mixin(EditorSetup.prototype, {
 			}
 		};
 		sidebar.create();
+		this.editorCommands.setSideBar(sidebar);
 		this.sidebarNavInputManager.addEventListener("rootChanged", function(evt) { //$NON-NLS-0$
 			this.lastRoot = evt.root;
 		}.bind(this));
@@ -732,6 +733,7 @@ objects.mixin(EditorSetup.prototype, {
 					var sel = editorView.editor.getSelection();
 					var currentHref = this.computeNavigationHref({Location: this.activeEditorViewer.inputManager.getInput()}, {start: sel.start, end: sel.end});
 					history.pushState({}, "", currentHref);
+					this.lastHash = PageUtil.hash(); // Pushing to the history stack changes the hash
 				}
 				var hash = href.split('#')[1];
 				if (hash === window.location.hash.substring(1)) {

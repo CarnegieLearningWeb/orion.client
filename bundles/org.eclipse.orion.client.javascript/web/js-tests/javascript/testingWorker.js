@@ -12,7 +12,9 @@
 /*eslint-env amd, browser*/
 /* eslint-disable missing-nls */
 define([
-], function() {
+'orion/xhr',
+'orion/URL-shim' //global, stays last
+], function(_xhr) {
 
 	/**
 	 * @description Create a new instance of the worker
@@ -101,7 +103,34 @@ define([
 							f(_d);
 							delete _instance.callbacks[id];
 						} else if(_d.request === 'read') {
-							_instance.postMessage({request: 'read', messageID: _d.messageID, args: {contents: _instance._state.buffer, file: _instance._state.file}});
+							var url, req, _f;
+							if(_d.args && _d.args.file) {
+								if(typeof(_d.args.file) === 'object') {
+									_f = 'js-tests/javascript/';
+									_f += _d.args.file.logical ? _d.args.file.logical : _d.args.file;
+									if(!/\.js$/g.test(_f)) {
+										_f += '.js';
+									}
+									url = new URL(_f, window.location.href);
+									_xhr('GET', url.href).then(function(response) {
+										_instance.postMessage({request: 'read', ternID: _d.ternID, args: {contents: response.response, file: response.url, logical: _d.args.file.logical}});
+									});
+								} else if(typeof(_d.args.file) === 'string') {
+									_f = _d.args.file;
+									if(!/\.js$/g.test(_f)) {
+										_f += '.js';
+									}
+									url = new URL(_f, window.location.href);
+									req = new XMLHttpRequest();
+									req.onload = function(response) {
+										_instance.postMessage({request: 'read', ternID: _d.ternID, args: {contents: response.target.response, file: response.target.responseURL}});
+									};
+									req.open('GET', url, true);
+									req.send();
+								}
+							} else {
+								_instance.postMessage({request: 'read', ternID: _d.ternID, args: {contents: _instance._state.buffer, file: _instance._state.file}});
+							}
 						} else if(typeof(_d.request) === 'string') {
 							//don't process requests other than the ones we want
 							return;

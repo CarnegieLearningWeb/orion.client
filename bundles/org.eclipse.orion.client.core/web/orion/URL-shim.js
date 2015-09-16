@@ -289,7 +289,9 @@
         var result = [];
         path.split("/").forEach(function(segment) {
             if (segment === "..") {
-                result.pop();
+            	if (result.length > 1) {
+                	result.pop();
+            	}
             } else if (segment !== ".") {
                 result.push(segment);
             }
@@ -412,6 +414,11 @@
     }
 
     Object.defineProperties(URL.prototype, {
+    	toString: {
+    		value: function() {
+    			return this.href;
+    		}		
+    	},
         href: {
             get: function() {
                 return this._url ? _serialize(this._url) : this._input;

@@ -14,9 +14,8 @@ define([
 'orion/objects',
 'javascript/finder',
 'orion/Deferred',
-'javascript/compilationUnit',
 'i18n!javascript/nls/messages'
-], function(Objects, Finder, Deferred, CU, Messages) {
+], function(Objects, Finder, Deferred, Messages) {
 
 	var deferred;
 	var cachedContext;
@@ -30,10 +29,11 @@ define([
 	 * @returns {javascript.commands.RenameCommand} A new command
 	 * @since 9.0
 	 */
-	function RenameCommand(ASTManager, ternWorker, scriptResolver) {
+	function RenameCommand(ASTManager, ternWorker, scriptResolver, CUProvider) {
 		this.astManager = ASTManager;
 		this.ternworker = ternWorker;
 		this.scriptResolver = scriptResolver;
+		this.cuprovider = CUProvider;
 		this.timeout = null;
 	}
 
@@ -45,19 +45,23 @@ define([
 		execute: function(editorContext, options) {
 			var that = this;
 			return editorContext.getFileMetadata().then(function(metadata) {
-				that.scriptResolver.setSearchLocation(metadata.parents[metadata.parents.length - 1].Location);
+				if(Array.isArray(metadata.parents) && metadata.parents.length > 1) {
+					that.scriptResolver.setSearchLocation(metadata.parents[metadata.parents.length - 1].Location);
+				} else {
+					that.scriptResolver.setSearchLocation(null);	
+				}
 			    if(options.contentType.id === 'application/javascript') {
 	    			return that._doRename(editorContext, options);
 			    } else {
 			        return editorContext.getText().then(function(text) {
-			            var offset = options.offset;
-			            var blocks = Finder.findScriptBlocks(text);
-			            if(blocks && blocks.length > 0) {
-			                var cu = new CU(blocks, {location:options.input, contentType:options.contentType});
-	    			        if(cu.validOffset(offset)) {
-	    			        	return that._doRename(editorContext, options);
-	    			        }
-				        }
+			        	var offset = options.offset;
+			        	var cu = that.cuprovider.getCompilationUnit(function(){
+		            		return Finder.findScriptBlocks(text);
+		            	}, {location:options.input, contentType:options.contentType});
+    			        if(cu.validOffset(offset)) {
+    			        	return that._doRename(editorContext, options);
+    			        }
+    			        return [];
 			        });
 			    }
 			});

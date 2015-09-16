@@ -17,11 +17,11 @@ define([
 		'orion/widgets/themes/ThemePreferences', 'orion/widgets/themes/container/ThemeData', 'orion/Deferred',
 		'orion/widgets/UserMenu', 'orion/PageLinks', 'orion/webui/dialogs/OpenResourceDialog', 'text!orion/banner/banner.html',
 		'text!orion/banner/toolbar.html',
-		'orion/util', 'orion/customGlobalCommands', 'orion/fileClient', 'orion/webui/SideMenu', 'orion/objects', "orion/metrics"
+		'orion/util', 'orion/customGlobalCommands', 'orion/fileClient', 'orion/webui/SideMenu', 'orion/objects', "orion/metrics",'orion/bidiUtils'
 	],
 	function (messages, require, splash, commonHTML, KeyBinding, EventTarget, mCommands, mParameterCollectors, mExtensionCommands,
 		mBreadcrumbs, lib, i18nUtil, mSplitter, mDropdown, mTooltip, mContentTypes, mKeyAssist, mThemePreferences, mThemeData, Deferred,
-		mUserMenu, PageLinks, openResource, BannerTemplate, ToolbarTemplate, util, mCustomGlobalCommands, mFileClient, SideMenu, objects, mMetrics) {
+		mUserMenu, PageLinks, openResource, BannerTemplate, ToolbarTemplate, util, mCustomGlobalCommands, mFileClient, SideMenu, objects, mMetrics, mBidiUtils) {
 	/**
 	 * This class contains static utility methods. It is not intended to be instantiated.
 	 *
@@ -711,7 +711,7 @@ define([
 
 		// open resource
 		var showingResourceDialog = false;
-		var openResourceDialog = function (searcher, serviceRegistry) {
+		var openResourceDialog = function (searcher, serviceRegistry, commandRegistry) {
 			if (showingResourceDialog) {
 				return;
 			}
@@ -721,6 +721,8 @@ define([
 				searcher: searcher,
 				progress: progress,
 				prefService: prefs,
+				serviceRegistry: serviceRegistry,
+				commandRegistry: commandRegistry,
 				searchRenderer: searcher.defaultRenderer,
 				onHide: function () {
 					showingResourceDialog = false;
@@ -737,7 +739,7 @@ define([
 			tooltip: messages["ChooseFileOpenEditor"],
 			id: "orion.openResource", //$NON-NLS-0$
 			callback: function (data) {
-				openResourceDialog(searcher, serviceRegistry);
+				openResourceDialog(searcher, serviceRegistry, commandRegistry);
 			}
 		});
 

@@ -195,6 +195,7 @@
 	padding-top: 5px;
 	margin: 0;
 	opacity: 1;
+	min-height: 35px;
 }
 
 .commitFilter.sectionWrapper.sectionClosed:hover {
@@ -202,7 +203,7 @@
 }
 
 .commitFilter .sectionTitle {
-	min-width: 80px;
+	width: 100px;
 	color: #333;
 	padding-left: 3px;
 }
@@ -243,8 +244,9 @@
 	padding-right: 22px;
 }
 
-.mainToolbar .sectionTableItemActions .commandImage {
-	color: inherit;
+html[dir="rtl"] .mainToolbar .gitFilterBox input { /* ACGC */
+	padding-left: 22px;
+	padding-right: 0px;
 }
 
 .auxpane .gitFilterBox input {
@@ -814,11 +816,6 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 
 .checkedRow .gitImageSprite {
 	color: white;
-}
-
-.checkedRow .commandButton {
-	color: white;
-	border-color: white;
 }
 
 .git-sprite-notsure{ background-position: 0 -216px; width: 16px; height: 16px; } 

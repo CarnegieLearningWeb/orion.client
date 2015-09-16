@@ -1,4 +1,5 @@
 /*eslint-env browser, amd*/
+/* eslint-disable missing-nls */
 define(function() {
 	require.config({
 		baseUrl: "..",
@@ -9,13 +10,7 @@ define(function() {
 	        i18n: 'requirejs/i18n',
 	        domReady: 'requirejs/domReady',
 	        gcli: 'gcli/gcli',
-	        util: 'gcli/util',
-	        esprima: 'esprima/esprima',
-	        estraverse: 'estraverse/estraverse',
-	        escope: 'escope/escope',
-	        logger: 'javascript/logger',
-	        csslint: 'csslint/csslint',
-	        doctrine: 'doctrine/doctrine'
+	        util: 'gcli/util'
 		}
 	});
 	function errback(err) {

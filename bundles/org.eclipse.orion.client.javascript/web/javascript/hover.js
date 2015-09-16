@@ -18,7 +18,7 @@ define([
 'orion/Deferred',
 'i18n!javascript/nls/messages',
 'orion/i18nUtil',
-'doctrine' //last, exports into global
+'doctrine/doctrine' //last, exports into global
 ], function(Objects, Finder, URITemplate, Deferred, Messages, i18nUtil) {
 
 	/**
@@ -258,21 +258,24 @@ define([
 		    	if (!meta){
 		    		return null;
 		    	}
-		    	that.resolver.setSearchLocation(meta.parents[meta.parents.length - 1].Location);
+		    	if(Array.isArray(meta.parents) && meta.parents.length > 1) {
+		    		that.resolver.setSearchLocation(meta.parents[meta.parents.length - 1].Location);	
+		    	} else {
+		    		that.resolver.setSearchLocation(null);
+		    	}
 		        if(meta && meta.contentType.id === 'application/javascript') {
 		            return that.astManager.getAST(editorContext).then(function(ast) {
         				return that._doHover(ast, ctxt, meta);
         			});
 		        }
 		        return editorContext.getText().then(function(text) {
-		            var blocks = Finder.findScriptBlocks(text);
-		            if(blocks && blocks.length > 0) {
-		            	var cu = that.cuprovider.getCompilationUnit(blocks, meta);
-    		            if(cu.validOffset(ctxt.offset)) {
-        		            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
-                				return that._doHover(ast, ctxt, meta, text);
-                			});
-            			}
+	            	var cu = that.cuprovider.getCompilationUnit(function(){
+	            			Finder.findScriptBlocks(text);
+	            		}, meta);
+		            if(cu.validOffset(ctxt.offset)) {
+    		            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
+            				return that._doHover(ast, ctxt, meta, text);
+            			});
         			}
         			return null;
 		        });
