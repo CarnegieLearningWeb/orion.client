@@ -1241,25 +1241,25 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			bufferedSelection = data.items;
 		};
 		
-		var cutCommand = new mCommands.Command({
-			name: messages["Cut"],
-			id: "eclipse.cut", //$NON-NLS-0$
-			callback: function(data) {
-				var navHandler = explorer.getNavHandler();
+		// var cutCommand = new mCommands.Command({
+		// 	name: messages["Cut"],
+		// 	id: "eclipse.cut", //$NON-NLS-0$
+		// 	callback: function(data) {
+		// 		var navHandler = explorer.getNavHandler();
 				
-				copyToBuffer(data);
+		// 		copyToBuffer(data);
 				
-				if (bufferedSelection.length) {
-					isCutInProgress = true;
-					// disable cut items in explorer
-					bufferedSelection.forEach(function(cutItem){
-						navHandler.disableItem(cutItem);
-					});
-				}
-			},
-			visibleWhen: oneOrMoreFilesOrFolders
-		});
-		commandService.addCommand(cutCommand);
+		// 		if (bufferedSelection.length) {
+		// 			isCutInProgress = true;
+		// 			// disable cut items in explorer
+		// 			bufferedSelection.forEach(function(cutItem){
+		// 				navHandler.disableItem(cutItem);
+		// 			});
+		// 		}
+		// 	},
+		// 	visibleWhen: oneOrMoreFilesOrFolders
+		// });
+		// commandService.addCommand(cutCommand);
 		
 		var copyToBufferCommand = new mCommands.Command({
 			name: messages["Copy"],
