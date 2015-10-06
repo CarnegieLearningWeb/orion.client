@@ -114,6 +114,7 @@ define({//Default message bundle
 	"Writing .gitignore rules" : "Writing .gitignore rules", //$NON-NLS-0$  //$NON-NLS-1$ 
 	"Save Patch": "Save Patch", //$NON-NLS-0$  //$NON-NLS-1$
 	"Unstage the change": "Unstage the change", //$NON-NLS-0$  //$NON-NLS-1$
+	"EmptyUnstageWarning": "Please select at least one file to unstage", //$NON-NLS-0$  //$NON-NLS-1$ 
 	"Unstaging...": "Unstaging...", //$NON-NLS-0$  //$NON-NLS-1$
 	"Undo": "Undo", //$NON-NLS-0$  //$NON-NLS-1$
 	"UndoTooltip": "Revert this commit, keeping all changed files and not making any changes to the working directory.", //$NON-NLS-0$  //$NON-NLS-1$
@@ -567,5 +568,9 @@ define({//Default message bundle
 	'Ssh Private Key:' : 'Ssh Private Key:', //$NON-NLS-0$  //$NON-NLS-1$
 	'Ssh Passphrase:' : 'Ssh Passphrase:', //$NON-NLS-0$  //$NON-NLS-1$
 	'confirmUnsavedChanges': 'There are unsaved changes. Do you want to save them?', //$NON-NLS-1$ //$NON-NLS-0$
-	'NewConfigurationEntryTooltip': "Add a new entry to the repository configuration" //$NON-NLS-1$ //$NON-NLS-0$
+	'NewConfigurationEntryTooltip': "Add a new entry to the repository configuration", //$NON-NLS-1$ //$NON-NLS-0$
+	'Configurations' : "Configurations", //$NON-NLS-0$  //$NON-NLS-1$
+	'DetachedHead ${0}' : "Detached HEAD @ ${0}", //$NON-NLS-1$ //$NON-NLS-0$
+	'SingleSubmodule' : "${0} (${1} submodule)", //$NON-NLS-1$ //$NON-NLS-0$
+	'PluralSubmodule' : "${0} (${1} submodules)" //$NON-NLS-1$ //$NON-NLS-0$
 });

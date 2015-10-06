@@ -32,17 +32,6 @@
         gcli: 'gcli/gcli',
         util: 'gcli/util'
     },
-    packages: [
-        {
-            name: "eslint",
-            location: "eslint/lib",
-            main: "eslint"
-        },
-        // As eslint/conf/ is not located in eslint/lib/, override the previous package
-        {
-            name: "eslint/conf",
-            location: "eslint/conf"
-        }],
     // Bundles whose ./web/ folders will be copied into the staging directory by the builder.
     // ** For Nashorn compatibility, use single quotes here **
     bundles: [
@@ -133,6 +122,7 @@
             { name: "sites/sites" },
             { name: "sites/view" },
             { name: "webtools/plugins/webToolsPlugin" },
+            { name: "orion/splash" },
         ];
         modules.forEach(function(module) {
             module.excludeShallow = ["chai/chai"];

@@ -18,7 +18,7 @@ define([
 'orion/plugin',
 'orion/bootstrap',
 'orion/Deferred',
-'orion/fileClient',
+'orion/fileClient', 
 'orion/metrics',
 'esprima/esprima',
 'estraverse/estraverse',
@@ -367,7 +367,7 @@ define([
     	);
 
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-    			new OpenDeclCommand.OpenDeclarationCommand(astManager, scriptresolver, ternWorker, CUProvider, "replace"),  //$NON-NLS-1$
+    			new OpenDeclCommand.OpenDeclarationCommand(astManager, ternWorker, CUProvider, "replace"),  //$NON-NLS-1$
     			{
     		name: javascriptMessages["openDeclName"],  //$NON-NLS-1$
     		tooltip : javascriptMessages['openDeclTooltip'],  //$NON-NLS-1$
@@ -710,6 +710,19 @@ define([
                     ]
                 }
         );
+
+		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+    			quickFixComputer,
+    			{
+        			name: javascriptMessages["noNewArrayFixName"],  //$NON-NLS-1$
+        			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+        			id : "no.new.array.literal.fix",  //$NON-NLS-1$
+        			contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+        			validationProperties: [
+                        {source: "annotation:id", match: "^(?:no-new-array)$"} //$NON-NLS-1$ //$NON-NLS-2$
+                    ]
+    			}
+    	);
 
     	/**
     	 * legacy pref id

@@ -120,6 +120,11 @@ define([
 					that.changedItem();
 				}
 				break;
+			case "addClone": //$NON-NLS-0$
+				if(!that.repository){
+					that.changedItem();
+				}
+				break;
 			case "removeBranch": //$NON-NLS-0$
 			case "removeRemote": //$NON-NLS-0$
 			case "removeTag": //$NON-NLS-0$
@@ -347,7 +352,7 @@ define([
 			return;
 		}
 		this.statusDeferred = this.displayStatus(this.repository).then(function() {
-			if (changes.length === 0) {
+			if (changes.length === 0 && !this.repository.status.promise) {
 				this.changes = [this.repository.status];
 			}
 		}.bind(this));
@@ -587,8 +592,12 @@ define([
 		var activeBranch = explorer.model.getActiveBranch();
 		var targetRef = explorer.model.getTargetReference();
 		if (activeBranch && targetRef) {
-			var targetName =  util.shortenRefName(targetRef);
-			title = activeBranch.Name + " => " + targetName;  //$NON-NLS-0$
+			if (!activeBranch.Current) {
+				title = i18nUtil.formatMessage(messages['DetachedHead ${0}'], util.shortenRefName(explorer.model.log.Children[0])); 
+			} else {
+				var targetName =  util.shortenRefName(targetRef);
+				title = activeBranch.Name + " => " + targetName;  //$NON-NLS-0$
+			}
 		} else if (!activeBranch && !targetRef) {
 			title = messages["NoActiveBranch"];
 		} else if (!activeBranch && targetRef) {
@@ -750,6 +759,7 @@ define([
 			dropdown: true,
 			noTwistie: true,
 			noArrow: true,
+			tooltip: messages["Configurations"],
 			preferenceService: this.preferencesService
 		});
 			

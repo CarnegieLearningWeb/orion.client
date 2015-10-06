@@ -19,6 +19,8 @@ define(['require', 'orion/Deferred', 'orion/serviceregistry', 'orion/preferences
 		if (once) {
 			return once;
 		}
+		var pageLoader = require.specified("orion/splash") && require("orion/splash");
+		if (pageLoader) pageLoader.nextStep();
 		once = new Deferred();
 		
 		// initialize service registry and EAS services
@@ -33,18 +35,19 @@ define(['require', 'orion/Deferred', 'orion/serviceregistry', 'orion/preferences
 				var url = require.toUrl(key);
 				configuration.plugins[url] = pluginsPreference[key];
 			});
-			var pluginRegistry = new mPluginRegistry.PluginRegistry(serviceRegistry, configuration);	
+			var pluginRegistry = new mPluginRegistry.PluginRegistry(serviceRegistry, configuration);
+			if (pageLoader) {
+				pageLoader.setPluginRegistry(pluginRegistry);
+			}
 			return pluginRegistry.start().then(function() {
 				if (serviceRegistry.getServiceReferences("orion.core.preference.provider").length > 0) { //$NON-NLS-0$
-					return preferences.getPreferences("/plugins", preferences.USER_SCOPE).then(function(pluginsPreference) { //$NON-NLS-0$
+					return preferences.getPreferences("/plugins", mPreferences.PreferencesService.USER_SCOPE).then(function(pluginsPreference) { //$NON-NLS-0$
 						var installs = [];
 						pluginsPreference.keys().forEach(function(key) {
 							var url = require.toUrl(key);
 							if (!pluginRegistry.getPlugin(url)) {
 								installs.push(pluginRegistry.installPlugin(url,{autostart: "lazy"}).then(function(plugin) {
-									return plugin.update().then(function() {
-										return plugin.start({lazy:true});
-									});
+									return plugin.start({lazy:true});
 								}));
 							}
 						});	
@@ -82,6 +85,7 @@ define(['require', 'orion/Deferred', 'orion/serviceregistry', 'orion/preferences
 					preferences: preferences,
 					pluginRegistry: pluginRegistry
 				};
+				if (pageLoader) pageLoader.nextStep();
 				once.resolve(result);
 				return result;
 			});

@@ -29,6 +29,7 @@ define([
 	var astManager = new ASTManager.ASTManager(Esprima);
 	var jsFile = 'tern_content_assist_test_script.js';
 	var htmlFile = 'tern_content_assist_test_script.html';
+	var timeoutReturn = ['Content assist timed out'];
 
 	/**
 	 * @description Sets up the test
@@ -74,7 +75,7 @@ define([
 			}
 		};
 		astManager.onModelChanging({file: {location: file}});
-		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line};
+		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, timeout: options.timeout ? options.timeout : 20000, timeoutReturn: timeoutReturn};
 		return {
 			editorContext: editorContext,
 			params: params
@@ -123,6 +124,9 @@ define([
 		ternAssist.computeContentAssist(_p.editorContext, _p.params).then(function (actualProposals) {
 			try {
 				assert(actualProposals, "Error occurred, returned proposals was undefined");
+				if (actualProposals === timeoutReturn){
+					assert(false, "The content assist operation timed out");
+				}
 				assert.equal(actualProposals.length, expectedProposals.length,
 					"Wrong number of proposals.  Expected:\n" + stringifyExpected(expectedProposals) +"\nActual:\n" + stringifyActual(actualProposals));
 				for (var i = 0; i < actualProposals.length; i++) {
@@ -1146,8 +1150,7 @@ define([
 					offset: 47,
 					callback: done};
 				return testProposals(options, [
-				//TODO we should see a return type here
-					["xx()", "xx()"]
+					["xx()", "xx() : number"]
 				]);
 			});
 			it("test @type var type 14", function(done) {
@@ -1180,8 +1183,7 @@ define([
 					offset: 63,
 					callback: done};
 				return testProposals(options, [
-					//TODO should be a standin type for return
-					["xx()", "xx()"]
+					["xx()", "xx() : number"]
 				]);
 			});
 			it("test @type var type 17", function(done) {
@@ -2576,7 +2578,7 @@ define([
 					callback: done
 				};
 				return testProposals(options, [
-					["first()", "first()"]
+					["first()", "first() : {a: number, b: string}"]
 				]);
 			});
 			it("test function return types 22", function(done) {
@@ -2587,7 +2589,7 @@ define([
 					callback: done
 				};
 				return testProposals(options, [
-					["first()", "first() : a"]
+					["first()", "first() : fn() -> a"]
 				]);
 			});
 			it("test function return types 23", function(done) {
@@ -2942,7 +2944,7 @@ define([
 					offset: 64,
 					callback: done};
 				testProposals(options, [
-					['z(a)', 'z(a)']
+					['z(a)', 'z(a) : {}']
 				]);
 			});
 		});

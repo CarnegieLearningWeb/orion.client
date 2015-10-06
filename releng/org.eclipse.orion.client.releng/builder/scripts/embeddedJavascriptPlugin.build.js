@@ -20,17 +20,6 @@
         json: "requirejs/json", 
         'orion/bootstrap': 'embeddedEditor/builder/buildFrom/bootstrap'
 	},
-	packages: [
-		{
-			name: "eslint/conf",
-			location: "eslint/conf"
-		},
-		{
-			name: "eslint",
-			location: "eslint/lib",
-			main: "eslint"
-		},
-	],
 	name: "almond",
 	//locales: ["ja", "zh", "zh-tw", "fr", "de", "it", "es", "pt-br"],						
 	include: "javascript/plugins/javascriptPlugin",

@@ -21,7 +21,7 @@ hard-coded numbers elsewhere.
 
 /* $HeaderHeight */
 .headerLayout {
-	height: 60px;
+	height: 50px;
 }
 
 /* $ToolbarHeight */
@@ -808,34 +808,126 @@ and (max-device-width : 1024px)  {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	background-color: #37474F;
-	z-index: 1000;
-	display: none;
-	align-items: center;
+	background-color: rgb(57,75,84)/*rgb(38,52,63)*/;
+	z-index: 149;
+	display: block;
+	box-shadow: 0 3px 7pt 0 rgba(0,0,0,0.3) inset;
 }
 
-.splashShown {
+.splashSeeThroughX {
+	-webkit-animation-name: splashSeeThrough;
+	animation-name: splashSeeThrough;
+	animation-duration: 0.7s;
+	background-color: rgba(38,52,63, 0.7);
+}
+
+@-webkit-keyframes splashSeeThrough { 
+	from {background-color: rgb(38,52,63);}
+	to {background-color: rgba(38,52,63, 0.7);}
+}
+
+@keyframes splashSeeThrough { 
+	from {background-color: rgb(38,52,63);}
+	to {background-color: rgba(38,52,63, 0.7);}
+}
+
+
+.splashContainer {
+    display: flex;
+	display: -webkit-flex;
+    align-items: center;
+    -webkit-align-items: center;
+    justify-content: center;
+    -webkit-justify-content: center;
+    height:100%;
+    flex-direction: column;
+    -webkit-flex-direction: column;
+    font-family: sans-serif;
+    font-size: 14px;
+}
+
+.splashLoader {
+    display: flex;
+	display: -webkit-flex;
+    height:300px;
+    width:400px;
+    flex-direction: column;
+    -webkit-flex-direction: column;
+    align-items: center;
+    -webkit-align-items: center;
+	background-color: rgb(57,75,84);
+	padding: 20px;
+	padding-top: 60px;
+	padding-bottom: 0px;
+	border-radius: 4px;
+	Xbox-shadow: 5px 5px 5px 0 rgba(0,0,0,0.2);
+	Xborder-bottom: 1px solid rgb(59,222,255);
+}
+
+.splashAbout {
+    text-align: center;
+	color: #FFFFFF;
+	font-size:16px;
+	font-family: 'helvetica';
+	font-weight: bold;
+	margin-bottom: 10px;
+}
+
+.splashSteps {
+	margin:20px; 
+    max-width: 300px;
+}
+
+.splashStep {
 	display: flex;
+	display: -webkit-flex;
+	flex-direction: row;
+    -webkit-flex-direction: row;
+	padding-top: 10px;
+	padding-bottom:10px;
+	height:24px;
 }
 
-.splashProgress {
-	font-size: 20px;
-	width: 100%;
-	text-align: center;
-	margin-top: -20px;
+.splashMessage {
 	color: white;
+	font-size: 12px;
+}
+
+.splashDetailedMessage {
+	color: white;
+	font-size: 12px;
+}
+
+.splashVisual {
+	width: 24px;
+}
+
+.splashVerbal {
+	margin-left:20px;
+	color: #3BDEFF;
+	font-family: 'helvetica';
+	font-weight: bold;
+	margin-top: 3px; /* should not have to do this */
+}
+
+.splashVerbalwaiting {
+	color:grey;
+}
+
+.splashLoadingImage {
+	background: url(../images/loading_24.gif) no-repeat top left;
 	vertical-align: middle;
+	display: inline-block;
+	border: none;	
+	height:24px;
+	width:24px;
 }
 
-.splashProgress .core-sprite-progress {
-	display:inline-block;
-	border-color:white;
-	width:20px;
-	height:20px;
+.splashSuccessImage {
+	background: url(../images/message_success_24.png) no-repeat top left;
+	vertical-align: middle;
+	display: inline-block;
+	border: none;	
+	height:24px;
+	width:24px;
 }
-
-.splashProgressLabel {
-	position:relative;
-	top:-6px;
-}
-

@@ -110,14 +110,19 @@ define([
 			} else if (parentItem.Type === "RepoRoot") { //$NON-NLS-0$
 				Deferred.when (this.repositories || this.progressService.progress(this.gitClient.getGitClone(that.location), messages["Getting git repository details"]), function(resp){
 					var repositories = that.repositories = resp.Children || resp;
-					var allInfoDeferreds = repositories.map(function(repo) {
-						return repo.infoDeferred = that.loadRepositoryInfo(repo);
-					});
+					var processedChildren = that.processChildren(parentItem, repositories);
 					function done() {
 						if (progress) progress.done();
 					}
-					Deferred.all(allInfoDeferreds).then(done, done);
-					onComplete(that.processChildren(parentItem, repositories));
+					if (repositories.length > 0) {
+						var allInfoDeferreds = processedChildren.map(function(repo) {
+							return repo.infoDeferred = that.loadRepositoryInfo(repo);
+						});
+						Deferred.all(allInfoDeferreds).then(done, done);
+					} else {
+						done();
+					}
+					onComplete(processedChildren);
 				}, function(error){
 					if (progress) progress.done();
 					that.handleError(error);
@@ -143,6 +148,22 @@ define([
 				return repo1.Name.localeCompare(repo2.Name);
 			});
 			parentItem.children = children;
+			
+			function attachChildren(repo, array) {
+				array.push(repo);
+				if (repo.Children) {
+					for (var j=0; j<repo.Children.length; j++) {
+						attachChildren(repo.Children[j], array);
+					}
+				}
+			}
+			
+			var rootRepo = [];
+			for (var i=0; i<children.length; i++) {
+				attachChildren(children[i], rootRepo);
+			}
+			
+			children = rootRepo;			
 			return children;
 		},
 		getId: function(/* item */ item){
@@ -286,19 +307,26 @@ define([
 				case 0:
 					var explorer = this.explorer;
 					var repo = item;
-				
 					td = document.createElement("td"); //$NON-NLS-0$
 					div = document.createElement("div"); //$NON-NLS-0$
 					div.className = "sectionTableItem"; //$NON-NLS-0$
 					td.appendChild(div);
 					var horizontalBox = document.createElement("div"); //$NON-NLS-0$
 					horizontalBox.className = "gitListCell"; //$NON-NLS-0$
+					
+					if (item.Parents) {
+						var len = item.Parents.length;
+						if (len > 0) {
+							horizontalBox.style.paddingLeft = (len * 25).toString() + "px";
+						}
+					}
+					
 					div.appendChild(horizontalBox);	
 					
 					var actionsID, title, description, subDescription, extraDescriptions = [], titleClass = "", titleLink;
 					if (item.Type === "NoContent") { //$NON-NLS-0$
 						title = messages[item.Type];
-					} else if (item.parent.Type === "RepoRoot") { //$NON-NLS-0$
+					} else if ((item.Type === "Clone" && !item.parent) || item.parent.Type === "RepoRoot") { //$NON-NLS-0$
 						if (explorer.showLinks) {
 							titleLink = require.toUrl(repoTemplate.expand({resource: repo.Location}));
 						} else {
@@ -328,8 +356,18 @@ define([
 									extraDescriptions.push(commitsState > 0 ? i18nUtil.formatMessage(messages["NCommitsToPush"], commitsState) : messages["Nothing to push."]);
 								}
 							}
+							
+							title = repo.Name;
+							if (item.Children) {
+								var subLength = item.Children.length;
+								if (subLength === 1) {
+									title = i18nUtil.formatMessage(messages["SingleSubmodule"], repo.Name, subLength);
+								} else {
+									title = i18nUtil.formatMessage(messages["PluralSubmodule"], repo.Name, subLength);
+								}
+							}
 							if (repo.infoDeferred) {
-								title = repo.Name + ellipses;
+								title = title + ellipses;
 								if (explorer.mode === "full") extraDescriptions.push(ellipses); //$NON-NLS-0$
 								repo.infoDeferred.then(function() {
 									if (explorer.destroyed) return;

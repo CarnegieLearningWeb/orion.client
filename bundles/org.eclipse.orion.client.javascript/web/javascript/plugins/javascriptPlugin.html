@@ -6,20 +6,10 @@
 	<script src="../../requirejs/require.js"></script>
 	<script>
 		/*eslint-env browser, amd*/	
+		/* eslint-disable missing-nls */
 		require(["../../orion/require-config.js"], function(config){
 			require.config({
-				baseUrl: "../../",
-				packages: [
-					{
-						name: "eslint/conf",
-						location: "eslint/conf"
-					},
-					{
-						name: "eslint",
-						location: "eslint/lib",
-						main: "eslint"
-					},
-				]
+				baseUrl: "../../"
 			});
 			require(["javascript/plugins/javascriptPlugin"], null, config.errback);
 		});
@@ -73,9 +63,9 @@
                 <td><a href="https://github.com/Constellation/estraverse/blob/1.9.0/LICENSE.BSD">License</a></td>
             </tr>
             <tr>
-                <td>Tern 0.10.0</td>
-                <td><a href="https://github.com/marijnh/tern/blob/0.10.0/README.md">Readme</a></td>
-                <td><a href="https://github.com/marijnh/tern/blob/0.10.0/LICENSE">License</a></td>
+                <td>Tern 0.12.0</td>
+                <td><a href="https://github.com/marijnh/tern/blob/0.12.0/README.md">Readme</a></td>
+                <td><a href="https://github.com/marijnh/tern/blob/0.12.0/LICENSE">License</a></td>
             </tr>
         </table>
 	</div>

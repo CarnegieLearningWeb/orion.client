@@ -11,17 +11,17 @@
  *******************************************************************************/
 /*eslint-env browser, amd*/
 define([
-		'i18n!orion/nls/messages', 'require', 'orion/splash', 'orion/commonHTMLFragments', 'orion/keyBinding', 'orion/EventTarget', 'orion/commands',
+		'i18n!orion/nls/messages', 'require', 'orion/commonHTMLFragments', 'orion/keyBinding', 'orion/EventTarget', 'orion/commands',
 		'orion/parameterCollectors', 'orion/extensionCommands', 'orion/breadcrumbs', 'orion/webui/littlelib', 'orion/i18nUtil',
 		'orion/webui/splitter', 'orion/webui/dropdown', 'orion/webui/tooltip', 'orion/contentTypes', 'orion/keyAssist',
 		'orion/widgets/themes/ThemePreferences', 'orion/widgets/themes/container/ThemeData', 'orion/Deferred',
-		'orion/widgets/UserMenu', 'orion/PageLinks', 'orion/webui/dialogs/OpenResourceDialog', 'text!orion/banner/banner.html',
+		'orion/widgets/UserMenu', 'orion/PageLinks', 'orion/webui/dialogs/OpenResourceDialog', '!orion/banner/banner',
 		'text!orion/banner/toolbar.html',
 		'orion/util', 'orion/customGlobalCommands', 'orion/fileClient', 'orion/webui/SideMenu', 'orion/objects', "orion/metrics",'orion/bidiUtils'
 	],
-	function (messages, require, splash, commonHTML, KeyBinding, EventTarget, mCommands, mParameterCollectors, mExtensionCommands,
+	function (messages, require, commonHTML, KeyBinding, EventTarget, mCommands, mParameterCollectors, mExtensionCommands,
 		mBreadcrumbs, lib, i18nUtil, mSplitter, mDropdown, mTooltip, mContentTypes, mKeyAssist, mThemePreferences, mThemeData, Deferred,
-		mUserMenu, PageLinks, openResource, BannerTemplate, ToolbarTemplate, util, mCustomGlobalCommands, mFileClient, SideMenu, objects, mMetrics, mBidiUtils) {
+		mUserMenu, PageLinks, openResource, Banner, ToolbarTemplate, util, mCustomGlobalCommands, mFileClient, SideMenu, objects, mMetrics, mBidiUtils) {
 	/**
 	 * This class contains static utility methods. It is not intended to be instantiated.
 	 *
@@ -47,11 +47,13 @@ define([
 				dropdown: userDropdown,
 				serviceRegistry: serviceRegistry
 			});
+			var optionsLabel = messages['Options'];
 			var dropdownTrigger = lib.node("userTrigger"); //$NON-NLS-0$
+			dropdownTrigger.setAttribute("aria-label", optionsLabel);
 
 			new mTooltip.Tooltip({
 				node: dropdownTrigger,
-				text: messages['Options'],
+				text: optionsLabel,
 				position: ["below", "left"] //$NON-NLS-1$ //$NON-NLS-0$
 			});
 
@@ -567,22 +569,23 @@ define([
 	 * @param {Boolean} closeSplitter true to make the splitter's initial state "closed".
 	 */
 	function generateBanner(parentId, serviceRegistry, commandRegistry, prefsService, searcher, handler, /* optional */ editor, closeSplitter, fileClient) {
-		if (localStorage.consoleMetrics) {
-			serviceRegistry.registerService("orion.metrics", {
-				/** @callback */
-				logEvent: function(category, action, label, value) {
-				},
-				logTiming: function(timingCategory, timingVar, timingValue, timingLabel) {
-					if (timingCategory === "page" && timingVar === "complete") {
-						splash.takeDown();
-					}
-					window.console.log(timingCategory + " " + timingVar + " " + timingValue + " " + timingLabel);
-				},
-				/** @callback */
-				pageLoad: function(href, page, title, args) {
+		var pageLoader = require.specified("orion/splash") && require("orion/splash");
+		serviceRegistry.registerService("orion.metrics", {
+			/** @callback */
+			logEvent: function(category, action, label, value) {
+			},
+			logTiming: function(timingCategory, timingVar, timingValue, timingLabel) {
+				if (timingCategory === "page" && timingVar === "complete") {
+					if (pageLoader) pageLoader.takeDown();
 				}
-			}, {});
-		}
+				if (localStorage.consoleMetrics) {
+					window.console.log(timingCategory + " " + timingVar + " " + timingValue + " " + timingLabel);
+				}
+			},
+			/** @callback */
+			pageLoad: function(href, page, title, args) {
+			}
+		}, {});
 		mMetrics.initFromRegistry(serviceRegistry);
 		prefsService.addChangeListener(function(name, value) {
 			if (value.length < METRICS_MAXLENGTH && name.indexOf("/git/credentials/")) { //$NON-NLS-0$
@@ -611,22 +614,15 @@ define([
 			throw i18nUtil.formatMessage("could not find banner parent, id was ${0}", parentId);
 		}
 		// place the HTML fragment for the header.
-		var range = document.createRange();
-		range.selectNode(parent);
-		var headerFragment = range.createContextualFragment(BannerTemplate);
-		// do the i18n string substitutions
-		lib.processTextNodes(headerFragment, messages);
-
-		if (parent.firstChild) {
-			parent.insertBefore(headerFragment, parent.firstChild);
-		} else {
-			parent.appendChild(headerFragment);
-		}
+		new Banner().create(parent);
+		
 		// TODO not entirely happy with this. Dynamic behavior that couldn't be in the html template, maybe it could be
 		// dynamically bound in a better way like we do with NLS strings
 		var home = lib.node("home"); //$NON-NLS-0$
-		home.href = require.toUrl("edit/edit.html"); //$NON-NLS-0$
-		home.setAttribute("aria-label", messages['Orion Home']); //$NON-NLS-1$ //$NON-NLS-0$
+		if (home) {
+			home.href = require.toUrl("edit/edit.html"); //$NON-NLS-0$
+			home.setAttribute("aria-label", messages['Orion Home']); //$NON-NLS-1$ //$NON-NLS-0$
+		}
 
 		var toolbar = lib.node("pageToolbar"); //$NON-NLS-0$
 		if (toolbar) {

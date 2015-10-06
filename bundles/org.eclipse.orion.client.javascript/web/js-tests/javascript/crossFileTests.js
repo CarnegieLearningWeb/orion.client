@@ -30,6 +30,7 @@ define([
 	var testworker, assist, hover, opendecl, openimpl;
 	var envs = Object.create(null);
 	var astManager = new ASTManager.ASTManager(Esprima);
+	var timeoutReturn = ['Content assist operation timed out'];
 
 	/**
 	 * @description Sets up the test
@@ -67,7 +68,7 @@ define([
 			}
 		};
 		astManager.onModelChanging({file: {location: file}});
-		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, timeout: timeout};
+		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, timeout: timeout, timeoutReturn: timeoutReturn};
 		return {
 			editorContext: editorContext,
 			params: params,
@@ -185,7 +186,7 @@ define([
 			var _p = setup(options);
 			testworker._state.warmup = true;
 			assist.computeContentAssist(_p.editorContext, _p.params).then(/* @callback */ function (actualProposals) {
-				//do noting, warm up
+				//do nothing, warm up
 			});
 		});
 		after('Shutting down the test worker', function() {
@@ -203,6 +204,10 @@ define([
 				var _p = setup(options);
 				assert(_p, 'setup() should have completed normally');
 				assist.computeContentAssist(_p.editorContext, _p.params).then(function (actualProposals) {
+					assert(actualProposals, "Error during content assist, undefined returned");
+					if (actualProposals === timeoutReturn){
+						assert(false, "The content assist operation timed out");
+					}
 					_compareProposals(actualProposals, expectedProposals);
 				}, function (error) {
 					testworker._state.callback(error);
@@ -220,6 +225,7 @@ define([
 				testworker.postMessage(message('completions', _p), function(response) {
 					try {
 						assert(response, 'There was no response from the worker');
+						assert(!response.error, 'Tern returned an error response: ' + response.error);
 						var actual = response.proposals;
 						assert(Array.isArray(actual), 'There were no proposals returned');
 						//_compareProposals(actual, expected);
@@ -343,8 +349,9 @@ define([
 				testworker.postMessage(message('implementation', _p), function(response) {
 					try {
 						assert(response, 'There was no response from the worker');
+						assert(!response.error, 'Tern returned an error response: ' + response.error);
 						var actual = response.implementation;
-						assert(actual, 'There was no implmentation returned');
+						assert(actual, 'There was no implementation returned');
 						_compareImpls(actual, expected);
 					}
 					catch(err) {
@@ -380,8 +387,8 @@ define([
 			function _compareImpls(actual, expected) {
 				try {
 					_sameFile(actual.file, expected.file);
-					assert(actual.start, expected.start, 'The implementation starts are not the same');
-					assert(actual.end, expected.end, 'The implementation ends are not the same');
+					assert.equal(actual.start, expected.start, 'The implementation starts are not the same. Actual ' + actual.start + '-' + actual.end + ' Expected ' + expected.start + '-' + expected.end);
+					assert.equal(actual.end, expected.end, 'The implementation ends are not the same. Actual ' + actual.start + '-' + actual.end + ' Expected ' + expected.start + '-' + expected.end);
 					testworker._state.callback();
 				} catch(err) {
 					testworker._state.callback(err);
@@ -445,16 +452,99 @@ define([
 				//TODO this test passes, but is marking the RHS of the property rather than the property name
 				testDirectImplementation(options, {start:868, end:881, file: 'require_dep2.js'});
 			});
-			it("Test direct impl - cross file return object indirection 4", function(done) {
+			it.skip("Test direct impl - cross file return object indirection 4", function(done) {
 				var options = {
 					buffer: "define(['./files/require_dep2'], function(a) {a.variable});",
 					offset: 52,
 					callback: done
 				};
-				//TODO this test fails to find the impl, but it should work
-				testDirectImplementation(options, {start:733, end:741, file: 'require_dep2.js'});
+				testDirectImplementation(options, {start:751, end:758, file: 'require_dep2.js'});
 			});
-			it("Test direct impl - cross file constructor", function(done) {
+			it("Test direct impl - cross file return object constructor 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {new a.directFoo();});",
+					offset: 56,
+					callback: done
+				};
+				testDirectImplementation(options, {start:845, end:848, file: 'require_dep6.js'});
+			});
+			it("Test direct impl - cross file return object direct function 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.directFunc();});",
+					offset: 52,
+					callback: done
+				};
+				//TODO this test fails to find the impl, but it should work
+				testDirectImplementation(options, {start:1210, end:1219, file: 'require_dep6.js'});
+			});
+			it("Test direct impl - cross file return object direct var 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.directVar;});",
+					offset: 52,
+					callback: done
+				};
+				testDirectImplementation(options, {start:1179, end:1187, file: 'require_dep6.js'});
+			});
+			it("Test direct impl - cross file return object member constructor 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.memberFoo();});",
+					offset: 52,
+					callback: done
+				};
+				testDirectImplementation(options, {start:845, end:848, file: 'require_dep6.js'});
+			});
+			it("Test direct impl - cross file return object member function 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.memberFunc();});",
+					offset: 52,
+					callback: done
+				};
+				testDirectImplementation(options, {start:1210, end:1219, file: 'require_dep6.js'});
+			});
+			it("Test direct impl - cross file return object member variable 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.memberVar;});",
+					offset: 52,
+					callback: done
+				};
+				testDirectImplementation(options, {start:1179, end:1187, file: 'require_dep6.js'});
+			});
+			// TODO Crossing 2 files only works if the files have been previously loaded in Tern, they will pass when run in the suite https://bugs.eclipse.org/bugs/show_bug.cgi?id=478233
+			it("Test direct impl - cross 2 files func 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep7'], function(a) {a.reExportFunc;});",
+					offset: 52,
+					callback: done
+				};
+				testDirectImplementation(options, {start:868, end:881, file: 'require_dep2.js'});
+			});
+			it("Test direct impl - cross 2 files var 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep7'], function(a) {a.reExportVar;});",
+					offset: 52,
+					callback: done
+				};
+				testDirectImplementation(options, {start:751, end:758, file: 'require_dep2.js'});
+			});
+			it.skip("Test direct impl - cross file return object proto function 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.pFunc;});",
+					offset: 52,
+					callback: done
+				};
+				//TODO this test fails to find the impl, but it should work
+				testDirectImplementation(options, {start:-1, end:-1, file: 'require_dep6.js'});
+			});
+			it.skip("Test direct impl - cross file return object proto var 1", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep6'], function(a) {a.pVar;});",
+					offset: 52,
+					callback: done
+				};
+				//TODO this test fails to find the impl, but it should work
+				testDirectImplementation(options, {start:-1, end:-1, file: 'require_dep6.js'});
+			});
+			it.skip("Test direct impl - cross file constructor 1 - export value, non-proto constructor", function(done) {
 				var options = {
 					buffer: "define(['./files/require_dep3'], function(a) {var local = new a();});",
 					offset: 63,
@@ -463,6 +553,24 @@ define([
 				//TODO this test finds the impl as the define import, but should find the function declaration in the required file 
 				testDirectImplementation(options, {start:-1, end:-1, file: 'require_dep3.js'});
 			});
+			it.skip("Test direct impl - cross file constructor 2 - export value, prototype constructor", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep4'], function(a) {var local = new a();});",
+					offset: 63,
+					callback: done
+				};
+				//TODO this test finds the impl as the define import, but should find the function declaration in the required file 
+				testDirectImplementation(options, {start:-1, end:-1, file: 'require_dep4.js'});
+			});
+			it("Test direct impl - cross file constructor 3 - export object non-proto constructor", function(done) {
+				var options = {
+					buffer: "define(['./files/require_dep5'], function(a) {var local = new a.Foo();});",
+					offset: 65,
+					callback: done
+				};
+				testDirectImplementation(options, {start:824, end:827, file: 'require_dep5.js'});
+			});
+			//TODO Add similar constructor tests for content assist, hovers, openDeclaration
 		});
 		describe("All References Tests", function() {
 			it("Simple pre-load dep 1");

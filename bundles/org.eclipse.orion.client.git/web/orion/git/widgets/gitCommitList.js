@@ -88,11 +88,12 @@ define([
 		_getLog: function(parentItem) {
 			var that = this;
 			var logMsg = that.location ? messages["Getting git log"] : i18nUtil.formatMessage(messages['Getting commits for \"${0}\" branch'], that.currentBranch.Name);
-			var ref = that.simpleLog ? that.getTargetReference() : that.getActiveBranch();
+			var detach = !that.getActiveBranch().Current;
+			var ref = that.simpleLog && !detach ? that.getTargetReference() : that.getActiveBranch();
 			if (that.isNewBranch(ref)) {
 				ref = that.getActiveBranch();
 			}
-			var location = parentItem.more ? parentItem.location : ((that.location || ref.CommitLocation || ref.Location) + that.repositoryPath + that.getQueries());
+			var location = parentItem.more ? parentItem.location : ((that.location || (detach ? ref.HeadLocation : null) || ref.CommitLocation || ref.Location) + that.repositoryPath + that.getQueries());
 			return that.progressService.progress(that.gitClient.doGitLog(location), logMsg).then(function(resp) {
 				if (that.location && resp.Type === "RemoteTrackingBranch") { //$NON-NLS-0$
 					return that.progressService.progress(that.gitClient.doGitLog(resp.CommitLocation + that.repositoryPath + that.getQueries(), logMsg)).then(function(resp) { //$NON-NLS-0$
@@ -168,9 +169,13 @@ define([
 		getChildren: function(parentItem, onComplete) {
 			var that = this;
 			var tracksRemoteBranch = this.tracksRemoteBranch();
+			var section = this.section;
 			var getSimpleLog = function() {
 				return Deferred.when(that.log || that._getLog(parentItem), function(log) {
 					that.log = parentItem.log = log;
+					if (section && that.currentBranch && !that.currentBranch.Current) {
+						section.setTitle(i18nUtil.formatMessage(messages['DetachedHead ${0}'], util.shortenRefName(log.Children[0])));
+					}
 					var children = log.Children.slice(0);
 					onComplete(that.processChildren(parentItem, that.processMoreChildren(parentItem, children, log)));
 					return log;
@@ -183,7 +188,6 @@ define([
 			} else if (parentItem.children && !parentItem.more) {
 				onComplete(parentItem.children);
 			} else if (parentItem.Type === "CommitRoot") { //$NON-NLS-0$
-				var section = this.section;
 				var progress = section ? section.createProgressMonitor() : null;
 				if (progress) progress.begin(messages["Getting git log"]);
 				return Deferred.when(parentItem.repository || that._getRepository(parentItem), function(repository) {
@@ -208,9 +212,14 @@ define([
 						repository.CurrentBranch = currentBranch;
 						var activeBranch = that.getActiveBranch();
 						var targetRef = that.getTargetReference();
+						if (!activeBranch.Current) {
+							that.simpleLog = true;
+						}
 						if (section) {
 							if (that.simpleLog && targetRef) {
-								section.setTitle(i18nUtil.formatMessage(messages[targetRef.Type + ' (${0})'], util.shortenRefName(targetRef)));
+								if (activeBranch && activeBranch.Current) {
+									section.setTitle(i18nUtil.formatMessage(messages[targetRef.Type + ' (${0})'], util.shortenRefName(targetRef)));
+								} 
 							} else {
 								section.setTitle(i18nUtil.formatMessage(messages['Active Branch (${0})'], util.shortenRefName(activeBranch)));
 							}
@@ -814,7 +823,7 @@ define([
 		},
 		expandSections: function(children) {
 			var deferreds = [];
-			if (!this.simpleLog && !this.model.isRebasing()) {
+			if (!this.model.simpleLog && !this.model.isRebasing()) {
 				for (var i = 0; i < children.length; i++) {
 					var deferred = new Deferred();
 					deferreds.push(deferred);
@@ -822,8 +831,9 @@ define([
 						d.resolve();
 					}, [deferred]);
 				}
+				return Deferred.all(deferreds);
 			}
-			return Deferred.all(deferreds);
+			return new Deferred().resolve();
 		},
 		isRowSelectable: function() {
 			return !!this.selection;
@@ -863,6 +873,7 @@ define([
 					}
 					simpleLogCommand.imageClass = imgClass;
 					var activeBranch = that.model.getActiveBranch();
+					if (!activeBranch.Current) return false;
 					simpleLogCommand.tooltip = i18nUtil.formatMessage(messages[that.model.simpleLog ? "ShowActiveBranchTip" : "ShowReferenceTip"], activeBranch.Name, messages[targetRef.Type + "Type"], targetRef.Name);
 					simpleLogCommand.checked = !that.model.simpleLog;
 					return !that.model.isRebasing();
@@ -962,15 +973,16 @@ define([
 				commandService.renderCommands(actionsNodeScope, actionsNodeScope, repository.status, this, "tool"); //$NON-NLS-0$
 				return;
 			}
+
+			var activeBranch = model.getActiveBranch();
+			var targetRef = model.getTargetReference();
 			
 			commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.commit.toggleFilter", 20, null, false, new KeyBinding.KeyBinding('h', true, true)); //$NON-NLS-1$ //$NON-NLS-0$
 			commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.commit.simpleLog", 50); //$NON-NLS-0$
 			commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.sync", 100); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 
-			var activeBranch = model.getActiveBranch();
-			var targetRef = model.getTargetReference();
 				
-			if (currentBranch && !this.simpleLog) {
+			if (currentBranch && !this.model.simpleLog) {
 				var incomingActionScope = this.incomingActionScope;
 				var outgoingActionScope = this.outgoingActionScope;
 				

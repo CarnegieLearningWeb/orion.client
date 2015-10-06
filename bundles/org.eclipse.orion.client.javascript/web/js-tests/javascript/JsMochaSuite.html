@@ -15,18 +15,7 @@
 			json: "requirejs/json", 
 			i18n: 'requirejs/i18n',
 			domReady: 'requirejs/domReady'
-		},
-		packages: [
-			{
-				name: "eslint/conf",
-				location: "eslint/conf"
-			},
-			{
-				name: "eslint",
-				location: "eslint/lib",
-				main: "eslint"
-			},
-		]
+		}
 	});
 	require(['mocha/sauce'], function(mocha) {
 		mocha.setup('bdd');
@@ -34,6 +23,7 @@
 				'js-tests/javascript/crossFileTests',
 				'js-tests/javascript/astManagerTests',
 				'js-tests/javascript/ternAssistTests',
+				'js-tests/javascript/ternCommandsTests',
 				'js-tests/javascript/esprimaTolerantTests',
 				'js-tests/javascript/dependencyTests',
 				'js-tests/javascript/finderTests',
@@ -44,7 +34,8 @@
 				'js-tests/javascript/quickfixTests',
 				'js-tests/javascript/eslintCoreTests',
 				'js-tests/javascript/eslintRuleTests',
-				'js-tests/javascript/scriptResolverTests'
+				'js-tests/javascript/scriptResolverTests',
+				'js-tests/javascript/sigparserTests'
 				], function(){
 			mocha.run();
 		});

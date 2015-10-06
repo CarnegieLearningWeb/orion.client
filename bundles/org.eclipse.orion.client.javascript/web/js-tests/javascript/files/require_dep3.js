@@ -23,7 +23,7 @@ define([
 	 */
 	function Foo() {
 	}
-	
+
 	Objects.mixin(Foo.prototype, {
 		/**
 	     * @description A simple string var
@@ -39,4 +39,5 @@ define([
 	});
 	
 	return Foo;
+	
 });
