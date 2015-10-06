@@ -63,7 +63,7 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 		var cookieLength = document.cookie.length;
 
 		if (cookieLength > 0) {
-			var cookies = document.cookie.split(';');
+			var cookies = document.cookie.split(/; */);
 
 			for (i = 0; i < cookies.length; i++) {
 				currItem = cookies[i].split('=');
@@ -74,6 +74,10 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 			if (results.hasOwnProperty('JSESSIONID')) {
 				var cookieName = results.JSESSIONID;
 				document.cookie = "JSESSIONID=; Path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+
+				// If we have a cookie left over from SLP remove it
+				if (document.cookie.match(/JSESSIONID/))
+					document.cookie = "JSESSIONID=; path=/; domain=myglife.org; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
 			}
 		}
 	}
