@@ -100,6 +100,26 @@ define([
 		statusService.setProgressResult(error);
 		return error;
 	}
+	
+	function decode(contents, charset, done, errorHandler) {
+		if (window.TextDecoder) {
+			done(new TextDecoder(charset).decode(contents));
+		} else {
+			var mimeType = 'text/plain; charset=' + charset; //$NON-NLS-0$
+			var blob = new Blob([contents], { type: mimeType });
+			var reader = new FileReader();
+			reader.onload = function() {
+				done(reader.result);
+			}.bind(this);
+			reader.onerror = errorHandler;
+			reader.readAsText(blob, charset);
+		}
+	}
+	
+	var UTF8 = "UTF-8"; //$NON-NLS-0$
+	function isUTF8(charset) {
+		return !charset || charset === UTF8; //$NON-NLS-0$
+	}
 
 	/**
 	 * @name orion.editor.InputManager
@@ -223,8 +243,10 @@ define([
 							this._setInputContents(this._parsedLocation, fileURI, contents, metadata);
 						}.bind(this), errorHandler);
 					} else {
-						// Read contents if this is a text file
-						if (this._isText(metadata)) {
+						var charset = this._charset;
+						// Read contents if this is a text file and encoding is UTF-8
+						var isText = this._isText(metadata);
+						if (isUTF8(charset) && isText) {
 							// Read text contents
 							progress(fileClient.read(resource, false, true), messages.Reading, fileURI).then(function(contents) {
 								clearProgressTimeout();
@@ -237,6 +259,12 @@ define([
 						} else {
 							progress(fileClient._getService(resource).readBlob(resource), messages.Reading, fileURI).then(function(contents) {
 								clearProgressTimeout();
+								if (isText) {
+									decode(contents, charset, function(result) {
+										this._setInputContents(this._parsedLocation, fileURI, result, metadata);
+									}.bind(this), errorHandler);
+									return;
+								}
 								this._setInputContents(this._parsedLocation, fileURI, contents, metadata);
 							}.bind(this), errorHandler);
 						}
@@ -259,6 +287,9 @@ define([
 		},
 		getEditor: function() {
 			return this.editor;
+		},
+		getEncodingCharset: function() {
+			return this._charset || UTF8;
 		},
 		getInput: function() {
 			return this._input;
@@ -433,6 +464,9 @@ define([
 		},
 		setContentType: function(contentType) {
 			this._contentType = contentType;
+		},
+		setEncodingCharset: function(charset) {
+			this._charset = charset;
 		},
 		setInput: function(loc) {
 			if (this._ignoreInput) { return; }

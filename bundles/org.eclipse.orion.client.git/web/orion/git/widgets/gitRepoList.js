@@ -109,20 +109,26 @@ define([
 				onComplete(parentItem.children);
 			} else if (parentItem.Type === "RepoRoot") { //$NON-NLS-0$
 				Deferred.when (this.repositories || this.progressService.progress(this.gitClient.getGitClone(that.location), messages["Getting git repository details"]), function(resp){
-					var repositories = that.repositories = resp.Children || resp;
-					var processedChildren = that.processChildren(parentItem, repositories);
+					var repositories = that.processChildren(parentItem, resp.Children || resp);
+					var count = 0;
 					function done() {
-						if (progress) progress.done();
+						if (--count <= 0) {
+							if (progress) progress.done();
+						}
 					}
-					if (repositories.length > 0) {
-						var allInfoDeferreds = processedChildren.map(function(repo) {
-							return repo.infoDeferred = that.loadRepositoryInfo(repo);
-						});
-						Deferred.all(allInfoDeferreds).then(done, done);
-					} else {
+					that.repositories = repositories.filter(function(repo) {
+						if (repo.Type === "Clone") {
+							count++;
+							repo.infoDeferred = that.loadRepositoryInfo(repo);
+							repo.infoDeferred.then(done, done);
+							return repo;
+						}
+						return null;
+					});
+					if (count == 0) {
 						done();
 					}
-					onComplete(processedChildren);
+					onComplete(repositories);
 				}, function(error){
 					if (progress) progress.done();
 					that.handleError(error);
@@ -132,6 +138,31 @@ define([
 			}
 		},
 		processChildren: function(parentItem, children) {
+			function sort(children) {
+				children.sort(function(repo1, repo2) {
+					return repo1.Name.localeCompare(repo2.Name);
+				});
+			}
+			
+			sort(children);
+			
+			function attachChildren(repo, array) {
+				array.push(repo);
+				if (repo.Children) {
+					sort(repo.Children);
+					for (var j=0; j<repo.Children.length; j++) {
+						attachChildren(repo.Children[j], array);
+					}
+				}
+			}
+			
+			var allRepos = [];
+			for (var i=0; i<children.length; i++) {
+				attachChildren(children[i], allRepos);
+			}
+			
+			children = allRepos;
+			
 			var filter = this.filterQuery;
 			if (filter) {
 				children = children.filter(function(item) {
@@ -144,30 +175,12 @@ define([
 			children.forEach(function(item) {
 				item.parent = parentItem;
 			});
-			children.sort(function(repo1, repo2) {
-				return repo1.Name.localeCompare(repo2.Name);
-			});
 			parentItem.children = children;
-			
-			function attachChildren(repo, array) {
-				array.push(repo);
-				if (repo.Children) {
-					for (var j=0; j<repo.Children.length; j++) {
-						attachChildren(repo.Children[j], array);
-					}
-				}
-			}
-			
-			var rootRepo = [];
-			for (var i=0; i<children.length; i++) {
-				attachChildren(children[i], rootRepo);
-			}
-			
-			children = rootRepo;			
 			return children;
 		},
 		getId: function(/* item */ item){
-			return this.parentId + (item.Name ? item.Name : "") + (item.Type ? item.Type : ""); //$NON-NLS-0$
+			return this.parentId + (item.Name ? item.Name : "") + (item.Type ? item.Type : "") +
+					(item.Parents ? ("-for-" + item.Parents[item.Parents.length-1].replace(/\//g, "")) : ""); //$NON-NLS-0$
 		}
 	});
 	
@@ -204,8 +217,12 @@ define([
 			switch (event.action) {
 			case "addClone": //$NON-NLS-0$
 			case "removeClone": //$NON-NLS-0$
+			case "updateSubmodules": //$NON-NLS-0$
+			case "addSubmodule": //$NON-NLS-0$
+			case "deleteSubmodule": //$NON-NLS-0$
 				this.changedItem();
 				break;
+				
 			}
 		}.bind(this));
 	}
@@ -280,7 +297,12 @@ define([
 			var commandRegistry = this.commandService;
 			var actionsNodeScope = this.sectionActionScodeId || section.actionsNode.id;
 //			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.orion.git.pull", 100); //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.git.deleteClone", 200); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.git.addSubmodule", 100); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.git.syncSubmodules", 200); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.git.updateSubmodules", 300); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.git.deleteSubmodule", 400); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.git.deleteClone", 500); //$NON-NLS-1$ //$NON-NLS-0$
+			
 			if (this.singleRepository) {
 				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.popStash", 100); //$NON-NLS-1$ //$NON-NLS-0$
 				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.applyPatch", 200); //$NON-NLS-1$ //$NON-NLS-0$

@@ -114,12 +114,26 @@ define([
 				}
 				that.changedItem();
 				break;
+			case "deleteSubmodule": //$NON-NLS-0$
 			case "removeClone": //$NON-NLS-0$
-				if (that.repository && event.items.some(function(repo) { return repo.Location === that.repository.Location; })) {
+				function submoduleSelected(repo) {
+					var parentSelected = repo.Location === that.repository.Location;
+					if(!parentSelected && repo.Parents){
+						parentSelected = repo.Parents.some(function(parentrepo) {return parentrepo === that.repository.Location;});
+					}
+					var childSelected = false;
+					if (repo.Children) {
+						childSelected = repo.Children.some(function(childrepo) {return submoduleSelected(childrepo);});
+					}
+
+					return parentSelected || childSelected;
+				}
+				if (that.repository && event.items.some(submoduleSelected)) {
 					window.location.href = require.toUrl(repoTemplate.expand({resource: that.lastResource = ""}));
 					that.changedItem();
 				}
 				break;
+			case "addSubmodule": //$NON-NLS-0$
 			case "addClone": //$NON-NLS-0$
 				if(!that.repository){
 					that.changedItem();
@@ -592,8 +606,8 @@ define([
 		var activeBranch = explorer.model.getActiveBranch();
 		var targetRef = explorer.model.getTargetReference();
 		if (activeBranch && targetRef) {
-			if (!activeBranch.Current) {
-				title = i18nUtil.formatMessage(messages['DetachedHead ${0}'], util.shortenRefName(explorer.model.log.Children[0])); 
+			if (activeBranch.Detached) {
+				title = i18nUtil.formatMessage(messages['DetachedHead ${0}'], util.shortenString(activeBranch.HeadSHA)); 
 			} else {
 				var targetName =  util.shortenRefName(targetRef);
 				title = activeBranch.Name + " => " + targetName;  //$NON-NLS-0$
