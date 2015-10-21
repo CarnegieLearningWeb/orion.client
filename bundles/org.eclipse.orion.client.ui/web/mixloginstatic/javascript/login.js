@@ -12,6 +12,7 @@
 /*global URL*/
 define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(domReady, xhr, lib, common) {
 	deleteInitialSessionCookie();
+	deleteSessionStorage();
 
 	function getRedirect() {
 		var regex = new RegExp('[\\?&]redirect=([^&#]*)');
@@ -80,6 +81,14 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 					document.cookie = "JSESSIONID=; path=/; domain=myglife.org; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
 			}
 		}
+	}
+
+	function deleteSessionStorage() {
+		if (sessionStorage.getItem('lastFile') !== null)
+			sessionStorage.removeItem('lastFile');
+
+		if (sessionStorage.getItem('editorViewSection') !== null)
+			sessionStorage.removeItem('editorViewSection');
 	}
 
 	domReady(function() {
