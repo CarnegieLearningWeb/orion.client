@@ -14,8 +14,9 @@ define([
 'orion/objects',
 'javascript/finder',
 'orion/Deferred',
-'i18n!javascript/nls/messages'
-], function(Objects, Finder, Deferred, Messages) {
+'i18n!javascript/nls/messages',
+'orion/i18nUtil',
+], function(Objects, Finder, Deferred, Messages, i18nUtil) {
 
 	/**
 	 * @description Creates a new rename command
@@ -31,8 +32,83 @@ define([
 		this.astmanager = astManager;
 		this.cuprovider = cuProvider;
 		this.searchclient = searchClient;
-		this.cache = Object.create(null);
 	}
+
+	/**
+	 * The listing of all categories, their NLS'd names and the order they should e sorted in
+	 */
+	var categories = {
+		functionDecls: {
+			name: Messages['functionDecls'],
+			category: 'funcdecls', //$NON-NLS-1$
+			sort: 1
+		},
+		functionCalls: {
+			name: Messages['functionCalls'],
+			category: 'funccalls', //$NON-NLS-1$
+			sort: 2
+		},
+		propAccess: {
+			name: Messages['propAccess'],
+			category: 'propaccess', //$NON-NLS-1$
+			sort: 3
+		},
+		propWrite: {
+			name: Messages['propWrite'],
+			category: 'propwrite', //$NON-NLS-1$
+			sort: 4
+		},
+		varDecls: {
+			name: Messages['varDecls'],
+			category: 'vardecls', //$NON-NLS-1$
+			sort: 5
+		},
+		varAccess: {
+			name: Messages['varAccess'],
+			category: 'varaccess', //$NON-NLS-1$
+			sort: 6
+		},
+		varWrite: {
+			name: Messages['varWrite'],
+			category: 'varwrite', //$NON-NLS-1$
+			sort: 7
+		},
+		regex: {
+			name: Messages['regex'],
+			category: 'regex', //$NON-NLS-1$
+			sort: 8
+		},
+		strings: {
+			name: Messages['strings'],
+			category: 'strings', //$NON-NLS-1$
+			sort: 9
+		},
+		blockComments: {
+			name: Messages['blockComments'],
+			category: 'blockcomments', //$NON-NLS-1$
+			sort: 10
+		},
+		lineComments: {
+			name: Messages['lineComments'],
+			category: 'linecomments', //$NON-NLS-1$
+			sort: 11
+		},
+		partial: {
+			name: Messages['partial'],
+			category: 'partial', //$NON-NLS-1$
+			sort: 12
+		},
+		uncategorized: {
+			name: Messages['uncategorized'],
+			category: 'uncategorized', //$NON-NLS-1$
+			sort: 13
+		},
+		syntax: {
+			name: Messages['parseErrors'],
+			category: 'parseerrors', //$NON-NLS-1$
+			sort: 14
+		}
+	};
 
 	Objects.mixin(RefsCommand.prototype, {
 		/**
@@ -42,11 +118,14 @@ define([
 			var that = this;
 			var deferred = new Deferred();
 			editorContext.getFileMetadata().then(function(metadata) {
+				var loc = null;
 				if(options.kind === 'project' && Array.isArray(metadata.parents) && metadata.parents.length > 0) {
-					that.scriptresolver.setSearchLocation(metadata.parents[metadata.parents.length - 1].Location);
+					loc = metadata.parents[metadata.parents.length - 1].Location;
+					deferred.progress({message: Messages['allProjectRefs']});
 				} else {
-					that.scriptresolver.setSearchLocation(null);
+					deferred.progress({message: Messages['allWorkspaceRefs']});
 				}
+				that.scriptresolver.setSearchLocation(loc);
 			    if(options.contentType.id === 'application/javascript') {
 	    			that._findRefs(editorContext, options, metadata, deferred);
 			    } else {
@@ -57,13 +136,15 @@ define([
 		            	}, {location:options.input, contentType:options.contentType});
     			        if(cu.validOffset(offset)) {
     			        	that._findRefs(editorContext, options, metadata, deferred);
+    			        } else {
+    			        	deferred.resolve(Messages['notHtmlOffset']);
     			        }
 			        }, /* @callback */ function(err) {
-			        	deferred.resolve('Could not compute references: failed to compute file text content');
+			        	deferred.resolve(Messages['noFileContents']);
 			        });
 			    }
 			}, /* @callback */ function(err) {
-				deferred.resolve('Could not compute references: failed to compute file metadata');
+				deferred.resolve(Messages['noFileMeta']);
 			});
 			return deferred;
 		},
@@ -86,13 +167,20 @@ define([
 						{request: 'type', args: {meta: metadata, params: options}},  //$NON-NLS-1$
 						function(type, err) {
 							if(err) {
-								deferred.resolve(err);
+								editorContext.setStatus({Severity: 'Error', Message: err}); //$NON-NLS-1$
+								deferred.resolve([]);
 							} else {
 								var expected = Object.create(null);
 								expected.total = 0;
 								expected.done = 0;
 								expected.result = [];
-								var searchParams = {keyword: node.name, resource: that.scriptresolver.getSearchLocation(), fileNamePatterns:["*.js"], caseSensitive: true, incremental:true, shape: 'flat' }; //$NON-NLS-1$
+								var searchParams = {keyword: node.name, 
+									resource: that.scriptresolver.getSearchLocation(), 
+									fileNamePatterns: ["*.js", "*.html", "*.htm"],  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+									caseSensitive: true, 
+									incremental:false, 
+									shape: 'group' //$NON-NLS-1$
+								};
 								expected.params = searchParams;
 								expected.deferred = deferred;
 								that.searchclient.search(searchParams, true, true).then(function(searchResult) {
@@ -106,14 +194,10 @@ define([
 												var match = line.matches[j];
 												var v = Finder.findWord(line.name, match.startIndex);
 												if(v === node.name) {
-													if(match.start === node.range[0] && match.end === node.range[1]) {
-														match.confidence = 100;
-														expected.done++;
-													} else {
-														that._checkType(type, file.metadata, match, expected);
-													}
+													that._checkType(type, file.metadata, match, expected);
 												} else {
-													match.confidence = -1;
+													match.category = categories.partial.category;
+													match.confidence = 0;
 													expected.done++;
 												}
 											}
@@ -121,7 +205,7 @@ define([
 									}
 									that._checkDone(expected);
 								}, /* @callback */ function(err) {
-									editorContext.setStatus({Severity: 'Error', Message: 'Cannot compute references: '+err.message}); //$NON-NLS-1$
+									editorContext.setStatus({Severity: 'Error', Message: i18nUtil.formatMessage(Messages['cannotComputeRefs'], err.message)}); //$NON-NLS-1$
 									deferred.resolve([]);
 								}, /* @callback */ function(result) {
 									//TODO progress
@@ -129,7 +213,7 @@ define([
 						  }
 					});
 				} else {
-					editorContext.setStatus({Severity: 'Error', Message: 'Cannot compute references at the selected location: Location is not an identifier'}); //$NON-NLS-1$
+					editorContext.setStatus({Severity: 'Error', Message: Messages['notAnIdentifier']}); //$NON-NLS-1$
 					deferred.resolve([]);
 				}
 			});
@@ -144,140 +228,57 @@ define([
 		_checkType: function _checkType(original, file, match, expected) {
 			var that = this;
 			that.ternworker.postMessage(
-					{request: 'type', args: {meta:{location: file.Location}, params: {offset: match.end}}},  //$NON-NLS-1$
-					function(type, err) { //$NON-NLS-1$
-						//TODO not until incremental support is added 
-						//deferred.progress({searchParams: searchParams, refResult: match});
+					{request: 'checkRef', args: {meta:{location: file.Location}, params: {offset: match.end}, origin: original}},  //$NON-NLS-1$
+					/* @callback */ function(type, err) {
 						if(type && type.type) {
-							//TODO
-							var _t = type.type;
-							var _ot = original.type;
-							if(_t.name === _ot.name && _t.type === _ot.type && _t.origin === _ot.origin) {
+							var _t = type.type, _ot = original.type;
+							if(_t.name === _ot.name && _t.type === _ot.type && that._sameOrigin(_t.origin, _ot.origin)) {
 								match.confidence = 100;
-							} else {
-								match.confidence = -1; //we got the type info for this and it did not match, weed it out
+							} else if(_t.staticCheck) {
+								match.confidence = _t.staticCheck.confidence;
+							} else if(_t.category === 'blockcomments') {
+								match.confidence = 0;
+								//TODO propagate type infos to named elements in structured doc
+								//for example @name mentions func decl match
 							}
-							expected.done++;
-						} else {
-							that._staticCheck(original, file, match, expected);
+							else {
+								match.confidence = 0;
+							}
+							match.category = _t.category;
+							//TODO for demo anything with parsererrors category is -1
+							if(_t.category === categories.syntax.category) {
+								match.confidence = -1;
+							}
+						} else if(err) {
+							match.category = categories.uncategorized.category;
+							match.confidence = -1;
 						}
+						expected.done++;
+						expected.deferred.progress({message: i18nUtil.formatMessage(Messages['refsFoundIn'], file.Name, expected.done, expected.total)});
 						that._checkDone(expected);
 					});
 		},
 		
 		/**
-		 * @description Function to statically look at the search result by loading its AST and making some non-type inferred guesses.
-		 * This function is used if Tern reports it has no idea what the type of a match is.
+		 * @description Compares the two origins to see if they are the same. This function will
+		 * try decoding the URIs to compare for equality
 		 * @function
 		 * @private
+		 * @param {String} o1 The first origin
+		 * @param {String} o2 The second origin
+		 * @returns {Boolean} If the origins are equal
 		 */
-		_staticCheck: function _staticCheck(original, file, match, expected) {
-			var that = this;
-			that._getAST(file).then(function(ast) {
-				var node = Finder.findNode(match.start, ast, {parents: true});
-				if(node) {
-					that._checkNode(original, node, match, expected);
-				} else {
-					match.confidence = -1;
-				}
-				expected.done++;
-				that._checkDone(expected);
-			});
-		},
-		
-		_checkNode: function _checkNode(original, node, match, expected) {
-			switch(node.type) {
-				case 'FunctionDeclaration':
-				case 'FucntionExpression':
-				case 'VariableDeclarator': 
-				case 'Literal': {
-					//a re-decl cannot be a reference
-					match.confidence = -1;
-					break;
-				}
-				case 'Identifier': {
-					if(Array.isArray(node.parents)) {
-						var p = node.parents.slice(node.parents.length-1)[0];
-						this._checkNode(original, p, match, expected);
-					} else {
-						match.confidence = 25;
-					}
-					break;
-				}
-				case 'AssignmentExpression': {
-					if(node.left.name === original.type.exprName ||
-						node.right.name === original.type.exprName) {
-						match.confidence = 25;
-					}
-					break;
-				}
-				case 'MemberExpression': {
-					//if part of the expression, maybe relevant
-					match.confidence = 10;
-					break;
-				}
-				case 'CallExpression': {
-					if(node.callee.name === original.type.exprName) {
-						if(original.type.type === 'fn()') {
-							match.confidence = 25;
-						} else {
-							match.confidence = -1;
-						}
-					}
-					for(var i = 0, l = node.arguments.length; i < l; i++) {
-						var arg = node.arguments[i];
-						if(arg.type === 'Identifier') {
-							if(original.type.type === 'fn()') {
-								//orig type is function, this is not relevant
-								match.confidence = -1;
-							} else {
-								//with no type infos we have no idea if this is the same one
-								match.confidence = 40;
-							}
-						} else if(arg.type === 'FunctionExpression') {
-							if(arg.id === original.type.exprName) {
-								//redecl, not relevant
-								match.confidence = -1;
-							}
-						}
-					}
-					break;
-				}
-				default: {
-					match.confidence = 0;
-				}
+		_sameOrigin: function _sameOrigin(o1, o2) {
+			if(o1 === o2) {
+				return true;
 			}
-		},
-		
-		/**
-		 * @description Returns the AST for the given file match. We do caching before the AST manager to avoid having to 
-		 * read the complete file contents each time
-		 * @function
-		 * @private
-		 * @param {Object} file The file match metadata from the search results
-		 * @returns {Deferred} The deferred to resolve to get the AST
-		 */
-		_getAST: function _getAST(file) {
-			var that = this;
-			var ast = that.cache[file.Location];
-			if(ast) {
-				return new Deferred().resolve(ast);
-			} else {
-				return that.searchclient._fileClient.read(file.Location).then(function(contents) {
-					var proxy = {
-						getFileMetadata: function() {
-							return new Deferred().resolve(file);
-						},
-						getText: function() {
-							return new Deferred().resolve(contents);
-						}
-					};
-					return that.astmanager.getAST(proxy).then(function(ast) {
-						that.cache[file.Location] = ast;
-						return new Deferred().resolve(ast);
-					});
-				});
+			var u1 = decodeURIComponent(o1);
+			var u2 = decodeURIComponent(o2);
+			if(u1 === u2) {
+				return true;
 			}
+			//last try, in case we have re-encoded URIs
+			return decodeURIComponent(u1) === decodeURIComponent(u2);
 		},
 		
 		/**
@@ -287,9 +288,8 @@ define([
 		 * @param {Object} expected The context of confidence computation
 		 */
 		_checkDone: function _checkDone(expected) {
-			if(expected.done === expected.total) {
-				this.cache = Object.create(null);
-				expected.deferred.resolve({searchParams: expected.params, refResult: expected.result});
+			if(expected.done >= expected.total) {
+				expected.deferred.resolve({searchParams: expected.params, refResult: expected.result, categories: categories});
 			}
 		}
 	});

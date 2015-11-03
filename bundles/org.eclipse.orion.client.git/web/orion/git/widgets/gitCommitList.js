@@ -88,12 +88,13 @@ define([
 		_getLog: function(parentItem) {
 			var that = this;
 			var logMsg = that.location ? messages["Getting git log"] : i18nUtil.formatMessage(messages['Getting commits for \"${0}\" branch'], that.currentBranch.Name);
-			var detach = that.getActiveBranch().Detached;
-			var ref = that.simpleLog && !detach ? that.getTargetReference() : that.getActiveBranch();
+			var activeBranch = that.getActiveBranch();
+			var targetRef = that.getTargetReference();
+			var ref = that.simpleLog && targetRef ? targetRef : activeBranch;
 			if (that.isNewBranch(ref)) {
 				ref = that.getActiveBranch();
 			}
-			var location = parentItem.more ? parentItem.location : ((that.location || (detach ? ref.HeadLocation : null) || ref.CommitLocation || ref.Location) + that.repositoryPath + that.getQueries());
+			var location = parentItem.more ? parentItem.location : ((that.location || (ref.Detached ? ref.HeadLocation : null) || ref.CommitLocation || ref.Location) + that.repositoryPath + that.getQueries());
 			return that.progressService.progress(that.gitClient.doGitLog(location), logMsg).then(function(resp) {
 				if (that.location && resp.Type === "RemoteTrackingBranch") { //$NON-NLS-0$
 					return that.progressService.progress(that.gitClient.doGitLog(resp.CommitLocation + that.repositoryPath + that.getQueries(), logMsg)).then(function(resp) { //$NON-NLS-0$
@@ -142,9 +143,11 @@ define([
 		},
 		getTargetReference: function() {
 			if (this.targetRef) {
+				if (this.targetRef.Detached) return null;
 				return this.targetRef;
 			}
 			var ref = this.currentBranch;
+			if (ref && ref.Detached) return null;
 			return ref && ref.RemoteLocation &&  ref.RemoteLocation[0] && ref.RemoteLocation[0].Children[ref.RemoteLocation[0].Children.length - 1];
 		},
 		tracksRemoteBranch: function(){
@@ -209,22 +212,15 @@ define([
 						repository.CurrentBranch = currentBranch;
 						var activeBranch = that.getActiveBranch();
 						var targetRef = that.getTargetReference();
-						if (activeBranch.Detached) {
-							that.simpleLog = true;
-						}
 						if (section) {
 							if (that.simpleLog && targetRef) {
-								if (activeBranch && activeBranch.Current && !activeBranch.Detached) {
-									section.setTitle(i18nUtil.formatMessage(messages[targetRef.Type + ' (${0})'], util.shortenRefName(targetRef)));
-								}else if (activeBranch && activeBranch.Current && activeBranch.Detached) {
-									section.setTitle(i18nUtil.formatMessage(messages['DetachedHead ${0}'], util.shortenString(that.currentBranch.HeadSHA)));
-								}
+								section.setTitle(i18nUtil.formatMessage(messages[targetRef.Type + ' (${0})'], util.shortenRefName(targetRef))); //$NON-NLS-1$
 							} else {
 								section.setTitle(i18nUtil.formatMessage(messages['Active Branch (${0})'], util.shortenRefName(activeBranch)));
 							}
 						}
 						if (progress) progress.done();
-						if (that.simpleLog) {
+						if (that.simpleLog || !targetRef || util.sameRef(activeBranch, targetRef)) {
 							that.outgoingItem = that.incomingItem = that.syncItem = null;
 							return getSimpleLog();
 						} else {
@@ -345,7 +341,7 @@ define([
 			}
 		},
 		getId: function(/* item */ item){
-			return this.parentId + (item.Name ? item.Name : "") + (item.Type ? item.Type : ""); //$NON-NLS-0$
+			return this.parentId + (item.Name ? item.Name : "") + (item.Type ? item.Type : "") + (item.parent ? item.parent.Type : ""); //$NON-NLS-0$; //$NON-NLS-0$
 		},
 		processMoreChildren: function(parentItem, children, item, type) {
 			type = type || "MoreCommits"; //$NON-NLS-0$ /* use more commits by default */
@@ -872,7 +868,7 @@ define([
 					}
 					simpleLogCommand.imageClass = imgClass;
 					var activeBranch = that.model.getActiveBranch();
-					if (!activeBranch.Current || activeBranch.Detached) return false;
+					if (!activeBranch.Current || util.sameRef(activeBranch, targetRef)) return false;
 					simpleLogCommand.tooltip = i18nUtil.formatMessage(messages[that.model.simpleLog ? "ShowActiveBranchTip" : "ShowReferenceTip"], activeBranch.Name, messages[targetRef.Type + "Type"], targetRef.Name);
 					simpleLogCommand.checked = !that.model.simpleLog;
 					return !that.model.isRebasing();
@@ -981,34 +977,35 @@ define([
 			commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.sync", 100); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 
 				
-			if (currentBranch && !this.model.simpleLog) {
+			if (currentBranch && !this.model.simpleLog && targetRef) {
 				var incomingActionScope = this.incomingActionScope;
 				var outgoingActionScope = this.outgoingActionScope;
 				
 				if (lib.node(incomingActionScope)) {
 					commandService.destroy(incomingActionScope);
+					
+					commandService.addCommandGroup(incomingActionScope, "eclipse.gitFetchGroup", 500, messages['fetchGroup'], null, null, null, "Fetch", null, "eclipse.orion.git.fetch"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+					commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.fetch", 100, "eclipse.gitFetchGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+					commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.fetchForce", 200, "eclipse.gitFetchGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+					
+					commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.merge", 300); //$NON-NLS-0$
+					commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.mergeSquash", 350); //$NON-NLS-1$ //$NON-NLS-0$
+					commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.rebase", 200); //$NON-NLS-0$
+					commandService.renderCommands(incomingActionScope, incomingActionScope, targetRef, this, "tool"); //$NON-NLS-0$
 				}
+				
 				if (lib.node(outgoingActionScope)) {
 					commandService.destroy(outgoingActionScope);
+					
+					commandService.addCommandGroup(outgoingActionScope, "eclipse.gitPushGroup", 1000, messages['pushGroup'], null, null, null, "Push", null, "eclipse.orion.git.push"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+					commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.push", 1100, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+					commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushForce", 1200, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+					commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushBranch", 1300, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+					commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushForceBranch", 1400, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+					commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushToGerrit", 1500, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
+
+					commandService.renderCommands(outgoingActionScope, outgoingActionScope, {LocalBranch: activeBranch, Remote: targetRef}, this, "tool"); //$NON-NLS-0$
 				}
-	
-				commandService.addCommandGroup(incomingActionScope, "eclipse.gitFetchGroup", 500, messages['fetchGroup'], null, null, null, "Fetch", null, "eclipse.orion.git.fetch"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-				commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.fetch", 100, "eclipse.gitFetchGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-				commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.fetchForce", 200, "eclipse.gitFetchGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-				
-				commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.merge", 300); //$NON-NLS-0$
-				commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.mergeSquash", 350); //$NON-NLS-1$ //$NON-NLS-0$
-				commandService.registerCommandContribution(incomingActionScope, "eclipse.orion.git.rebase", 200); //$NON-NLS-0$
-				commandService.renderCommands(incomingActionScope, incomingActionScope, targetRef, this, "tool"); //$NON-NLS-0$
-
-				commandService.addCommandGroup(outgoingActionScope, "eclipse.gitPushGroup", 1000, messages['pushGroup'], null, null, null, "Push", null, "eclipse.orion.git.push"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-				commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.push", 1100, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-				commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushForce", 1200, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-				commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushBranch", 1300, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-				commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushForceBranch", 1400, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-				commandService.registerCommandContribution(outgoingActionScope, "eclipse.orion.git.pushToGerrit", 1500, "eclipse.gitPushGroup"); //$NON-NLS-0$ //$NON-NLS-1$
-
-				commandService.renderCommands(outgoingActionScope, outgoingActionScope, {LocalBranch: activeBranch, Remote: targetRef}, this, "tool"); //$NON-NLS-0$
 			}
 			commandService.renderCommands(actionsNodeScope, actionsNodeScope, {LocalBranch: activeBranch, Remote: targetRef}, this, "tool"); //$NON-NLS-0$
 		}

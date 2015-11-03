@@ -36,36 +36,18 @@ define([
 			var node = document.createElement("div"); //$NON-NLS-1$
 			var entryNode = document.createElement("div"); //$NON-NLS-1$
 			entryNode.classList.add("plugin-entry"); //$NON-NLS-1$
-			
-//			var cmdNode = document.createElement("span"); //$NON-NLS-1$
-//			cmdNode.classList.add("plugin-commands"); //$NON-NLS-1$
-//			var reloadPluginsCommand = new mCommands.Command({
-//				name: messages["reloadPluginCmd"],
-//				tooltip: messages["reloadPluginCmdTooltip"],
-//				id: "javascript.reloadTernPlugin", //$NON-NLS-0$
-//				callback: function(){console.log("Reloading of Tern plugins is not supported yet");}/*this.reloadPlugins.bind(this)*/
-//			});
-//			this.commandService.addCommand(reloadPluginsCommand);
-//			this.commandService.registerCommandContribution("ternPluginCommands", "javascript.reloadTernPlugin", 2); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
-//			this.commandService.renderCommands("ternPluginCommands", cmdNode, this, this, "button"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			// TODO entryNode.appendChild(cmdNode);
-			
-			// TODO NLS Version and Removeable or replace with icons
 			if (item.name){
 				var nameNode = document.createElement("div"); //$NON-NLS-1$
 				nameNode.classList.add("plugin-title"); //$NON-NLS-1$
 				nameNode.textContent = item.name;
-				
 				if (item.version){
 					var versionNode = document.createElement("span"); //$NON-NLS-1$
 					versionNode.textContent = 'v'+item.version; //$NON-NLS-1$
 					versionNode.style.marginLeft = "10px"; //$NON-NLS-1$
 					nameNode.appendChild(versionNode);
 				}
-				
 				entryNode.appendChild(nameNode);
 			}
-			
 			if (item.description){
 				var descNode = document.createElement("div"); //$NON-NLS-1$
 				descNode.textContent = item.description;
@@ -75,8 +57,6 @@ define([
 //				}
 				entryNode.appendChild(descNode);
 			}
-			
-			
 			node.appendChild(entryNode);
 			return node;
 		}
@@ -187,7 +167,6 @@ define([
 		},
 	
 		render: function(referenceplugin){
-		 
 			// Declare row-level commands so they will be rendered when the rows are added.
 			var reloadPluginCommand = new mCommands.Command({
 				name: messages["reloadPluginCmd"],
@@ -209,23 +188,23 @@ define([
 
 			var _self = this;
 			return this.preferences.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
-					var props = prefs.get("tern/plugins"); //$NON-NLS-1$
-					var plugins = Object.create(null);
+					var props = prefs.get("tern"); //$NON-NLS-1$
+					var tern = props;
 					if(typeof(props) === 'string') {
-						plugins = JSON.parse(props);
-					} else {
-						plugins = props;
+						tern = JSON.parse(props);
+					} else if(!tern) {
+						tern = Object.create(null);
+						tern.plugins = Object.create(null);
 					}
 					var pluginArray = [];
-					var keys = Object.keys(plugins);
-					for (var i=0; i<keys.length; i++) {
-						var plugin = plugins[keys[i]];
+					var keys = Object.keys(tern.plugins);
+					for (var i = 0, len = keys.length; i < len; i++) {
+						var plugin = tern.plugins[keys[i]];
 						if(typeof(plugin) === 'object' && plugin.name) {
 							pluginArray.push(plugin);
 						}
 					}
 					_self.pluginTitle.textContent = messages["ternPlugins"];
-					
 					if (pluginArray.length > 0){
 						_self.pluginCount.textContent = pluginArray.length;
 						pluginArray.sort(_self._sortPlugins); 
@@ -250,13 +229,6 @@ define([
 		 * @returns -1 for a first, 1 for b first, 0 if equals
 		 */
 		_sortPlugins: function(a, b) {
-			//TODO do we want to sort by removable? or only colour them differently? or simply use the 'remove' command to show this
-			/*if (b.removable && !a.removeable){
-				return -1;
-			}
-			if (a.removable && !b.removable){
-				return 1;
-			}*/
 			var n1 = a.name.toLowerCase();
 			var n2 = b.name.toLowerCase();
 			if (n1 < n2) { return -1; }

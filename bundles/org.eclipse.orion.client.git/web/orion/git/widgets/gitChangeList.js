@@ -286,7 +286,9 @@ define([
 							indexURI : groupData[j].Git.IndexLocation,
 							DiffLocation : groupData[j].Git.DiffLocation,
 							CloneLocation : this.items.CloneLocation, //will die here
-							conflicting : isConflict(renderType)
+							conflicting : isConflict(renderType),
+							IsSubmodule:groupData[j].IsSubmodule,
+							Directory:groupData[j].Directory
 						});
 					}
 				}
@@ -306,14 +308,6 @@ define([
 		},
 		getGroupData: function(groupName) {
 			return this.items[groupName];
-		},
-		isStaged: function(type) {
-			for (var i = 0; i < interestedStagedGroup.length; i++) {
-				if (type === interestedStagedGroup[i]) {
-					return true;
-				}
-			}
-			return false;
 		},
 		getClass: function(item) {
 			return statusTypeMap[item.type].imageClass;
@@ -376,6 +370,10 @@ define([
 				this.changedItem(event.items);
 				break;
 			case "mergeSquash": //$NON-NLS-0$
+			case "syncSubmodules": //$NON-NLS-0$
+			case "updateSubmodules": //$NON-NLS-0$
+			case "addSubmodule": //$NON-NLS-0$
+			case "deleteSubmodule": //$NON-NLS-0$
 				this.changedItem();
 				break;
 			}
@@ -415,7 +413,7 @@ define([
 					parent.removeAll = true;
 					that.myTree.refresh.bind(that.myTree)(parent, children, false);
 					var selection = children.filter(function(item) {
-						return that.model.isStaged(item.type);
+						return mGitUtil.isStaged(item);
 					});
 					that.selection.setSelections(selection);
 					that.setMoreVisible(moreVisible);
@@ -547,7 +545,7 @@ define([
 							if (userInfo && userInfo.GitSelectAll) {
 								model.getRoot(function(root) {
 									var selection = root.children.filter(function(item) {
-										return !that.model.isStaged(item.type) && mGitUtil.isChange(item);
+										return !mGitUtil.isStaged(item) && mGitUtil.isChange(item);
 									});
 									that.commandService.runCommand("eclipse.orion.git.stageCommand", selection, that, null, that.repository.status); //$NON-NLS-0$
 									selectFunc();
@@ -681,7 +679,7 @@ define([
 					that.model.getRoot(function(root) {
 						if (root.children) {
 							var selection = root.children.filter(function(item) {
-								return !that.model.isStaged(item.type) && mGitUtil.isChange(item);
+								return !mGitUtil.isStaged(item) && mGitUtil.isChange(item);
 							});
 							result = selection.length > 0;
 						}
@@ -692,7 +690,7 @@ define([
 					var deferred = new Deferred();
 					that.model.getRoot(function(root) {
 						var selection = root.children.filter(function(item) {
-							return !that.model.isStaged(item.type) && mGitUtil.isChange(item);
+							return !mGitUtil.isStaged(item) && mGitUtil.isChange(item);
 						});
 						that.commandService.runCommand("eclipse.orion.git.stageCommand", selection, that, null, that.status).then(deferred.resolve, deferred.reject); //$NON-NLS-0$
 					});
@@ -709,7 +707,7 @@ define([
 					that.model.getRoot(function(root) {
 						if (root.children && root.children.length > 1) {
 							var selection = root.children.filter(function(item) {
-								return that.model.isStaged(item.type);
+								return mGitUtil.isStaged(item);
 							});
 							result = selection.length === Math.max(0, root.children.length - 2);
 						}
@@ -720,7 +718,7 @@ define([
 					var deferred = new Deferred();
 					that.model.getRoot(function(root) {
 						var selection = root.children.filter(function(item) {
-							return that.model.isStaged(item.type);
+							return mGitUtil.isStaged(item);
 						});
 						that.commandService.runCommand("eclipse.orion.git.unstageCommand", selection, that, null, that.status).then(deferred.resolve, deferred.reject); //$NON-NLS-0$
 					});
@@ -1201,41 +1199,56 @@ define([
 						diffContainer.className = "gitChangeListCompare"; //$NON-NLS-0$
 						diffContainer.id = "diffArea_" + item.DiffLocation; //$NON-NLS-0$
 						div.appendChild(diffContainer);
-	
-						navGridHolder = this.explorer.getNavDict() ? this.explorer.getNavDict().getGridNavHolder(item, true) : null;
-						var hasConflict = item.parent.type === "Conflicting"; //$NON-NLS-0$
-						window.setTimeout(function() {
-							mGitUIUtil.createCompareWidget(
-								explorer.registry,
-								explorer.commandService,
-								item.DiffLocation,
-								hasConflict,
-								diffContainer,
-								compareWidgetActionWrapper.id,
-								explorer.editableInComparePage ? !this.explorer.model.isStaged(item.parent.type) : false,
-								{
-									navGridHolder : navGridHolder,
-									additionalCmdRender : function(gridHolder) {
-										explorer.commandService.destroy(diffActionWrapper.id);
-										explorer.commandService.renderCommands("itemLevelCommands", diffActionWrapper.id, item.parent, explorer, "tool", false, gridHolder); //$NON-NLS-1$ //$NON-NLS-0$
-										explorer.commandService.renderCommands(diffActionWrapper.id, diffActionWrapper.id, item.parent, explorer, "tool", false, gridHolder); //$NON-NLS-0$
+						
+						if(item.parent.IsSubmodule){
+							var submoduleMessageHolder = document.createElement("div"); //$NON-NLS-0$
+							submoduleMessageHolder.className = "submoduleMessageHolder"; //$NON-NLS-0$
+							switch (item.parent.type){
+								case "Missing":
+									submoduleMessageHolder.textContent = messages["Missing Submodule Message"];
+									break;
+								case "Added":
+									submoduleMessageHolder.textContent = messages["Added Submodule Message"];
+									break;
+							}
+							diffContainer.appendChild(submoduleMessageHolder);
+						}else{
+							navGridHolder = this.explorer.getNavDict() ? this.explorer.getNavDict().getGridNavHolder(item, true) : null;
+							var hasConflict = item.parent.type === "Conflicting"; //$NON-NLS-0$
+							window.setTimeout(function() {
+								mGitUIUtil.createCompareWidget(
+									explorer.registry,
+									explorer.commandService,
+									item.DiffLocation,
+									hasConflict,
+									diffContainer,
+									compareWidgetActionWrapper.id,
+									explorer.editableInComparePage ? !mGitUtil.isStaged(item.parent) : false,
+									{
+										navGridHolder : navGridHolder,
+										additionalCmdRender : function(gridHolder) {
+											explorer.commandService.destroy(diffActionWrapper.id);
+											explorer.commandService.renderCommands("itemLevelCommands", diffActionWrapper.id, item.parent, explorer, "tool", false, gridHolder); //$NON-NLS-1$ //$NON-NLS-0$
+											explorer.commandService.renderCommands(diffActionWrapper.id, diffActionWrapper.id, item.parent, explorer, "tool", false, gridHolder); //$NON-NLS-0$
+										},
+										before : true
 									},
-									before : true
-								},
-								undefined,
-								compareWidgetLeftActionWrapper.id,
-								explorer.preferencesService,
-								item.parent.Type === "Diff" ? null : compareWidgetLeftActionWrapper.id, //saveCmdContainerId  //$NON-NLS-0$
-								item.parent.Type === "Diff" ? null : "compare.save." + item.DiffLocation, //saveCmdId  //$NON-NLS-1$ //$NON-NLS-0$
-								//We pass an array of two title Ids here in order for the resource comparer to render the dirty indicator optionally
-								//If the widget is not maximized, the dirty indicator, if any, is rendered at the end of the file name
-								//If the widget is maximized, as the file name is not visible, the "*" is rendered right beside the left hand action wrapper
-								item.parent.Type === "Diff" ? null : [explorer.prefix + item.parent.name + item.parent.type + "FileItemId", dirtyindicator.id], //$NON-NLS-1$ //$NON-NLS-0$ //The compare widget title where the dirty indicator can be inserted
-								//We need to attach the compare widget reference to the model. Also we need the widget to be destroy when the model is destroyed.
-								item,
-								this.explorer.standAloneOptions
-							);
-						}.bind(this), 0);
+									undefined,
+									compareWidgetLeftActionWrapper.id,
+									explorer.preferencesService,
+									item.parent.Type === "Diff" ? null : compareWidgetLeftActionWrapper.id, //saveCmdContainerId  //$NON-NLS-0$
+									item.parent.Type === "Diff" ? null : "compare.save." + item.DiffLocation, //saveCmdId  //$NON-NLS-1$ //$NON-NLS-0$
+									//We pass an array of two title Ids here in order for the resource comparer to render the dirty indicator optionally
+									//If the widget is not maximized, the dirty indicator, if any, is rendered at the end of the file name
+									//If the widget is maximized, as the file name is not visible, the "*" is rendered right beside the left hand action wrapper
+									item.parent.Type === "Diff" ? null : [explorer.prefix + item.parent.name + item.parent.type + "FileItemId", dirtyindicator.id], //$NON-NLS-1$ //$NON-NLS-0$ //The compare widget title where the dirty indicator can be inserted
+									//We need to attach the compare widget reference to the model. Also we need the widget to be destroy when the model is destroyed.
+									item,
+									this.explorer.standAloneOptions
+								);
+							}.bind(this), 0);
+						}
+						
 					}
 					return td;
 			}
@@ -1268,7 +1281,7 @@ define([
 				return !this.explorer.commandService.findCommand("orion.explorer.selectAllCommandChangeList").visibleWhen(this.explorer); //$NON-NLS-0$
 			}
 			
-			return this.explorer.model.isStaged(item.type);
+			return mGitUtil.isStaged(item);
 		}
 	});
 	

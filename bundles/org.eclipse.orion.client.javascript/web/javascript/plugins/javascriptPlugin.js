@@ -31,6 +31,7 @@ define([
 'javascript/hover',
 'javascript/outliner',
 'javascript/cuProvider',
+'javascript/ternProjectManager',
 'orion/util',
 'javascript/logger',
 'javascript/commands/generateDocCommand',
@@ -46,7 +47,7 @@ define([
 'i18n!javascript/nls/messages',
 'orion/URL-shim'
 ], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist,
-			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
+			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, TernProjectManager, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
 			RenameCommand, RefsCommand, mGSearchClient, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
 
     var provider = new PluginProvider({
@@ -70,7 +71,7 @@ define([
     		               }, {id: "application/json", //$NON-NLS-1$
     		            	   "extends": "text/plain", //$NON-NLS-1$ //$NON-NLS-1$
     		            	   name: "JSON", //$NON-NLS-1$
-    		            	   extension: ["json", "pref"], //$NON-NLS-1$ //$NON-NLS-2$
+    		            	   extension: ["json", "pref", "tern-project"], //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
     		            	   imageClass: "file-sprite-javascript modelDecorationSprite" //$NON-NLS-1$
     		               }, {id: "application/x-ejs", //$NON-NLS-1$
     		            	   "extends": "text/plain", //$NON-NLS-1$ //$NON-NLS-1$
@@ -96,7 +97,7 @@ define([
     	 * Create the file client early
     	 */
     	var fileClient = new FileClient.FileClient(core.serviceRegistry);
-
+    	
     	/**
     	 * Create the script resolver
     	 * @since 8.0
@@ -106,6 +107,9 @@ define([
     	 * Create the AST manager
     	 */
     	var astManager = new ASTManager.ASTManager(Esprima);
+
+		var ternReady = false;
+		var messageQueue = [];
 
     	function WrappedWorker(script, onMessage, onError) {
     		/*if(typeof(SharedWorker) === 'function') {
@@ -123,25 +127,38 @@ define([
     			this.worker = new Worker(wUrl.href);
     			this.worker.onmessage = onMessage.bind(this);
     			this.worker.onerror = onError.bind(this);
-    			this.worker.postMessage('start_server'); //$NON-NLS-1$
+    			this.worker.postMessage('start_worker'); //$NON-NLS-1$
     			this.messageId = 0;
     			this.callbacks = Object.create(null);
     	//	}
     	}
-
-    	WrappedWorker.prototype.postMessage = function(msg, f) {
-			if(msg != null && typeof(msg) === 'object') {
-				if(typeof(msg.messageID) !== 'number' && typeof(msg.ternID) !== 'number') {
-					//don't overwrite an id from a tern-side request
-					msg.messageID = this.messageId++;
-					this.callbacks[msg.messageID] = f;
-				}
-			}
+    	
+    	WrappedWorker.prototype.startServer = function(jsonOptions){
+    		ternReady = false;
     		if(this.shared) {
-    			this.worker.port.postMessage(msg);
+	    		this.worker.port.postMessage({request: 'start_server', args: {options: jsonOptions}}); //$NON-NLS-1$
     		} else {
-    			this.worker.postMessage(msg);
+    			this.worker.postMessage({request: 'start_server', args: {options: jsonOptions}}); //$NON-NLS-1$
     		}
+    	};
+    	
+    	WrappedWorker.prototype.postMessage = function(msg, f) {
+    		if(ternReady) {
+				if(msg != null && typeof(msg) === 'object') {
+					if(typeof(msg.messageID) !== 'number' && typeof(msg.ternID) !== 'number') {
+						//don't overwrite an id from a tern-side request
+						msg.messageID = this.messageId++;
+						this.callbacks[msg.messageID] = f;
+					}
+				}
+	    		if(this.shared) {
+	    			this.worker.port.postMessage(msg);
+	    		} else {
+	    			this.worker.postMessage(msg);
+	    		}
+			} else {
+				messageQueue.push({msg: msg, f: f});
+			}
     	};
 
     	var prefService = core.serviceRegistry.getService("orion.core.preference"); //$NON-NLS-1$
@@ -154,7 +171,8 @@ define([
 
 		var handlers ={
 			'read': doRead,
-			'server_ready': getPrefs
+			'worker_ready': workerReady,
+			'server_ready': serverReady
 		};
 
 		// Start the worker
@@ -238,28 +256,54 @@ define([
 				}
 			}
 		}
-
+		
+		function workerReady() {
+			ternWorker.startServer();
+		};
+		
 		/**
-		 * @description Pre-loads the tern plugin prefs
+		 * @description Handles the server being ready
 		 * @param {Object} request The request
 		 * @since 10.0
 		 */
-		function getPrefs() {
+		function serverReady() {
+			ternReady = true;
+			for(var i = 0, len = messageQueue.length; i < len; i++) {
+				var item = messageQueue[i];
+				ternWorker.postMessage(item.msg, item.f);
+			}
+			messageQueue = [];
+			function cleanPrefs(prefs) {
+				var all = prefs.keys();
+				for(i = 0, len = all.length; i < len; i++) {
+					var id = all[i];
+					if(/^tern.$/.test(id)) {
+						prefs.remove(all[i]);
+					}
+				}
+				prefs.sync(true);
+			}
 			ternWorker.postMessage({request: 'installed_plugins'}, function(response) { //$NON-NLS-1$
 				var plugins = response.plugins;
 				return prefService ? prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
-					var props = prefs.get("tern/plugins"); //$NON-NLS-1$
+					var props = prefs.get("tern"); //$NON-NLS-1$
+					cleanPrefs(prefs);
 					if (!props) {
 						props = Object.create(null);
 					} else if(typeof(props) === 'string') {
 						props = JSON.parse(props);
 					}
 					var keys = Object.keys(plugins);
-					for(var i = 0; i < keys.length; i++) {
+					var plugs = props.plugins ? props.plugins : Object.create(null);
+					for(i = 0; i < keys.length; i++) {
 						var key = keys[i];
-						props[key] = plugins[key];
+						if(/^orion/.test(key)) {
+							delete plugs[key]; //make sure only the latest of Orion builtins are shown
+						}
+						plugs[key] = plugins[key];
 					}
-					prefs.put("tern/plugins", JSON.stringify(props)); //$NON-NLS-1$
+					props.plugins = plugs;
+					prefs.put("tern", JSON.stringify(props)); //$NON-NLS-1$
 					prefs.sync(true);
 				}) : new Deferred().resolve();
 			});
@@ -342,6 +386,21 @@ define([
     		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
+    	
+    	// TODO This manager is dark launched as it will be automated during editor open - Bug 476062
+    	if ("true" === localStorage.getItem("ternProject")) { //$NON-NLS-1$
+	    	var ternProjectManager = new TernProjectManager.TernProjectManager(ternWorker, scriptresolver, fileClient);
+	    	/**
+	    	 * Register Tern project manager as input changed listener
+	    	 */
+	    	provider.registerService("orion.edit.model", {  //$NON-NLS-1$
+	    		onInputChanged: ternProjectManager.onInputChanged.bind(ternProjectManager)
+	    	},
+	    	{
+	    		contentType: ["application/javascript", "application/json", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+	    		types: ['onInputChanged']  //$NON-NLS-1$
+	    	});
+    	}
 
     	/**
     	 * register the compilation unit provider as a listener
@@ -376,7 +435,7 @@ define([
     		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
     			}
     	);
-
+    	
 		provider.registerServiceProvider("orion.edit.command.category", {}, { //$NON-NLS-1$
 			  id : "js.references", //$NON-NLS-1$
 	          name: javascriptMessages['referencesMenuName'],
@@ -389,7 +448,22 @@ define([
 							scriptresolver,
 							CUProvider,
 							new mGSearchClient.GSearchClient({serviceRegistry: core.serviceRegistry, fileClient: fileClient}));
-
+			provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+	    			{
+						execute: function(editorContext, options) {
+							options.kind ='project'; //$NON-NLS-1$
+							return refscommand.execute(editorContext, options);
+						}
+					},
+	    			{
+	    		name: javascriptMessages["projectRefsName"],  //$NON-NLS-1$
+	    		tooltip : javascriptMessages['projectRefsTooltip'],  //$NON-NLS-1$
+	    		parentPath: "js.references", //$NON-NLS-1$
+	    		id : "project.js.refs",  //$NON-NLS-1$
+	    		key : [ "y", true, true, false, false],  //$NON-NLS-1$
+	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+	    			}
+	    	);
 	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
 	    			{
 						execute: function(editorContext, options) {
@@ -402,40 +476,21 @@ define([
 	    		tooltip : javascriptMessages['workspaceRefsTooltip'],  //$NON-NLS-1$
 	    		parentPath: "js.references", //$NON-NLS-1$
 	    		id : "workspace.js.refs",  //$NON-NLS-1$
-	    		key : [ "g", true, true, false, false],  //$NON-NLS-1$
-	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
-	    			}
-	    	);
-	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-	    			{
-						execute: function(editorContext, options) {
-							options.kind ='project'; //$NON-NLS-1$
-							return refscommand.execute(editorContext, options);
-						}
-					},
-	    			{
-	    		name: javascriptMessages["projectRefsName"],  //$NON-NLS-1$
-	    		tooltip : javascriptMessages['projectRefsTooltip'],  //$NON-NLS-1$
-	    		parentPath: "js.references", //$NON-NLS-1$
-	    		id : "project.js.refs",  //$NON-NLS-1$
-	    		key : [ "k", true, true, false, false],  //$NON-NLS-1$
+	    		//key : [ "g", true, true, false, false],  //$NON-NLS-1$
 	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
 	    			}
 	    	);
 		}
-		//TODO
-		if ("true" === localStorage.getItem("darklaunch")) {
-	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-	    			new OpenImplCommand.OpenImplementationCommand(astManager, ternWorker, CUProvider),  //$NON-NLS-1$
-	    			{
-	    		name: javascriptMessages["openImplName"],  //$NON-NLS-1$
-	    		tooltip : javascriptMessages['openImplTooltip'],  //$NON-NLS-1$
-	    		id : "open.js.impl",  //$NON-NLS-1$
-	    		contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
-    		key : [ 114, true, false, false, false],  //$NON-NLS-1$
-	    			}
-	    	);
-		}
+    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+    			new OpenImplCommand.OpenImplementationCommand(astManager, ternWorker, CUProvider),  //$NON-NLS-1$
+    			{
+    		name: javascriptMessages["openImplName"],  //$NON-NLS-1$
+    		tooltip : javascriptMessages['openImplTooltip'],  //$NON-NLS-1$
+    		id : "open.js.impl",  //$NON-NLS-1$
+    		contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+			key : [ 114, true, false, false, false]  //$NON-NLS-1$
+    			}
+    	);
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			new RenameCommand.RenameCommand(astManager, ternWorker, scriptresolver, CUProvider),
     			{

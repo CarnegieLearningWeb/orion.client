@@ -85,7 +85,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
         if (modelItem.type === "file") { //$NON-NLS-0$
             return modelItem;
         }
-        return modelItem.parent;
+        return modelItem.logicalParent ? modelItem.logicalParent : modelItem.parent;
     }
 
     function _onSameFile(modelItem1, modelItem2) {
@@ -131,20 +131,45 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
 				{holderDom: this._lastFileIconDom});
 		return link;
     };
-    
+/*    
 	SearchResultRenderer.prototype.generateDetailDecorator = function(item, spanHolder) {
-		if(item.type === 'group') {
-			//TODO do nothing for now
-		} else {
-			if(typeof(item.confidence) === "number") {
-				var classNames = ["confidenceDecorator"]; //$NON-NLS-1$
-				if(item.confidence >= 100) {
-					classNames.push("confidenceHigh"); //$NON-NLS-0$
-				} else {
-					classNames.push("confidenceLow"); //$NON-NLS-0$
-				}
-		    	_createSpan(classNames, null, spanHolder, item.confidence + "%");
-	    	}
+		if(typeof(item.confidence) === "number") {
+			var classNames = ["confidenceDecorator"]; //$NON-NLS-1$
+			if(item.confidence >= 100) {
+				classNames.push("confidenceHigh"); //$NON-NLS-0$
+			} else if(item.confidence > 0 && item.confidence < 100) {
+				classNames.push('confidenceMid'); //$NON-NLS-1$
+			}
+			else {
+				classNames.push("confidenceLow"); //$NON-NLS-0$
+			}
+	    	_createSpan(classNames, null, spanHolder, item.confidence + "%");
+    	}
+	};
+*/	
+	SearchResultRenderer.prototype.generateDetailDecorator = function(item, spanHolder) {
+		if(typeof(item.confidence) === "number") {
+			var icon = document.createElement("div"); //$NON-NLS-0$
+			icon.classList.add("confidenceDecoratorImg"); //$NON-NLS-0$
+			//TODO: Use message.js for the real titles.
+			if(item.confidence >= 100) {
+				icon.classList.add('confidenceHighImg'); //$NON-NLS-1$
+				icon.classList.add("core-sprite-checkmark"); //$NON-NLS-0$
+				icon.title = "Perfect match";
+			} else if(item.confidence > 0 && item.confidence < 100) {
+				icon.classList.add('confidenceMidImg'); //$NON-NLS-1$
+				icon.classList.add("core-sprite-warning"); //$NON-NLS-0$
+				icon.title = "Possible match: " + item.confidence + "%";
+			} else if(item.confidence === -1) {
+				icon.classList.add('confidenceUnknownImg'); //$NON-NLS-1$
+				icon.classList.add("core-sprite-questionmark"); //$NON-NLS-0$
+				icon.title = "Not enough information on this match";
+			} else {
+				icon.classList.add('confidenceLowImg'); //$NON-NLS-1$
+				icon.classList.add("core-sprite-error"); //$NON-NLS-0$
+				icon.title = "Not a match";
+			}
+			spanHolder.appendChild(icon);
 		}
 	};
 	
@@ -154,9 +179,17 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
             helper = this.explorer.model._provideSearchHelper();
         }
        
-		var params = helper ? mSearchUtils.generateFindURLBinding(helper.params, helper.inFileQuery, item.lineNumber, helper.params.replace, true) : null;
+        var params;
+        if(typeof item.start === "number" && typeof item.end === "number") {
+        	params = {start: item.start, end: item.end};
+        } else {
+			params = helper ? mSearchUtils.generateFindURLBinding(helper.params, helper.inFileQuery, item.lineNumber, helper.params.replace, true) : null;
+		}
 		//var name = item.parent.name;
-		var location = item.parent.location ? item.parent.location : '#';
+		var location = item.location;
+		if(!location) {
+			item.parent.location ? item.parent.location : '#';
+		}
 		var link = navigatorRenderer.createLink(null, 
 			{Location: location/*, Name: name*/}, 
 			this.explorer._commandService, 
@@ -194,7 +227,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
     };
     
     SearchResultRenderer.prototype.getCheckboxColumn = function(item, tableRow){
-    	if (!this.enableCheckbox(item) || (item.type === "file")) { //$NON-NLS-0$
+    	if (!this.enableCheckbox(item) || item.type === "file" || item.type === 'group') { //$NON-NLS-0$
     		return mExplorer.ExplorerRenderer.prototype.getCheckboxColumn.call(this, item, tableRow);
     	} else {
     		//detail row checkboxes should be placed in next column
@@ -391,8 +424,9 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
             checkbox: false,
             highlightSelection: false
         }, this);
-    	mFileDetailRenderer.getFullPathPref(this._preferences, "/inlineSearchPane", ["showFullPath"]).then(function(properties){ //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
+    	mFileDetailRenderer.getFullPathPref(this._preferences, "/inlineSearchPane", ["showFullPath", "viewByFile"]).then(function(properties){ //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
     		this._shouldShowFullPath = (properties ? properties[0] : false);
+    		this._viewByFile = (properties ? properties[1] : false);
     		this.declareCommands();
      	}.bind(this));
     }
@@ -432,6 +466,23 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
     InlineSearchResultExplorer.prototype.declareCommands = function() {
         var that = this;
         // page actions for search
+		var switchViewCommand = new mCommands.Command({
+			tooltip : messages["viewByTypesTooltip"],
+			name: messages["viewByTypes"],
+			imageClass : "problems-sprite-view-mode", //$NON-NLS-0$
+            id: "orion.globalSearch.switchView", //$NON-NLS-0$
+            groupId: "orion.searchGroup", //$NON-NLS-0$
+			type: "switch", //$NON-NLS-0$
+			checked: this._viewByFile,
+			visibleWhen: function(/*item*/) {
+				switchViewCommand.checked = this._viewByFile;
+				switchViewCommand.name = this._viewByFile ? messages["viewByTypes"] : messages["viewByFiles"];
+				switchViewCommand.tooltip = this._viewByFile ? messages["viewByTypesTooltip"] : messages["viewByFilesTooltip"];
+				return this.getItemCount() > 0 && this._cacheSearchResult && that.model && !that.model.replaceMode();
+			}.bind(this),
+			callback : function(data) {
+				this.switchViewMode();
+		}.bind(this)});
         var replaceAllCommand = new mCommands.Command({
             name: messages["Apply Changes"],
             tooltip: messages["Replace all selected matches"],
@@ -478,6 +529,9 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
             type: "switch", //$NON-NLS-0$
             checked: this._shouldShowFullPath,
             visibleWhen: function(/*item*/) {
+            	if(that._cacheSearchResult) {
+            		return that.getItemCount() > 0 && that._cacheSearchParams && that._cacheSearchParams.shape === "file";
+            	}
                 return (that.getItemCount() > 0);
             },
             callback: function() {
@@ -486,6 +540,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
             }
         });
         
+	    this._commandService.addCommand(switchViewCommand);
         this._commandService.addCommand(nextResultCommand);
         this._commandService.addCommand(prevResultCommand);
         this._commandService.addCommand(replaceAllCommand);
@@ -501,6 +556,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
 			return !item._reporting && !emptyKeyword;
         });
         
+	    this._commandService.registerCommandContribution("searchPageActions", "orion.globalSearch.switchView", 0); //$NON-NLS-1$ //$NON-NLS-0$
         this._commandService.registerCommandContribution("searchPageActions", "orion.globalSearch.replaceAll", 1); //$NON-NLS-2$ //$NON-NLS-1$
         this._commandService.registerCommandContribution("searchPageActions", "orion.explorer.expandAll", 2); //$NON-NLS-1$ //$NON-NLS-2$
         this._commandService.registerCommandContribution("searchPageActions", "orion.explorer.collapseAll", 3); //$NON-NLS-1$ //$NON-NLS-2$
@@ -598,7 +654,13 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
 
     InlineSearchResultExplorer.prototype.getItemChecked = function(item) {
         if (item.checked === undefined) {
-            item.checked = true;
+        	if(item.type === 'group' && (item.children.length === 0 || item.location === 'partial' || item.location === 'uncategorized')) {
+        		item.checked = false;
+        	} else if(item.parent && item.parent.type === 'group' && (item.parent.location === 'partial' || item.parent.location === 'uncategorized')) {
+        		item.checked = false;
+        	} else {
+	            item.checked = true;
+	        }
         }
         return item.checked;
     };
@@ -647,7 +709,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
 
     InlineSearchResultExplorer.prototype.onItemChecked = function(item, checked, manually) {
         item.checked = checked;
-        if (item.type === "file" || item === this.model.getListRoot()) { //$NON-NLS-0$
+        if (item.type === "file" || item.type === 'group' || item === this.model.getListRoot()) { //$NON-NLS-0$
             if (item.children) {
                 for (var i = 0; i < item.children.length; i++) {
                     var checkBox = lib.node(this.renderer.getCheckBoxId(this.model.getId(item.children[i])));
@@ -658,7 +720,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
                     }
                 }
             }
-            if (item.type === "file") { //$NON-NLS-0$
+            if (item.type === "file" || item.type === 'group') { //$NON-NLS-0$
                 this.onNewContentChanged(item);
             }
         } else if (manually) {
@@ -883,7 +945,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
 	        	// removed from diffs and must therefore be skipped.
 				var changeIndex = 0;
 				currentModel.parent.children.some(function(element){
-					if (currentModel.location === element.location) {
+					if (this.model.getId(currentModel) === this.model.getId(element)) {
 						return true;
 					} else if (element.checked) {
 						changeIndex++;
@@ -1058,6 +1120,13 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
      	}.bind(this));
     };
 
+    InlineSearchResultExplorer.prototype.switchViewMode = function() {
+	    	mFileDetailRenderer.switchFullPathPref(this._preferences, "/inlineSearchPane", ["viewByFile"]).then(function(properties){ //$NON-NLS-1$ //$NON-NLS-0$
+	    		this._viewByFile = (properties ? properties[0] : false);
+	    		this.runSearch(this._cacheSearchParams, this._resultsNode, this._cacheSearchResult); 
+	     	}.bind(this));
+	};
+	
 	InlineSearchResultExplorer.prototype._renderSearchResult = function(resultsNode, searchParams, searchResult, incremental) {
 		var node = lib.node(resultsNode);
 		lib.empty(node);
@@ -1090,12 +1159,17 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mFileClien
 	InlineSearchResultExplorer.prototype._search = function(resultsNode, searchParams, searchResult) {
 		lib.empty(resultsNode);
 		if(searchResult) {
-			this._renderSearchResult(resultsNode, searchParams, searchResult, searchParams.incremental);
+			this._resultsNode = resultsNode;
+			this._cacheSearchParams = searchParams;
+			this._cacheSearchParams.shape = this._viewByFile ? "file" : "group";
+			this._cacheSearchResult = searchResult;
+			this._renderSearchResult(resultsNode, this._cacheSearchParams, searchResult, searchParams.incremental);
 			window.setTimeout(function() {
 				this.expandAll();
 			}.bind(this), 10);
 			return;
 		}
+		this._cacheSearchResult = null;
 		//If there is no search keyword defined, then we treat the search just as the scope change.
 		if(typeof searchParams.keyword === "undefined"){ //$NON-NLS-0$
 			return;

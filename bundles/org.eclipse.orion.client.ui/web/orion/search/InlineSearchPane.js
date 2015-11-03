@@ -96,8 +96,8 @@ define([
 				this._showSearchOptBLocks();	
 				this._hideReplaceField();
 				this._searchBox.show();
+				this._searchBox.enable(true);
 				delete this._filledResult;
-				delete this._filledParams;
 				lib.empty(lib.node("searchResultsTitle"));
 				lib.empty(lib.node("searchPageActions"));
 				lib.empty(this._searchResultsWrapperDiv);
@@ -134,15 +134,15 @@ define([
 		},
 		
 		search: function(){
+			this._searchBox.enable(true);
 			this._submitSearch();
 		},
 		
-		fillSearchResult: function(filledParams, filledResult) {
-			this._hideSearchOptBLocks();	
-			this._filledResult = filledResult;
-			this._filledParams = filledParams;
+		fillSearchResult: function(searchResult) {
+			this._filledResult = searchResult;
 			this._showReplaceField();
-			this._searchResultExplorer.runSearch(filledParams, this._searchResultsWrapperDiv, filledResult);
+			this._hideSearchOptBLocks();	
+			this._searchResultExplorer.runSearch(searchResult.searchParams, this._searchResultsWrapperDiv, searchResult);
 		},
 				
 		_submitSearch: function(){
@@ -167,8 +167,8 @@ define([
 				this._replaceBox.addTextInputValueToRecentEntries();
 				this._fileNamePatternsBox.addTextInputValueToRecentEntries();
        			var searchParams;
-				if(this._filledResult && this._filledParams) {
-       				searchParams = mSearchUtils.copySearchParams(this._filledParams);
+				if(this._filledResult) {
+       				searchParams = mSearchUtils.copySearchParams(this._filledResult.searchParams);
        				searchParams.replace = options.replace;
 				} else {
 					searchParams = mSearchUtils.getSearchParams(this._searcher, options.keyword, options);
@@ -447,7 +447,9 @@ define([
 		
 		_hideSearchOptBLocks: function() {
 			this._searchWrapper.classList.add("searchOptParamBlockHidden");
-			this._searchBox.hide();
+			//this._searchBox.hide();
+			this._replaceTextInputBox.focus();
+			this._searchBox.enable(false);
 		},
 		
 		_showReplaceField: function() {
