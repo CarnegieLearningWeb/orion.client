@@ -504,9 +504,7 @@ define([
 			mode: mode,
 			showLinks: links,
 		});
-		return explorer.display().then(function() {
-			this.loadingDeferred.resolve();
-		}.bind(this), this.loadingDeferred.reject);
+		return explorer.display();
 	};
 	
 	GitRepositoryExplorer.prototype.displayBranches = function(repository) {
@@ -544,7 +542,7 @@ define([
 							break;
 						case "Remote": //$NON-NLS-0$
 							var activeBranch = this.commitsNavigator.model.getActiveBranch();
-							if (!activeBranch) return;
+							if (!activeBranch || activeBranch.Detached) return;
 							var newBranch;
 							for (var i = 0; i < activeBranch.RemoteLocation.length; i++) {
 								if (selected.Location === activeBranch.RemoteLocation[i].Location) {
@@ -605,17 +603,12 @@ define([
 		if (!explorer) return;
 		var activeBranch = explorer.model.getActiveBranch();
 		var targetRef = explorer.model.getTargetReference();
-		if (activeBranch && targetRef) {
-			if (activeBranch.Detached) {
-				title = i18nUtil.formatMessage(messages['DetachedHead ${0}'], util.shortenString(activeBranch.HeadSHA)); 
-			} else {
-				var targetName =  util.shortenRefName(targetRef);
-				title = activeBranch.Name + " => " + targetName;  //$NON-NLS-0$
-			}
+		if (activeBranch && targetRef && !util.sameRef(activeBranch, targetRef)) {
+			title = util.shortenRefName(activeBranch) + " => " + util.shortenRefName(targetRef);  //$NON-NLS-0$
 		} else if (!activeBranch && !targetRef) {
 			title = messages["NoActiveBranch"];
 		} else if (!activeBranch && targetRef) {
-			title = messages["NoActiveBranch"] + " => " +  util.shortenRefName(targetRef);  //$NON-NLS-0$
+			title = messages["NoActiveBranch"] + " => " + util.shortenRefName(targetRef);  //$NON-NLS-0$
 		} else {
 			title = util.shortenRefName(activeBranch || targetRef);
 		}
@@ -720,8 +713,10 @@ define([
 				} else {
 					explorer.select(repository.status);
 				}
+
 				mMetrics.logPageLoadTiming("complete", window.location.pathname); //$NON-NLS-0$
-			}.bind(this));
+				this.loadingDeferred.resolve();
+			}.bind(this), this.loadingDeferred.reject);
 		}.bind(this));
 	};
 

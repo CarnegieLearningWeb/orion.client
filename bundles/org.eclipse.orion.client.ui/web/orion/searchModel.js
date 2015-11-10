@@ -23,11 +23,16 @@ define([
     /*
      *	The model to support the search result.
      */
-    function SearchResultModel(serviceRegistry, fileClient, resultLocation, totalNumber, searchParams, options) {
+    function SearchResultModel(serviceRegistry, fileClient, searchResult, totalNumber, searchParams, options) {
         this.registry = serviceRegistry;
         this.fileClient = fileClient;
-        this._resultLocation = resultLocation;
-        this._numberOnPage = resultLocation.length;
+        if(searchResult && searchResult.categories) {
+        	this._fileList = searchResult.refResult;
+        	this._categories = searchResult.categories;
+        } else {
+        	this._fileList = searchResult;
+        }
+        this._numberOnPage = this._fileList.length;
         this._totalNumber = totalNumber;
         this._shape = searchParams.shape ? searchParams.shape : 'file'; //$NON-NLS-1$
         this._listRoot = {
@@ -119,6 +124,15 @@ define([
 	            result = item.location;
 	            // remove all non valid chars to make a dom id. 
 	            result = result.replace(/[^\.\:\-\_0-9A-Za-z]/g, "");
+	            if(typeof item.lineNumber === "number") {
+	            	result = result + "-" + item.lineNumber;
+	            }
+	            if(typeof item.matchNumber === "number") {
+	            	result = result + "-" + item.matchNumber;
+	            }
+	            if(typeof item.start === "number") {
+	            	result = result + "-" + item.start;
+	            }
 	        }
 	        return result;
 	    },
@@ -167,21 +181,57 @@ define([
     	buildResultModel: function buildResultModel() {
 	        this._indexedFileItems = [];
 	        this.getListRoot().children = [];
-	        for (var i = 0, len = this._resultLocation.length; i < len; i++) {
+	        if(this._shape === 'group' && this._categories) {
+				for (var prop in this._categories) {
+					if(this._categories[prop] !== undefined && this._categories[prop] !== null){
+		    			var categoryNode = { //$NON-NLS-1$
+				    			parent: this.getListRoot(),
+				    			type: 'group', //$NON-NLS-1$
+				    			name: this._categories[prop].name,
+				    			location: this._categories[prop].category,
+				    			category: this._categories[prop].category,
+				    			sort: this._categories[prop].sort,
+				    			children: []
+				    	};
+						this.getListRoot().children.push(categoryNode);
+					}
+				}
+ 				this.getListRoot().children.sort(function(a, b) {
+					return a.sort - b.sort;
+				});
+	        }
+	        for (var i = 0, len = this._fileList.length; i < len; i++) {
 	        	switch(this._shape) {
 	        		case 'file': {
-	        			this._buildFileResult(this._resultLocation[i]);
+	        			this._buildFileResult(this._fileList[i]);
 	        			break;
 	        		}
-	        		case 'category': {
-	        			this._buildCategoryResult(this._resultLocation[i]);
-	        			break;
-	        		}
-	        		case 'flat': {
-	        			this._buildFlatResult(this._resultLocation[i]);
+	        		case 'group': {
+	        			this._buildCategoryResult(this._fileList[i]);
 	        			break;
 	        		}
 	        	}
+	        }
+	        if(this._shape === 'group' && this._categories) {
+ 				var filtered = this.getListRoot().children.filter(function(category) {
+					return category.children.length > 0;
+				});
+				this.getListRoot().children = filtered;
+				this.getListRoot().children.forEach(function(category){
+					category.children.sort(function(a, b) {
+						//There are rare cases that a match confidence is not assigned.
+						var aC = typeof a.confidence === 'number' ? a.confidence : -1000;
+						var bC = typeof b.confidence === 'number' ? b.confidence : -1000;
+	 					if(aC === bC) {
+	 						if(a.location === b.location) {
+	 							return a.lineNumber - b.lineNumber;
+	 						} else {
+	 							return a.logicalParent.name - b.logicalParent.name;
+	 						}
+	 					}
+						return bC - aC;
+					});
+				});
 	        }
 	    },
 	    /**
@@ -199,8 +249,6 @@ define([
 	                name: result.name,
 	                children: children,
 	                contents: result.contents,
-	                //lastModified: this._resultLocation[i].lastModified, //$NON-NLS-0$
-	                //linkLocation: this._resultLocation[i].linkLocation,
 	                location: result.location,
 	                parentLocation: mUiUtils.path2FolderName(result.location, result.name, true),
 	                fullPathName: mUiUtils.path2FolderName(result.path, result.name)
@@ -215,7 +263,7 @@ define([
 						var matchNumber = j+1;
 						var newMatch = {confidence: child.matches[j].confidence, parent: fileNode, matches: child.matches, lineNumber: child.lineNumber, matchNumber: matchNumber, 
 							checked: child.matches[j].confidence === 100 ? true: false, type: "detail", //$NON-NLS-1$
-							name: child.name, location: fileNode.location + "-" + child.lineNumber + "-" + matchNumber
+							start: child.matches[j].start, end: child.matches[j].end, name: child.name, location: fileNode.location
 						};
 						newChildren.push(newMatch);
 					}
@@ -229,117 +277,81 @@ define([
            	
             	fileNode.children = newChildren;
             }
-            this._location2ModelMap[fileNode.location] = fileNode;
+            //this._location2ModelMap[fileNode.location] = fileNode;
             this.getListRoot().children.push(fileNode);
             this._indexedFileItems.push(fileNode);
 	    },
-	    /**
-    	 * @description Builds a category-based result model. Each searh result will have a categories array for all the categories it supports
-    	 * and each child result will be tagged with the category it belongs to.
-    	 * @function
-    	 * @private
-    	 * @param {Object} result The current search result element
-    	 * @since 10.0
-    	 */
-    	_buildCategoryResult: function _buildCategoryResult(result) {
-    		var children = result.children;
-    		var categories = result.categories;
-    		for(var i = 0, len = categories.length; i < len; i++) {
-    			var cat = categories[i];
-    			if(this._location2ModelMap[cat]) {
-    				continue;
-    			}
-	    		var node = {
-	    			parent: this.getListRoot(),
-	    			type: 'category', //$NON-NLS-1$
-	    			name: result.name,
-	    			category: cat,
-	    			children: children,
-	    			contents: result.contents,
-	    			location: result.location,
-	    			parentLocation: mUiUtils.path2FolderName(result.location, result.name, true),
-	    			fullPathName: mUiUtils.path2FolderName(result.path, result.name)
-	    		};
-		    	this._location2ModelMap[cat] = node;
-	            this.getListRoot().children.push(node);
-	            this._indexedFileItems.push(node);
-	        }
+	    
+	    _match2Category: function _match2Category(match) {
+			var hasOne = this.getListRoot().children[0];
+			this.getListRoot().children.some(function(element){
+				if (element.category === match.category) {
+					hasOne = element;
+					return true;
+				}				
+				return false;
+			}, this);
+	    	return hasOne;
 	    },
-	    /**
-    	 * @description Builds a flat list search result model. Takes the complete result and turns it into a flat list of matches
-    	 * @function
-    	 * @private
-    	 * @param {Object} result The search result
-    	 * @since 10.0
-    	 */
-    	_buildFlatResult: function _buildFlatResult(result) {
-    		if(this._map('exact', { //$NON-NLS-1$
-    			parent: this.getListRoot(),
-    			type: 'group', //$NON-NLS-1$
-    			name: 'Exact Matches',
-    			location: 'exact',
-    			children: []
-    		})) {
-	    		this.getListRoot().children.push(this._location2ModelMap.exact);
+	    
+	    _getLogicalFileNode: function _getLogicalFileNode(fileResult) {
+			var hasOne = null;
+			this._indexedFileItems.some(function(element){
+				if (element.location === fileResult.location) {
+					hasOne = element;
+					return true;
+				}				
+				return false;
+			}, this);
+	    	if(!hasOne) {
+	    		hasOne = {
+	                //parent: this.getListRoot(),
+	                type: "file", //$NON-NLS-0$
+	                name: fileResult.name,
+	                children: [],
+	                contents: fileResult.contents,
+	                location: fileResult.location,
+	                parentLocation: mUiUtils.path2FolderName(fileResult.location, fileResult.name, true),
+	                fullPathName: mUiUtils.path2FolderName(fileResult.path, fileResult.name)
+	            };
+	            this._indexedFileItems.push(hasOne);
+	    	}
+	    	return hasOne;
+	    },
+	    
+	    _buildCategoryResult: function _buildCategoryResult(singleFileResult) {
+    		var matchLines = singleFileResult.children;
+    		if(matchLines) {
+    			var logicalFileNode = this._getLogicalFileNode(singleFileResult);
+	    		for(var i = 0, len = matchLines.length; i < len; i++) {
+	    			var matchLine = matchLines[i];
+	    			var matches = matchLine.matches;
+	    			for (var j = 0, len2 = matches.length; j < len2; j++) {
+	    				var match = matches[j];
+						var matchNumber = j+1;
+	    				match.lineNumber = matchLine.lineNumber;
+	    				match.matchNumber = matchNumber;
+	    				match.matches = matches;
+	    				if(matchLine.name) {
+	    					match.lineString = matchLine.name;
+	    					match.name = matchLine.name;
+	    				} else {
+	    					match.lineString = '';
+	    					match.name = '';
+	    				}
+	    				if(singleFileResult.location) {
+	    					match.location = singleFileResult.location;
+	    				} else {
+	    					match.location = '';
+	    				}
+	    				var categoryNode = this._match2Category(match);
+	    				match.parent = categoryNode;
+	    				categoryNode.children.push(match);
+			    		match.logicalParent = logicalFileNode;
+			    		logicalFileNode.children.push(match);
+	    			}
+	    		}
 			}
-    		if(this._map('possible', { //$NON-NLS-1$
-    			parent: this.getListRoot(),
-    			type: 'group', //$NON-NLS-1$
-    			name: 'Possible Matches',
-    			location: 'possible',
-    			children: []
-    		})) {
-	    		this.getListRoot().children.push(this._location2ModelMap.possible);
-			}
-    		if(this._map('unrelated', { //$NON-NLS-1$
-    			parent: this.getListRoot(),
-    			type: 'group', //$NON-NLS-1$
-    			name: 'Unrelated Matches',
-    			location: 'unrelated',
-    			children: []
-    		})) {
-	    		this.getListRoot().children.push(this._location2ModelMap.unrelated);
-			}
-    		var files = result.children;
-    		for(var i = 0, len = files.length; i < len; i++) {
-    			var file = files[i];
-    			var matches = file.matches;
-    			for (var j = 0, len2 = matches.length; j < len2; j++) {
-    				var match = matches[j];
-    				match.parent = this.getListRoot();
-    				match.lineNumber = file.lineNumber;
-    				if(file.name) {
-    					match.lineString = file.name;
-    					match.name = file.name;
-    				} else {
-    					match.lineString = '';
-    					match.name = '';
-    				}
-    				if(result.location) {
-    					match.location = result.location;
-    				} else {
-    					match.location = '';
-    				}
-    				if(typeof(match.confidence) === 'number') {
-    					if(match.confidence < 1) {
-		    				this._location2ModelMap.unrelated.children.push(match);
-		    			} else if(match.confidence < 100) {
-		    				this._location2ModelMap.possible.children.push(match);
-		    			} else {
-		    				this._location2ModelMap.exact.children.push(match);
-		    			}
-    				}
-    			}
-    		}
-    		function _srt(a, b) {
-    			if(a.confidence === b.confidence) {
- 					return a.lineNumber - b.lineNumber;
- 				}
-				return b.confidence - a.confidence;
-    		}
-    		this._location2ModelMap.exact.children.sort(_srt);
-    		this._location2ModelMap.possible.children.sort(_srt);
-    		this._location2ModelMap.unrelated.children.sort(_srt);
 	    },
 	    /**
     	 * @description if replace mode is enabled
@@ -486,26 +498,48 @@ define([
     	 * @override
     	 */
     	getHeaderString: function getHeaderString() {
-	        var headerStr = messages["Results"]; //$NON-NLS-0$
-	        if (this._searchHelper.displayedSearchTerm) {
-	            var pagingParams = this.getPagingParams();
-	            if (pagingParams.numberOnPage > 0) {
-	                var startNumber = pagingParams.start + 1;
-	                var endNumber = startNumber + pagingParams.numberOnPage - 1;
-	                headerStr = "";
-	                if (!this.replaceMode()) {
-	                    headerStr = i18nUtil.formatMessage(messages["FilesAofBmatchingC"],
-	                    startNumber + "-" + endNumber, pagingParams.totalNumber, this._searchHelper.displayedSearchTerm); //$NON-NLS-0$
-	                } else {
-	                    headerStr = i18nUtil.formatMessage(messages["ReplaceAwithBforCofD"],
-	                    this._searchHelper.displayedSearchTerm,
-	                    this._searchHelper.params.replace,
-	                    startNumber + "-" + endNumber, //$NON-NLS-0$
-	                    pagingParams.totalNumber);
-	                }
-	            }
-	        }
-	        return headerStr;
+    		if(this._shape === 'group') {
+    			//# references to <str> in <project_name>|<workspace>
+    			var total = 0;
+    			for(var i = 0, len = this._fileList.length; i < len; i++) {
+    				var matches = this._fileList[i].totalMatches;
+    				if(typeof(matches) === 'number') {
+	    				total += matches;
+					}
+    			}
+    			var res = this._searchHelper.params.resource;
+    			if(res && res !== '/file') {
+    				res = res.replace(/\/$/g, '');
+    				var idx = res.lastIndexOf('/');
+    				if(idx > -1) {
+    					res = res.substring(idx+1);
+    				}
+    				return i18nUtil.formatMessage(messages['refsInProject'], {0: total, 1: this._searchHelper.displayedSearchTerm, 2: decodeURIComponent(res)});
+    			} else {
+    				return i18nUtil.formatMessage(messages['refsInWorkspace'], {0: total, 1: this._searchHelper.displayedSearchTerm});
+    			}
+    		} else {
+		        var headerStr = messages["Results"]; //$NON-NLS-0$
+		        if (this._searchHelper.displayedSearchTerm) {
+		            var pagingParams = this.getPagingParams();
+		            if (pagingParams.numberOnPage > 0) {
+		                var startNumber = pagingParams.start + 1;
+		                var endNumber = startNumber + pagingParams.numberOnPage - 1;
+		                headerStr = "";
+		                if (!this.replaceMode()) {
+		                    headerStr = i18nUtil.formatMessage(messages["FilesAofBmatchingC"],
+		                    startNumber + "-" + endNumber, pagingParams.totalNumber, this._searchHelper.displayedSearchTerm); //$NON-NLS-0$
+		                } else {
+		                    headerStr = i18nUtil.formatMessage(messages["ReplaceAwithBforCofD"],
+		                    this._searchHelper.displayedSearchTerm,
+		                    this._searchHelper.params.replace,
+		                    startNumber + "-" + endNumber, //$NON-NLS-0$
+		                    pagingParams.totalNumber);
+		                }
+		            }
+		        }
+		        return headerStr;
+        	}	
 	    },
 	    /**
     	 * @description The function to return the list of valid files. Optional.
@@ -572,24 +606,6 @@ define([
 				return this._filteredRoot.children;
 	        }
 	        return model.children;
-	    },
-	    /**
-    	 * @description Maps the given node to the given location. This function does not allow a mapping to be overwritten
-    	 * @function
-    	 * @private
-    	 * @param {String} loc The location to map to
-    	 * @param {Object} node The object to cache
-    	 * @returns {Boolean} True if the cache changed, false otherwise 
-    	 * @since 10.0
-    	 */
-    	_map: function _map(loc, node) {
-	    	if(loc) {
-	    		if(!this._location2ModelMap[loc]) {
-	    			this._location2ModelMap[loc] = node;
-	    			return true;
-	    		}
-	    	}
-	    	return false;
 	    },
 	    /**
     	 * @description description

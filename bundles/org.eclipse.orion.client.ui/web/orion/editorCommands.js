@@ -892,10 +892,13 @@ define([
 						serviceCall = service.execute(editorContext, context); 
 						handleResult = function(result){
 							if (result && result.searchParams && result.refResult) {
-								var refResult = result.refResult;
 								if(that.sideBar) {
-									that.sideBar.fillSearchPane(result.searchParams.keyword, {Location: result.searchParams.resource}, refResult, result.searchParams);
+									that.sideBar.fillSearchPane(result.searchParams.keyword, {Location: result.searchParams.resource}, result);
 								}
+							}
+							var statusService = serviceRegistry.getService("orion.page.message"); //$NON-NLS-0$
+							if (statusService) {
+								statusService.setProgressMessage("");
 							}
 						};
 					} else {

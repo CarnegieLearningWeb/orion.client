@@ -74,7 +74,20 @@ function Tooltip (view) {
 					self.hide();
 				}
 			}, true);
+			textUtil.addEventListener(document, "scroll", this._scrollHandler = function(event) { //$NON-NLS-0$
+				if (!self.isVisible()) return;
+				if (self._topPixel !== self._view.getTopPixel() || self._leftPixel !== self._view.getHorizontalPixel()) {
+					self.hide();
+				}
+			}, true);
 			textUtil.addEventListener(document, "mousemove", this._mouseMoveHandler = function(event) { //$NON-NLS-0$
+				// Ignore spurious mousemove events
+				if (self._prevX && self._prevX === event.clientX && self._prevY && self._prevY === event.clientY) {
+					return;
+				}
+				self._prevX = event.clientX;
+				self._prevY = event.clientY;
+				
 				if (!self.isVisible() || self._locked || self._hasFocus()) { return; }
 				if (self._isInRect(self._outerArea, event.clientX, event.clientY)){ return; }
 				self.hide();
@@ -115,6 +128,7 @@ function Tooltip (view) {
 			if (parent) { parent.removeChild(this._tooltipDiv); }
 			var doc = this._tooltipDiv.ownerDocument;
 			textUtil.removeEventListener(doc, "mousedown", this._mouseDownHandler, true); //$NON-NLS-0$
+			textUtil.removeEventListener(doc, "scroll", this._scrollHandler, true); //$NON-NLS-0$
 			textUtil.removeEventListener(doc, "mousemove", this._mouseMoveHandler, true); //$NON-NLS-0$
 			this._tooltipDiv = null;
 		},
@@ -130,6 +144,8 @@ function Tooltip (view) {
 		show: function(tooltipInfo, locked, giveFocus) {
 			this._locked = locked;
 			this._giveFocus = giveFocus;
+			this._topPixel = this._view.getTopPixel();
+			this._leftPixel = this._view.getHorizontalPixel();
 			this._processInfo(tooltipInfo.getTooltipInfo());
 		},
 		

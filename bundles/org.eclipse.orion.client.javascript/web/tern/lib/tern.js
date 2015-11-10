@@ -3,7 +3,7 @@
 // A server is a stateful object that manages the analysis for a
 // project, and defines an interface for querying the code in the
 // project.
-
+/* eslint-disable */
 (function(root, mod) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
     return mod(exports, require("./infer"), require("./signal"),
@@ -142,7 +142,7 @@
       var self = this;
       doRequest(this, doc, function(err, data) {
         c(err, data);
-        if (self.uses > 40) {
+        if (self.uses > 40000) {
           self.reset();
           analyzeAll(self, null, function(){});
         }
@@ -208,13 +208,19 @@
 
       function run() {
         var result;
-        try {
-          result = queryType.run(srv, query, file);
-        } catch (e) {
-          if (srv.options.debug && e.name != "TernError") console.error(e.stack);
-          return c(e);
-        }
-        c(null, result);
+        if(queryType.runAsync) { //ORION
+        	queryType.runAsync(srv, query, file, function(err, result) {
+        		c(err, result);
+        	});
+        } else {
+	        try {
+	          result = queryType.run(srv, query, file);
+	        } catch (e) {
+	          if (srv.options.debug && e.name != "TernError") console.error(e.stack);
+	          return c(e);
+	        }
+	        c(null, result);
+	    }
       }
       infer.withContext(srv.cx, timeBudget ? function() { infer.withTimeout(timeBudget[0], run); } : run);
     });
@@ -255,6 +261,10 @@
     } else if (srv.options.async) {
       srv.startAsyncAction();
       srv.options.getFile(name, function(err, text) {
+      	//ORION We pass back an object containing addition information about the file
+      	if (typeof text === 'object'){ //ORION
+      	  text = text.contents; //ORION
+      	} //ORION
         updateText(file, text || "", srv);
         srv.finishAsyncAction(err);
       });
@@ -1022,5 +1032,10 @@
 
   exports.version = "0.12.0";
   exports.findDef = findDef; //ORION
+  exports.findExpr = findExpr; //ORION
+  exports.findExprType = findExprType; //ORION
+  exports.resolveFile = resolveFile; //ORION
+  exports.storeTypeDocs = storeTypeDocs; //ORION
+  exports.parseDoc = parseDoc; //ORION
   exports.resolvePos = resolvePos; //ORION
 });

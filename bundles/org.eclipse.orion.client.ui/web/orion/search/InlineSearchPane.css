@@ -11,20 +11,50 @@
 .searchResultsWrapperDiv .confidenceDecorator {
 	display: inline-block;
 	width: 32px;
-	height: 16px;
 	vertical-align: middle;
-	margin-top: 4px;
 	border: none;
 }
 
-.searchResultsWrapperDiv .confidenceHigh {
-	color: white;
-	background-color:green;
+.searchResultsWrapperDiv .confidenceDecoratorImg {
+	display: inline-block;
+	width: 16px;
+	vertical-align: middle;
+	font-size: 12px;
+	border: none;
 }
 
+.searchResultsWrapperDiv .confidenceHighImg {
+	color: green;
+}
+
+.searchResultsWrapperDiv .confidenceMidImg {
+	color: orange;
+	padding-right: 1px;
+}
+
+.searchResultsWrapperDiv .confidenceUnknownImg {
+	color: blue;
+}
+
+.searchResultsWrapperDiv .confidenceLowImg {
+	color: red;
+	padding-right: 1px;
+}
+
+.searchResultsWrapperDiv .confidenceHigh {
+	color: white !important;
+	background-color: #1BB199 !important;
+}
+
+.searchResultsWrapperDiv .confidenceMid {
+	color: white !important;
+	background-color: #f0ad4e !important;
+}
+
+
 .searchResultsWrapperDiv .confidenceLow {
-	color: black;
-	background-color:yellow;
+	color: white !important;
+	background-color: #d9534f !important;
 }
 
 .searchResultsWrapperDiv .selectableNavRow:hover {
@@ -66,7 +96,7 @@
 }
 
 .searchWrapper.searchOptParamBlockHidden > .searchResultsWrapperDiv{
-	height: calc(100% - 98px);
+	height: calc(100% - 120px);
 }
 
 .searchWrapper.searchOptParamBlockHidden > .searchOptWrapperDiv > .searchMainOptionBlock > .toggleDisplayLink{
@@ -88,7 +118,6 @@
 
 .searchResultsWrapperDiv > div > .treetable {
 	background: white;
-	table-layout: fixed;
 }
 
 .searchWrapper.searchOptionsHidden > .searchResultsWrapperDiv{
@@ -162,6 +191,10 @@
 
 .searchMainOptionBlock {
 	margin: 5px 10px 0 10px;
+}
+
+.searchMainOptionBlock input[type="text"]:disabled {
+    background: white;
 }
 
 .searchOptionBlock {
@@ -309,6 +342,13 @@
 	margin-right: 5px;
 }
 
+.fileLineSpan {
+	color: black;
+	display: inline-block;
+	font-style: italic;
+	font-size: 8pt;
+}
+
 .fileParentSpan {
 	color: #666 !important;
 	flex-grow: 0;
@@ -317,6 +357,28 @@
 	-webkit-flex-shrink: 0;		/* Safari */
 	font-size: 8pt; 
 	font-weight: normal;
+}
+
+.groupParentSpan {
+	color: #333 !important;
+	flex-grow: 0;
+	flex-shrink: 0;
+	-webkit-flex-grow: 0;		/* Safari */
+	-webkit-flex-shrink: 0;		/* Safari */
+	font-size: 9pt; 
+}
+
+.groupNameSpan {
+	font-weight: bold;
+	padding-top: 2px;
+    display: inline-block;
+}
+
+.groupCountSpan {
+	font-weight: bold;
+	padding-top: 2px;
+	padding-left: 5px;
+    display: inline-block;
 }
 
 .ellipsisSpan {
@@ -386,11 +448,10 @@
 	display: none;
 	font-size: 8pt;
 	font-weight: bold;
-	height: 20px;
-	left: 1px;
+	left: 0px;
 	padding: 3px 10px;
 	position: absolute;
-	top: -19px;
+	top: 1px;
 	z-index: 1;
 }
 
@@ -400,6 +461,7 @@
 
 .replaceCompareDiv {
 	display: none;
+	top: 20px;
 	z-index: 51;
 }
 

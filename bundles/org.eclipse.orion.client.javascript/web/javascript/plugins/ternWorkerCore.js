@@ -37,6 +37,7 @@ require([
 	'tern/plugin/orionRedis',
 	'tern/plugin/requirejs',
 	'tern/plugin/ternPlugins',
+	'tern/plugin/refs',
 	'tern/plugin/openImplementation',
 	'tern/plugin/htmlDependencies',
 	'json!tern/defs/ecma5.json',
@@ -47,14 +48,18 @@ require([
 ],
 /* @callback */ function(Tern, docPlugin, orionAMQPPlugin, angularPlugin,/* componentPlugin,*/ orionExpressPlugin, orionMongoDBPlugin,
 							orionMySQLPlugin, orionNodePlugin, orionPostgresPlugin, orionRedisPlugin, orionRequirePlugin, ternPluginsPlugin,
-							openImplPlugin, htmlDepPlugin, ecma5, ecma6, browser, Messages, i18nUtil) {
+							refsPlugin, openImplPlugin, htmlDepPlugin, ecma5, ecma6, browser, Messages, i18nUtil) {
 
-    var ternserver = Object.create(null);
+    var ternserver = null;
 
     /**
      * @description Start up the Tern server, send a message after trying
      */
-    function startServer() {
+    function startServer(jsonOptions) {
+    	if (ternserver){
+    		ternserver.reset();
+    		ternserver = null;
+    	}
         var options = {
                 async: true,
                 debug: false,
@@ -151,17 +156,42 @@ require([
                     	description: Messages["htmlDepPluginDescription"],
                     	version: '1.0', //$NON-NLS-1$
                     	removable: false
+                    },
+                    refs: {
+                    	name : Messages["findTypesName"],
+                    	description: Messages["findTypesDescription"],
+                    	version: '1.0', //$NON-NLS-1$
+                    	removable: false
                     }
                 },
                 getFile: _getFile
             };
-
+        if (jsonOptions){
+			if (jsonOptions.plugins){
+        		options.plugins = jsonOptions.plugins;
+        	}
+        	if (Array.isArray(jsonOptions.libs)){
+        		// TODO Untested option, related to the defs lookup
+        		options.libs = jsonOptions.libs;
+        	}
+        	if (typeof jsonOptions.ecmaVersion === 'number'){
+        		// TODO Untested option
+        		options.ecmaVersion = jsonOptions.ecmaVersion;
+        	}
+        	if (typeof jsonOptions.dependencyBudget === 'number'){
+        		// TODO Untested option
+        		options.dependencyBudget = jsonOptions.dependencyBudget;
+        	}
+        }
         ternserver = new Tern.Server(options);
         post('server_ready'); //$NON-NLS-1$
     }
-    startServer();
+	post('worker_ready'); //$NON-NLS-1$
 
 	var handlers = {
+		'start_server': function(args){
+			startServer(args && args.options);	
+		},
 		'addFile': function(args, callback) {
 			ternserver.addFile(args.file, args.source);
 			callback({request: 'addFile'}); //$NON-NLS-1$
@@ -386,29 +416,6 @@ require([
 		       callback({request: 'plugin_enablement', message: Messages['failedEnablementPluginsNoServer']}); //$NON-NLS-1$
 		   }
 		},
-		'refs': function(args, callback) {
-			if(ternserver) {
-		       ternserver.request({
-		           query: {
-			           type: "refs",  //$NON-NLS-1$
-			           file: args.meta.location,
-			           end: args.params.offset,
-			           newName: args.newname
-		           },
-		           files: args.files},
-		           function(error, refs) {
-		               if(error) {
-		                   callback({request: 'refs', error: error.message, message: Messages['failedRefs']}); //$NON-NLS-1$
-		               } else if(refs && Array.isArray(refs.refs)) {
-	        			   callback({request: 'refs', refs:refs.refs}); //$NON-NLS-1$
-		               } else {
-		               		callback({request: 'refs', refs:[]}); //$NON-NLS-1$
-		               }
-		           });
-		   } else {
-		       callback({request: 'refs', message: Messages['failedRefsNoServer']}); //$NON-NLS-1$
-		   }
-		},
 		/**
 		 * @callback
 		 */
@@ -469,6 +476,22 @@ require([
 		               	   callback({request: 'type', type: type}); //$NON-NLS-1$
 		               }
 		           });
+		},
+		'checkRef': function(args, callback) {
+			ternserver.request({
+		           query: {
+			           type: "checkRef",  //$NON-NLS-1$
+			           file: args.meta.location,
+			           end: args.params.offset,
+			           origin: args.origin
+		           }},
+		           function(error, type) {
+		               if(error) {
+		                   callback({request: 'checkRef', error: typeof(error) === 'string' ? error : error.message, message: Messages['failedType']}); //$NON-NLS-1$
+		               } else {
+		               	   callback({request: 'checkRef', type: type}); //$NON-NLS-1$
+		               }
+		           });
 		}
 	};
 
@@ -482,12 +505,15 @@ require([
     onmessage = function(evnt) {
         if(typeof(evnt.data) === 'object') {
             var _d = evnt.data;
+            if (!ternserver && _d.request !== 'start_server'){
+            	serverNotReady(_d);
+            }
             var _handler = handlers[_d.request];
 			if(typeof(_handler) === 'function') {
 				_handler(_d.args, function(response) {
-					if(_d.messageID) {
+					if(typeof(_d.messageID) === 'number') {
 						response.messageID = _d.messageID;
-					} else if(_d.ternID) {
+					} else if(typeof(_d.ternID) === 'number') {
 						response.ternID = _d.ternID;
 					}
                 	post(response);
@@ -519,6 +545,22 @@ require([
 			response.ternID = data.ternID;
 		}
 		response.error = i18nUtil.formatMessage(Messages['unknownRequest'], response.request);
+		post(response);
+	}
+	
+	/**
+	 * @description Respond back that the tern server has not been started
+	 * @param {Object} data The original request data
+	 */
+	function serverNotReady(data) {
+		var response = Object.create(null);
+		response.request = data.request;
+		if(data.messageID) {
+			response.messageID = data.messageID;
+		} else if(data.ternID) {
+			response.ternID = data.ternID;
+		}
+		response.error = i18nUtil.formatMessage(Messages['serverNotStarted'], response.request);
 		post(response);
 	}
 

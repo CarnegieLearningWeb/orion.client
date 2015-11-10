@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2015 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -12,7 +12,7 @@ define({//Default message bundle
 	"Find:": "Find:",
 	"Find With": "Find With",
 	"ReplaceWith:": "ReplaceWith:",
-	"Replace With": "Replace With",
+	"Replace With": "Replace with",
 	"Show all": "Show all",
 	"Wrap search": "Wrap search",
 	"Incremental search": "Incremental search",
@@ -97,10 +97,19 @@ define({//Default message bundle
 	"Show replacement preview": "Show replacement preview",
 	"File name patterns (comma-separated)": "File name patterns (comma-separated)",
 	"(* = any string, ? = any character)": "(* = any string, ? = any character)",
+	"(${0})": "(${0} matches)",
+	"singleMatch": "(1 match)",
 	"Choose a Folder": "Choose a Folder",
 	"Remove from search results": "Remove from search results",
 	"^ Edit Search": "^ Edit Search",
 	"Preview: " : "Preview: ",
 	"fullPath": "Show Full Path",
-	"switchFullPath": "Show/hide full path"
+	"switchFullPath": "Show/hide full path",
+	"refsInProject": "${0} references to \'${1}\' in ${2}",
+	"refsInWorkspace": "${0} references to \'${1}\' in the workspace",
+	"viewByTypes" : "By types", //$NON-NLS-1$ //$NON-NLS-0$
+	"viewByFiles" : "By files", //$NON-NLS-1$ //$NON-NLS-0$
+	"viewByTypesTooltip": "View references grouped by categories", //$NON-NLS-1$ //$NON-NLS-0$
+	"viewByFilesTooltip": "View references grouped by files" //$NON-NLS-1$ //$NON-NLS-0$
+	
 });

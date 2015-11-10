@@ -126,5 +126,28 @@ define({//Default message bundle
 	"callbackHoverTitle": "Callback:", // the in-line title for the callback section. The word is used alone in a sentence with no further punctuation
 	"sinceHoverTitle": "Since:", // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
 	"seeAlsoHoverTitle": "See Also:", // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
-	"openFileForTitle": "Open file for" // the in-line title for the 'open file hover'. The sentence is used as-is and is followed only by a OS file path
+	"openFileForTitle": "Open file for", // the in-line title for the 'open file hover'. The sentence is used as-is and is followed only by a OS file path
+	//All refs
+	"functionDecls": "Function Declarations",
+	"functionCalls": "Function Calls",
+	"propAccess": "Property Access",
+	"propWrite": "Property Write",
+	"varAccess": "Variable Access",
+	"varWrite": "Variable Write",
+	"varDecls": "Variable Declarations",
+	"regex": "Regular Expressions",
+	"strings": "Strings",
+	"blockComments": "Block Comments",
+	"lineComments": "Line Comments",
+	"partial": "Partial Matches",
+	"uncategorized": "Uncategorized",
+	"parseErrors": "Parse Errors",
+	"noFileContents": "Could not compute references: failed to compute file text content",
+	"noFileMeta": "Could not compute references: failed to compute file metadata",
+	"cannotComputeRefs": "Cannot compute references: ${0}",
+	"notAnIdentifier": "Cannot compute references at the selected location: Location is not an identifier",
+	"notHtmlOffset": "Not a valid offset in HTML",
+	"allProjectRefs": "Finding all project references...",
+	"allWorkspaceRefs": "Finding all workspace references...",
+	"refsFoundIn": "References found in file: \'${0}\' (${1}/${2})"
 });
