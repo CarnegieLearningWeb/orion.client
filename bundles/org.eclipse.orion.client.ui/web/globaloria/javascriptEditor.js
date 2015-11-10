@@ -250,7 +250,7 @@ define([
                 getHelpButton.textContent = 'Get Help?';
                 getHelpButton.className   = 'btn glife-navy';
 
-                getHelpButton.setAttribute('href', 'https://globaloriahelp.zendesk.com');
+                getHelpButton.setAttribute('href', 'https://globaloriahelp.zendesk.com/hc/en-us/categories/200406169-GIDE-Help');
                 getHelpButton.setAttribute('target', '_blank');
 
                 // Add a refresh button to reload the game
