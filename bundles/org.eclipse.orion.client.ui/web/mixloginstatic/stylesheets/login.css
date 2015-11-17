@@ -253,6 +253,7 @@ input::-ms-reveal {
 }
 
 .left-section {
+	background:white;
     min-width:220px;
 }
 
