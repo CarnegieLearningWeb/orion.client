@@ -16,9 +16,9 @@
  */
 define([
 'orion/plugin',
-'orion/bootstrap',
+'orion/serviceregistry',
 'orion/Deferred',
-'orion/fileClient', 
+'orion/fileClient',
 'orion/metrics',
 'esprima/esprima',
 'estraverse/estraverse',
@@ -34,6 +34,7 @@ define([
 'javascript/ternProjectManager',
 'orion/util',
 'javascript/logger',
+'javascript/commands/addToTernCommand',
 'javascript/commands/generateDocCommand',
 'javascript/commands/openDeclaration',
 'javascript/commands/openImplementation',
@@ -45,18 +46,18 @@ define([
 'orion/editor/stylers/application_schema_json/syntax',
 'orion/editor/stylers/application_x-ejs/syntax',
 'i18n!javascript/nls/messages',
+'orion/i18nUtil',
 'orion/URL-shim'
-], function(PluginProvider, Bootstrap, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist,
-			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, TernProjectManager, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
-			RenameCommand, RefsCommand, mGSearchClient, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages) {
+], function(PluginProvider, mServiceRegistry, Deferred, FileClient, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist,
+			EslintValidator, Occurrences, Hover, Outliner,	CUProvider, TernProjectManager, Util, Logger, AddToTernCommand, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
+			RenameCommand, RefsCommand, mGSearchClient, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages, i18nUtil) {
 
+	var serviceRegistry = new mServiceRegistry.ServiceRegistry();
     var provider = new PluginProvider({
 		name: javascriptMessages['pluginName'], //$NON-NLS-1$
 		version: "1.0", //$NON-NLS-1$
 		description: javascriptMessages['pluginDescription'] //$NON-NLS-1$
-	});
-
-    Bootstrap.startup().then(function(core) {
+	}, serviceRegistry);
 
     	/**
     	 * Register the JavaScript content types
@@ -83,12 +84,6 @@ define([
     	});
 
     	/**
-    	 * Re-init
-    	 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=462878
-    	 */
-    	Metrics.initFromRegistry(core.serviceRegistry);
-
-    	/**
     	 * make sure the RecoveredNode is ignored
     	 * @since 9.0
     	 */
@@ -96,7 +91,7 @@ define([
     	/**
     	 * Create the file client early
     	 */
-    	var fileClient = new FileClient.FileClient(core.serviceRegistry);
+    	var fileClient = new FileClient.FileClient(serviceRegistry);
     	
     	/**
     	 * Create the script resolver
@@ -120,30 +115,25 @@ define([
     			this.worker.port.onmessage = onMessage;
     			this.worker.port.onerror = onError;
     			this.worker.port.start();
-    			this.worker.port.postMessage('');
+    			this.worker.postMessage({request: "start_worker"}); //$NON-NLS-1$
     		} else { */
  				var wUrl = new URL(script, window.location.href);
-    			wUrl.query.set("worker-language", navigator.language);   			 //$NON-NLS-1$
+    			wUrl.query.set("worker-language", navigator.language); //$NON-NLS-1$
     			this.worker = new Worker(wUrl.href);
     			this.worker.onmessage = onMessage.bind(this);
     			this.worker.onerror = onError.bind(this);
-    			this.worker.postMessage('start_worker'); //$NON-NLS-1$
+    			this.worker.postMessage({request: "start_worker"}); //$NON-NLS-1$
     			this.messageId = 0;
     			this.callbacks = Object.create(null);
     	//	}
     	}
     	
-    	WrappedWorker.prototype.startServer = function(jsonOptions){
-    		ternReady = false;
-    		if(this.shared) {
-	    		this.worker.port.postMessage({request: 'start_server', args: {options: jsonOptions}}); //$NON-NLS-1$
-    		} else {
-    			this.worker.postMessage({request: 'start_server', args: {options: jsonOptions}}); //$NON-NLS-1$
-    		}
-    	};
-    	
     	WrappedWorker.prototype.postMessage = function(msg, f) {
-    		if(ternReady) {
+    		var starting = msg.request === 'start_server';
+    		if(starting) {
+    			ternReady = false;
+    		}
+    		if(ternReady || starting) {
 				if(msg != null && typeof(msg) === 'object') {
 					if(typeof(msg.messageID) !== 'number' && typeof(msg.ternID) !== 'number') {
 						//don't overwrite an id from a tern-side request
@@ -161,25 +151,41 @@ define([
 			}
     	};
 
-    	var prefService = core.serviceRegistry.getService("orion.core.preference"); //$NON-NLS-1$
     	/**
     	 * Object of contributed environments
     	 *
     	 * TODO will need to listen to updated tern plugin settings once enabled to clear this cache
     	 */
     	var contributedEnvs;
-
+		var ternWorker;
+		
 		var handlers ={
 			'read': doRead,
-			'worker_ready': workerReady,
-			'server_ready': serverReady
+			/**
+			 * @callback
+			 */
+			'worker_ready': function(response) {
+				ternReady = false;
+				ternWorker.postMessage({request: 'start_server', args: {options: {}}}, /* @callback */ function(response) { //$NON-NLS-1$
+					serverReady();
+				});
+			},
+			/**
+			 * @callback
+			 */
+			'start_server': function(response) {
+				serverReady();
+			}
 		};
 
 		// Start the worker
-    	var ternWorker = new WrappedWorker("ternWorker.js",  //$NON-NLS-1$
+    	ternWorker = new WrappedWorker("ternWorker.js",  //$NON-NLS-1$
 	    	function(evnt) {
 	    		var _d = evnt.data;
-				if(typeof(_d) === 'object') {
+	    		if(_d.__isError) {
+	    			//TODO log using the new platform hooks when available
+	    			Logger.log(_d.message);
+	    		} else if(typeof(_d) === 'object') {
 					var id  = _d.messageID;
 					var f = this.callbacks[id];
 					if(typeof(f) === 'function') {
@@ -190,12 +196,7 @@ define([
 					if(typeof(_handler) === 'function') {
 						_handler(_d);
 					}
-				} else if(typeof(evnt.data) === 'string') {
-					_handler = handlers[evnt.data];
-					if(typeof(_handler) === 'function') {
-						_handler(_d);
-					}
-		    	}
+				}
 	    	},
 	    	function(err) {
 	    		Logger.log(err);
@@ -222,22 +223,26 @@ define([
 								ternWorker.postMessage(response);
 							});
 						} else {
-							response.args.error = 'Failed to read file '+_l;
+							response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], _l);
 							ternWorker.postMessage(response);
 						}
 					} else {
-						response.args.error = 'Failed to read file '+_l;
+						response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], _l);
 						ternWorker.postMessage(response);
 					}
 				},
 				function(err) {
-					response.args.error = 'Failed to read file '+_l;
+					response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], _l);
 					response.args.message = err.toString();
 					ternWorker.postMessage(response);
 				});
 			} else {
 				var file = request.args.file;
 				response.args.file = file;
+				if(!/\.js|\.htm|\.htm$/ig.test(file)) {
+					//no extension given, guess at js
+					file += '.js'; //$NON-NLS-1$
+				}
 				try {
 					return fileClient.read(file).then(function(contents) {
 								response.args.contents = contents;
@@ -245,21 +250,17 @@ define([
 							},
 							function(err) {
 								response.args.message = err.toString();
-								response.args.error = 'Failed to read file '+file;
+								response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], file);
 								ternWorker.postMessage(response);
 							});
 				}
 				catch(err) {
 					response.args.message = err.toString();
-					response.args.error = 'Failed to read file '+file;
+					response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], file);
 					ternWorker.postMessage(response);
 				}
 			}
 		}
-		
-		function workerReady() {
-			ternWorker.startServer();
-		};
 		
 		/**
 		 * @description Handles the server being ready
@@ -274,19 +275,19 @@ define([
 			}
 			messageQueue = [];
 			function cleanPrefs(prefs) {
-				var all = prefs.keys();
+				var all = Object.keys(prefs);
 				for(i = 0, len = all.length; i < len; i++) {
 					var id = all[i];
 					if(/^tern.$/.test(id)) {
-						prefs.remove(all[i]);
+						delete prefs[id];
 					}
 				}
-				prefs.sync(true);
 			}
 			ternWorker.postMessage({request: 'installed_plugins'}, function(response) { //$NON-NLS-1$
 				var plugins = response.plugins;
-				return prefService ? prefService.getPreferences("/cm/configurations").then(function(prefs){ //$NON-NLS-1$
-					var props = prefs.get("tern"); //$NON-NLS-1$
+				var preferences = serviceRegistry.getService("orion.core.preference"); //$NON-NLS-1$
+ 				return preferences ? preferences.get("/cm/configurations").then(function(prefs){ //$NON-NLS-2$ //$NON-NLS-1$
+					var props = prefs["tern"]; //$NON-NLS-1$
 					cleanPrefs(prefs);
 					if (!props) {
 						props = Object.create(null);
@@ -303,8 +304,8 @@ define([
 						plugs[key] = plugins[key];
 					}
 					props.plugins = plugs;
-					prefs.put("tern", JSON.stringify(props)); //$NON-NLS-1$
-					prefs.sync(true);
+					prefs["tern"] = JSON.stringify(props); //$NON-NLS-1$
+					return preferences.put("/cm/configurations", prefs, {clear: true}); //$NON-NLS-1$
 				}) : new Deferred().resolve();
 			});
 		}
@@ -364,7 +365,7 @@ define([
     		contentType: ["application/javascript", "text/html"]	//$NON-NLS-1$ //$NON-NLS-2$
     			});
 
-    	var validator = new EslintValidator(astManager, CUProvider);
+    	var validator = new EslintValidator(ternWorker, CUProvider);
 
     	/**
     	 * Register the ESLint validator
@@ -387,19 +388,28 @@ define([
     		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
     	
-    	// TODO This manager is dark launched as it will be automated during editor open - Bug 476062
-    	if ("true" === localStorage.getItem("ternProject")) { //$NON-NLS-1$
-	    	var ternProjectManager = new TernProjectManager.TernProjectManager(ternWorker, scriptresolver, fileClient);
-	    	/**
-	    	 * Register Tern project manager as input changed listener
-	    	 */
-	    	provider.registerService("orion.edit.model", {  //$NON-NLS-1$
-	    		onInputChanged: ternProjectManager.onInputChanged.bind(ternProjectManager)
-	    	},
-	    	{
-	    		contentType: ["application/javascript", "application/json", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-	    		types: ['onInputChanged']  //$NON-NLS-1$
-	    	});
+    	var ternProjectManager = new TernProjectManager.TernProjectManager(ternWorker, scriptresolver, fileClient);
+    	/**
+    	 * Register Tern project manager as input changed listener
+    	 */
+    	provider.registerService("orion.edit.model", {  //$NON-NLS-1$
+    		onInputChanged: ternProjectManager.onInputChanged.bind(ternProjectManager)
+    	},
+    	{
+    		contentType: ["application/javascript", "application/json", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+    		types: ['onInputChanged']  //$NON-NLS-1$
+    	});
+	    
+	    if ("true" === localStorage.getItem("darklaunch")) {
+	    	provider.registerServiceProvider("orion.navigate.command",  //$NON-NLS-1$
+	    			new AddToTernCommand.AddToTernCommand(ternProjectManager),
+	    			{
+			    		name: javascriptMessages["addToTernCommand"],  //$NON-NLS-1$
+			    		tooltip : javascriptMessages['addToTernCommandTooltip'],  //$NON-NLS-1$
+			    		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
+			    		id : "add.js.tern"  //$NON-NLS-1$
+	    			}
+	    	);
     	}
 
     	/**
@@ -413,7 +423,7 @@ define([
     		contentType: ["text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
-
+    	
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			new GenerateDocCommand.GenerateDocCommand(astManager, CUProvider),
     			{
@@ -441,46 +451,44 @@ define([
 	          name: javascriptMessages['referencesMenuName'],
 	          tooltip : javascriptMessages['referencesMenuTooltip']
 		});
-		//TODO
-		if ("true" === localStorage.getItem("darklaunch")) {
-			var refscommand = new RefsCommand(ternWorker, 
-							astManager,
-							scriptresolver,
-							CUProvider,
-							new mGSearchClient.GSearchClient({serviceRegistry: core.serviceRegistry, fileClient: fileClient}));
-			provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-	    			{
-						execute: function(editorContext, options) {
-							options.kind ='project'; //$NON-NLS-1$
-							return refscommand.execute(editorContext, options);
-						}
-					},
-	    			{
-	    		name: javascriptMessages["projectRefsName"],  //$NON-NLS-1$
-	    		tooltip : javascriptMessages['projectRefsTooltip'],  //$NON-NLS-1$
-	    		parentPath: "js.references", //$NON-NLS-1$
-	    		id : "project.js.refs",  //$NON-NLS-1$
-	    		key : [ "y", true, true, false, false],  //$NON-NLS-1$
-	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
-	    			}
-	    	);
-	    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
-	    			{
-						execute: function(editorContext, options) {
-							options.kind ='workspace'; //$NON-NLS-1$
-							return refscommand.execute(editorContext, options);
-						}
-					},
-	    			{
-	    		name: javascriptMessages["workspaceRefsName"],  //$NON-NLS-1$
-	    		tooltip : javascriptMessages['workspaceRefsTooltip'],  //$NON-NLS-1$
-	    		parentPath: "js.references", //$NON-NLS-1$
-	    		id : "workspace.js.refs",  //$NON-NLS-1$
-	    		//key : [ "g", true, true, false, false],  //$NON-NLS-1$
-	    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
-	    			}
-	    	);
-		}
+		var refscommand = new RefsCommand(ternWorker, 
+						astManager,
+						scriptresolver,
+						CUProvider,
+						new mGSearchClient.GSearchClient({serviceRegistry: serviceRegistry, fileClient: fileClient}));
+		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+    			{
+					execute: function(editorContext, options) {
+						options.kind ='project'; //$NON-NLS-1$
+						return refscommand.execute(editorContext, options);
+					}
+				},
+    			{
+    		name: javascriptMessages["projectRefsName"],  //$NON-NLS-1$
+    		tooltip : javascriptMessages['projectRefsTooltip'],  //$NON-NLS-1$
+    		parentPath: "js.references", //$NON-NLS-1$
+    		id : "project.js.refs",  //$NON-NLS-1$
+    		key : [ "y", true, true, false, false],  //$NON-NLS-1$
+    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+    			}
+    	);
+    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+    			{
+					execute: function(editorContext, options) {
+						options.kind ='workspace'; //$NON-NLS-1$
+						return refscommand.execute(editorContext, options);
+					}
+				},
+    			{
+    		name: javascriptMessages["workspaceRefsName"],  //$NON-NLS-1$
+    		tooltip : javascriptMessages['workspaceRefsTooltip'],  //$NON-NLS-1$
+    		parentPath: "js.references", //$NON-NLS-1$
+    		id : "workspace.js.refs",  //$NON-NLS-1$
+    		//key : [ "g", true, true, false, false],  //$NON-NLS-1$
+    		contentType: ['application/javascript', 'text/html']  //$NON-NLS-1$ //$NON-NLS-2$
+    			}
+    	);
+
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			new OpenImplCommand.OpenImplementationCommand(astManager, ternWorker, CUProvider),  //$NON-NLS-1$
     			{
@@ -765,6 +773,19 @@ define([
                     ]
                 }
         );
+        
+        provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+                quickFixComputer,
+                {
+                    name: javascriptMessages["unnecessaryNlsFixName"],  //$NON-NLS-1$
+                    scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+                    id : "unnecessary.nls.fix",  //$NON-NLS-1$
+                    contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-1$ //$NON-NLS-2$
+                    validationProperties: [
+                        {source: "annotation:id", match: "^(?:unnecessary-nls)$"} //$NON-NLS-1$ //$NON-NLS-2$
+                    ]
+                }
+        );
 
 		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			quickFixComputer,
@@ -810,89 +831,89 @@ define([
  				 	        	   properties: [{	id: "no-cond-assign",  //$NON-NLS-1$
     			 	        	                	name: javascriptMessages["noCondAssign"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: error, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: error,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {	id: "no-constant-condition",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noConstantCondition"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noConstantCondition"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: error, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: error,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {   id: "no-console",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noConsole"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noConsole"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: error, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: error,
+    			 	        	                	options: severities
     			 	        	                },
      				 	        	            {	id: "no-debugger",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["noDebugger"],  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["noDebugger"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-dupe-keys",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noDupeKeys"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noDupeKeys"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "valid-typeof",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["validTypeof"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["validTypeof"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-regex-spaces",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noRegexSpaces"], //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noRegexSpaces"],
 				 	        	                	type: "number", //$NON-NLS-1$
-				 	        	                	defaultValue: error, //$NON-NLS-1$
-				 	        	                	options: severities //$NON-NLS-1$
+				 	        	                	defaultValue: error,
+				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "use-isnan",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["useIsNaN"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["useIsNaN"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-reserved-keys", //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noReservedKeys"], //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noReservedKeys"],
 				 	        	                	type: "number", //$NON-NLS-1$
-				 	        	                	defaultValue: error, //$NON-NLS-1$
-				 	        	                	options: severities //$NON-NLS-1$
+				 	        	                	defaultValue: error,
+				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-sparse-arrays", //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noSparseArrays"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noSparseArrays"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-fallthrough",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noFallthrough"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noFallthrough"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-comma-dangle", //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noCommaDangle"], //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noCommaDangle"],
 				 	        	                	type: "number", //$NON-NLS-1$
-				 	        	                	defaultValue: ignore, //$NON-NLS-1$
-				 	        	                	options: severities //$NON-NLS-1$
+				 	        	                	defaultValue: ignore,
+				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-empty-block",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noEmptyBlock"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noEmptyBlock"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: ignore,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-extra-semi",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["unnecessarySemis"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["unnecessarySemis"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-unreachable",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noUnreachable"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noUnreachable"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
@@ -900,133 +921,133 @@ define([
 				 	        	},
 				 	        	{  pid: "eslint.config.practices",  //$NON-NLS-1$
 				 	        	   order: 2,
-				 	        	   name: javascriptMessages['prefBestPractices'],  //$NON-NLS-1$
+				 	        	   name: javascriptMessages['prefBestPractices'],
 				 	        	   tags: "validation javascript js eslint".split(" "),  //$NON-NLS-1$  //$NON-NLS-1$
 				 	        	   category: 'javascript', //$NON-NLS-1$
  				 	        	   categoryLabel: javascriptMessages['javascriptValidation'],
 				 	        	   properties: [
 				 	        	   				{	id: "no-caller",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noCaller"], //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noCaller"],
 				 	        	                	type: "number", //$NON-NLS-1$
-				 	        	                	defaultValue: warning, //$NON-NLS-1$
-				 	        	                	options: severities //$NON-NLS-1$
+				 	        	                	defaultValue: warning,
+				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "eqeqeq",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noEqeqeq"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noEqeqeq"],
  				 	        	                	type: "number",  //$NON-NLS-1$
  				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-eval",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noEval"],  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noEval"],
     			 	        	                	type: "number",  //$NON-NLS-1$
     			 	        	                	defaultValue: ignore,
     			 	        	                	options: severities
     			 	        	                },
     			 	        	                {	id: "no-implied-eval",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noImpliedEval"],  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noImpliedEval"],
     			 	        	                	type: "number",  //$NON-NLS-1$
     			 	        	                	defaultValue: ignore,
     			 	        	                	options: severities
     			 	        	                },
     			 	        	                {	id: "no-iterator",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noIterator"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noIterator"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: error, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: error,
+    			 	        	                	options: severities
     			 	        	                },
  				 	        	                {
     			 	        	                	id: "no-new-array", //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noNewArray"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noNewArray"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: warning, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: warning,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {
     			 	        	                	id: "no-new-func", //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noNewFunc"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noNewFunc"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: warning, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: warning,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {
     			 	        	                	id: "no-new-object", //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noNewObject"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noNewObject"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: warning, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: warning,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {	id: "no-proto",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noProto"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noProto"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: error, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: error,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {
     			 	        	                	id: "no-with", //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noWith"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noWith"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: warning, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: warning,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {
     			 	        	                	id: "no-new-wrappers", //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noNewWrappers"], //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noNewWrappers"],
     			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: warning, //$NON-NLS-1$
-    			 	        	                	options: severities //$NON-NLS-1$
+    			 	        	                	defaultValue: warning,
+    			 	        	                	options: severities
     			 	        	                },
     			 	        	                {	id: "no-undef-init",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noUndefInit"], //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noUndefInit"],
 				 	        	                	type: "number", //$NON-NLS-1$
-				 	        	                	defaultValue: warning, //$NON-NLS-1$
-				 	        	                	options: severities //$NON-NLS-1$
+				 	        	                	defaultValue: warning,
+				 	        	                	options: severities
 				 	        	                },
  				 	        	                {
  				 	        	                	id: "no-shadow-global", //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["noShadowGlobals"], //$NON-NLS-1$
- 				 	        	                	defaultValue: warning, //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["noShadowGlobals"],
+ 				 	        	                	defaultValue: warning,
  				 	        	                	type: "number",  //$NON-NLS-1$
- 				 	        	                	options: severities //$NON-NLS-1$
+ 				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-use-before-define",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["useBeforeDefine"],  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["useBeforeDefine"],
  				 	        	                	type: "number",  //$NON-NLS-1$
  				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "radix",  //$NON-NLS-1$
- 				 	        	                    name: javascriptMessages['radix'],  //$NON-NLS-1$
+ 				 	        	                    name: javascriptMessages['radix'],
  				 	        	                    type: 'number',  //$NON-NLS-1$
  				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-throw-literal",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["noThrowLiteral"],  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["noThrowLiteral"],
  				 	        	                	type: "number",  //$NON-NLS-1$
  				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "curly",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["missingCurly"],  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["missingCurly"],
     			 	        	                	type: "number",  //$NON-NLS-1$
     			 	        	                	defaultValue: ignore,
     			 	        	                	options: severities
     			 	        	                },
  				 	        	                {	id: "no-undef",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["undefMember"],  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["undefMember"],
  				 	        	                	type: "number",  //$NON-NLS-1$
  				 	        	                	defaultValue: error,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-unused-params",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["unusedParams"],  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["unusedParams"],
  				 	        	                	type: "number",  //$NON-NLS-1$
  				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-unused-vars",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["unusedVars"],  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["unusedVars"],
     			 	        	                	type: "number",  //$NON-NLS-1$
     			 	        	                	defaultValue: warning,
     			 	        	                	options: severities
@@ -1038,7 +1059,7 @@ define([
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-shadow",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["varShadow"],  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["varShadow"],
     			 	        	                	type: "number",  //$NON-NLS-1$
     			 	        	                	defaultValue: warning,
     			 	        	                	options: severities
@@ -1046,40 +1067,52 @@ define([
 				 	            },
 				 	        	{  pid: "eslint.config.codestyle",  //$NON-NLS-1$
 				 	        	   order: 3,
-				 	        	   name: javascriptMessages['prefCodeStyle'],  //$NON-NLS-1$
+				 	        	   name: javascriptMessages['prefCodeStyle'],
 				 	        	   tags: "validation javascript js eslint".split(" "),  //$NON-NLS-1$  //$NON-NLS-1$
 				 	        	   category: 'javascript', //$NON-NLS-1$
  				 	        	   categoryLabel: javascriptMessages['javascriptValidation'],
 				 	        	   properties: [{	id: "missing-doc", //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["missingDoc"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["missingDoc"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: ignore,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "new-parens",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["newParens"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["newParens"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "semi",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["missingSemi"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["missingSemi"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "missing-nls",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["missingNls"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["missingNls"],
+				 	        	                	type: "number",  //$NON-NLS-1$
+				 	        	                	defaultValue: ignore,
+				 	        	                	options: severities
+				 	        	                },
+				 	        	                {	id: "unnecessary-nls",  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["unnecessaryNls"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: ignore,
 				 	        	                	options: severities
 				 	        	                },
 				 	        	                {	id: "no-jslint",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["unsupportedJSLint"],  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["unsupportedJSLint"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
-				 	        	                }]
+				 	        	                },
+				 	        	                {	id: "no-mixed-spaces-and-tabs",  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noMixedSpacesAndTabs"],
+				 	        	                	type: "number",  //$NON-NLS-1$
+				 	        	                	defaultValue: ignore,
+				 	        	                	options: severities
+ 				 	        	                }]
 				 	        	}]
     			});
 
@@ -1104,7 +1137,12 @@ define([
     			provider.registerService("orion.edit.highlighter", {}, newGrammars[current]); //$NON-NLS-1$
     		}
     	}
-    	provider.connect();
-	});
+    	provider.connect(function() {
+    		/**
+	    	 * Re-init
+	    	 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=462878
+	    	 */
+	    	Metrics.initFromRegistry(serviceRegistry);
+    	});
 });
 

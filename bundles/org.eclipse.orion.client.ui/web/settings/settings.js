@@ -42,9 +42,7 @@ define(['i18n!orion/settings/nls/messages', 'orion/bootstrap', 'orion/status', '
 			tooltip: messages['clearThemeAndEditorSettings.tooltip'],  //$NON-NLS-0$
 			id: "orion.clearThemes", //$NON-NLS-0$
 			callback: function(data) {
-				preferences.getPreferences('/themes', 2).then(function(prefs) { //$NON-NLS-0$
-					prefs.put("styles", null); //$NON-NLS-0$
-					prefs.put("selected", null); //$NON-NLS-0$
+				preferences.put('/themes', {styles: null, selected: null}).then(function() { //$NON-NLS-0$
 					preferencesStatusService.setMessage("Theme settings have been cleared.");
 				});
 			}});
@@ -72,7 +70,7 @@ define(['i18n!orion/settings/nls/messages', 'orion/bootstrap', 'orion/status', '
 									settingsRegistry: settingsRegistry
 									};
 									
-		lib.node("categoriesTitle").innerHTML = messages["Categories"]; //$NON-NLS-1$ //$NON-NLS-0$
+		lib.node("categoriesTitle").textContent = messages["Categories"]; //$NON-NLS-1$ //$NON-NLS-0$
 		var settingsContainer = new SettingsContainer( containerParameters, lib.node("categoriesContainer"), lib.node("settings")); //$NON-NLS-0$
 		settingsContainer.show();
 

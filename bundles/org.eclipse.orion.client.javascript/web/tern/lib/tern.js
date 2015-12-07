@@ -7,7 +7,7 @@
 (function(root, mod) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
     return mod(exports, require("./infer"), require("./signal"),
-               require("acorn"), require("acorn/dist/walk"));
+               require("esprima/esprima"), require("acorn/dist/walk"));
   if (typeof define == "function" && define.amd) // AMD
     return define(["exports", "./infer", "./signal", "esprima/esprima", "acorn/dist/walk"], mod);
   mod(root.tern || (root.tern = {}), tern, tern.signal, acorn, acorn.walk); // Plain browser env
@@ -166,7 +166,11 @@
     },
     finishAsyncAction: function(err) {
       if (err) this.asyncError = err;
-      if (--this.pending === 0) this.signal("everythingFetched");
+      //ORION
+      if(this.pending > 0) {
+      	this.pending--;
+      }
+      if (this.pending === 0) this.signal("everythingFetched");
     }
   });
 
@@ -208,19 +212,13 @@
 
       function run() {
         var result;
-        if(queryType.runAsync) { //ORION
-        	queryType.runAsync(srv, query, file, function(err, result) {
-        		c(err, result);
-        	});
-        } else {
-	        try {
-	          result = queryType.run(srv, query, file);
-	        } catch (e) {
-	          if (srv.options.debug && e.name != "TernError") console.error(e.stack);
-	          return c(e);
-	        }
-	        c(null, result);
-	    }
+        try {
+          result = queryType.run(srv, query, file);
+        } catch (e) {
+          if (srv.options.debug && e.name != "TernError") console.error(e.stack);
+          return c(e);
+        }
+        c(null, result);
       }
       infer.withContext(srv.cx, timeBudget ? function() { infer.withTimeout(timeBudget[0], run); } : run);
     });
@@ -249,6 +247,8 @@
       if (parentDepth(srv, known.parent) > parentDepth(srv, parent)) {
         known.parent = parent;
         if (known.excluded) known.excluded = null;
+      } else if(!known.parent) {
+      	known.parent = parent; //ORION - if no parent assign it
       }
       return;
     }
@@ -261,10 +261,6 @@
     } else if (srv.options.async) {
       srv.startAsyncAction();
       srv.options.getFile(name, function(err, text) {
-      	//ORION We pass back an object containing addition information about the file
-      	if (typeof text === 'object'){ //ORION
-      	  text = text.contents; //ORION
-      	} //ORION
         updateText(file, text || "", srv);
         srv.finishAsyncAction(err);
       });
@@ -712,9 +708,6 @@
       });
       hookname = "variableCompletion";
     }
-    if (srv.passes[hookname])
-      srv.passes[hookname].forEach(function(hook) {hook(file, wordStart, wordEnd, completions);}); //ORION
-
     if (query.sort !== false) completions.sort(compareCompletions);
     srv.cx.completingProperty = null;
 
@@ -882,10 +875,10 @@
   function findDef(srv, query, file) {
     var expr = findExpr(file, query);
     var type = findExprType(srv, query, file, expr);
-    //ORION if (infer.didGuess()) return {};
+    if (infer.didGuess() && !query.guess) return {}; //ORION
 
     var span = getSpan(type);
-    var result = {url: type.url, doc: parseDoc(query, type.doc), origin: type.origin};
+    var result = {url: type.url, doc: parseDoc(query, type.doc), origin: type.origin, guess: infer.didGuess()}; //ORION
 
     if (type.types) for (var i = type.types.length - 1; i >= 0; --i) {
       var tp = type.types[i];
@@ -994,24 +987,8 @@
   function buildRename(srv, query, file) {
     if (typeof query.newName != "string") throw ternError(".query.newName should be a string");
     var expr = findExprOrThrow(file, query);
-    if (!expr) {
-        throw ternError("Could not find an expression to rename.");
-    } else if(expr.node.type != "Identifier") {
-        switch(expr.node.type) { //ORION
-    		case 'MemberExpression': {
-    			throw ternError("Rename is not supported on member expressions.");
-    		}
-    		case 'ThisExpression': {
-    			throw ternError("Rename is not supported on this expressions.");
-    		}
-    		case 'ObjectExpression': {
-    			throw ternError("Rename is not supported on object properties.");
-    		}
-    		default: {
-    			throw ternError("Rename is only supported on variables.");
-    		}
-    	}
-    }
+    if (!expr || expr.node.type != "Identifier") throw ternError("Not at a variable.");
+
     var data = findRefsToVariable(srv, query, file, expr, query.newName), refs = data.refs;
     delete data.refs;
     data.files = srv.files.map(function(f){return f.name;});
@@ -1037,5 +1014,4 @@
   exports.resolveFile = resolveFile; //ORION
   exports.storeTypeDocs = storeTypeDocs; //ORION
   exports.parseDoc = parseDoc; //ORION
-  exports.resolvePos = resolvePos; //ORION
 });

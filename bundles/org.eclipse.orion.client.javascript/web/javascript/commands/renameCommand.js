@@ -14,11 +14,9 @@ define([
 'orion/objects',
 'javascript/finder',
 'orion/Deferred',
-'i18n!javascript/nls/messages'
-], function(Objects, Finder, Deferred, Messages) {
-
-	var deferred;
-	var cachedContext;
+'i18n!javascript/nls/messages',
+"orion/i18nUtil"
+], function(Objects, Finder, Deferred, Messages, i18nUtil) {
 
 	/**
 	 * @description Creates a new rename command
@@ -44,14 +42,15 @@ define([
 		 */
 		execute: function(editorContext, options) {
 			var that = this;
-			return editorContext.getFileMetadata().then(function(metadata) {
+			var deferred = new Deferred();
+			editorContext.getFileMetadata().then(function(metadata) {
 				if(Array.isArray(metadata.parents) && metadata.parents.length > 1) {
 					that.scriptResolver.setSearchLocation(metadata.parents[metadata.parents.length - 1].Location);
 				} else {
 					that.scriptResolver.setSearchLocation(null);	
 				}
 			    if(options.contentType.id === 'application/javascript') {
-	    			return that._doRename(editorContext, options);
+	    			return that._doRename(editorContext, options, deferred);
 			    } else {
 			        return editorContext.getText().then(function(text) {
 			        	var offset = options.offset;
@@ -59,12 +58,15 @@ define([
 		            		return Finder.findScriptBlocks(text);
 		            	}, {location:options.input, contentType:options.contentType});
     			        if(cu.validOffset(offset)) {
-    			        	return that._doRename(editorContext, options);
+    			        	return that._doRename(editorContext, options, deferred);
     			        }
     			        return [];
-			        });
+			        }, deferred.reject);
 			    }
+			}, /* @callback */ function(err) {
+				deferred.reject({Severity: 'Error', Message: Messages['noFileMeta']}); //$NON-NLS-1$
 			});
+			return deferred;
 		},
 
 		/**
@@ -75,19 +77,14 @@ define([
 		 * @param {Object} params The parameters
 		 * @returns {Deferred} A deferred to resolve
 		 */
-		_doRename: function _doRename(editorContext, params) {
+		_doRename: function _doRename(editorContext, params, deferred) {
 			var that = this;
 			return editorContext.getText().then(function(text) {
-				cachedContext = editorContext;
-				deferred = new Deferred();
 				if(that.timeout) {
 					clearTimeout(that.timeout);
 				}
 				that.timeout = setTimeout(function() {
-					cachedContext.setStatus({Severity: 'Error', Message: Messages['renameFailedTimedOut']}); //$NON-NLS-1$
-					if(deferred) {
-						deferred.resolve();
-					}
+					deferred.reject({Severity: 'Error', Message: Messages['renameFailedTimedOut']}); //$NON-NLS-1$
 					that.timeout = null;
 				}, 5000);
 				var files = [{type:'full', name:params.input, text:text}]; //$NON-NLS-1$
@@ -107,18 +104,29 @@ define([
 							}
 							var groups = [{data: {}, positions: offsets}];
 							var linkModel = {groups: groups};
-							deferred.resolve(cachedContext.exitLinkedMode());
-							deferred.resolve(cachedContext.enterLinkedMode(linkModel));
+							editorContext.exitLinkedMode().then(function() {
+								editorContext.enterLinkedMode(linkModel).then(deferred.resolve, deferred.reject);
+							}, deferred.reject);
 						} else if(typeof(response.error) === 'string') {
-							cachedContext.setStatus({Severity: 'Warning', Message: response.error}); //$NON-NLS-1$
+							deferred.reject({Severity: 'Warning', Message: badRename(response.error)}); //$NON-NLS-1$
 						}
-						deferred.resolve();
-						deferred = null;
 					});
-				return deferred;
-			});
+			}, deferred.reject);
 		}
 	});
+
+	/**
+	 * @description Shims the default reason for not doing an inline rename, or returns the original error message if
+	 * not the default
+	 * @param {String} original The original message
+	 * @returns {String} The message to present to the user
+	 */
+	function badRename(original) {
+		if("Not at a variable." === original) {
+			return Messages["badInlineRename"];
+		}
+		return i18nUtil.formatMessage(Messages["failedRename"], original);
+	}
 
 	return {
 		RenameCommand : RenameCommand

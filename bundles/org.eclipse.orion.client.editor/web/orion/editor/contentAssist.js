@@ -977,6 +977,11 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			return true;
 		},
 		
+		/**
+		 * Opens the tooltip for the selected proposal beside the content assist window
+		 * @param update if false, the tooltip will be hidden then reopened with the new contents
+		 * @param noContent if true the current tooltip contents will not be replaced, just size and position updated
+		 */
 		_showTooltip: function(update, noContent) {
 			var tooltip = mTooltip.Tooltip.getTooltip(this.contentAssist.textView);
 			var self = this;
@@ -1086,8 +1091,7 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 		var MO = window.MutationObserver || window.MozMutationObserver;
 		if (MO && util.isFirefox) {//MutationObserver does not work in chrome for resize https://code.google.com/p/chromium/issues/detail?id=293948
 			this._mutationObserver = new MO(function(mutations) {
-				//TODO: code edit widget : separate a finer API to only reposition and resize the tooltips
-				this._contentAssistMode._showTooltip(true);
+				this._contentAssistMode._showTooltip(true, true);
 			}.bind(this));
 		} else {
 			this._useResizeTimer = true;

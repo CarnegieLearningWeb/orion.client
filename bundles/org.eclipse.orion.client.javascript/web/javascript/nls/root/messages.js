@@ -53,6 +53,7 @@ define({//Default message bundle
 	'noNewFunc': 'Discouraged \'new Function()\':',
 	'noNewObject': 'Discouraged \'new Object()\':',
 	'noNewWrappers': 'Discouraged wrapper objects:',
+	'noMixedSpacesAndTabs' : 'Mixed spaces and tabs:',
 	'missingSemi' : 'Missing semicolons:',
 	'unusedVars' : 'Unused variables:',
 	'varRedecl' : 'Variable re-declarations:',
@@ -63,6 +64,7 @@ define({//Default message bundle
 	'unsupportedJSLint' : 'Unsupported environment directive:',
 	'noThrowLiteral': 'Literal used in \'throw\':',
 	'missingNls': 'Non-externalized string literals (missing $NON-NLS$ tag):',
+	'unnecessaryNls': 'Unnecessary $NON-NLS$ tags:',
 	'generateDocName' : 'Generate Element Comment',
 	'generateDocTooltip' : 'Generate a JSDoc-like comment for the selected JavaScript element',
 	'renameElement' : 'Rename Element',
@@ -72,6 +74,8 @@ define({//Default message bundle
 	'openDeclTooltip' : 'Open the declaration of the selected element',
 	'openImplName' : 'Open Implementation',
 	'openImplTooltip' : 'Open the implementation of the selected element',
+	'noImplFound': 'No implementation was found',
+	'implTimedOut': 'Could not compute implementation, the operation timed out',
 	'workspaceRefsName': 'Workspace',
 	'workspaceRefsTooltip': 'Show all references to the selection in the workspace',
 	'projectRefsName': 'Project',
@@ -102,6 +106,7 @@ define({//Default message bundle
 	'noShadowGlobals': 'Global shadowing:',
 	'noThrowLiteralFixName': 'Change to Error' ,
 	'missingNlsFixName': 'Add missing $NON-NLS$ tag',
+	'unnecessaryNlsFixName': 'Remove unnecessary $NON-NLS$ tag',
 	'funcProposalDescription': ' - The name of the function',
 	'funcParamProposalDescription': ' - Function parameter',
 	'eslintRuleProposalDescripton': ' - ESLint rule',
@@ -127,6 +132,10 @@ define({//Default message bundle
 	"sinceHoverTitle": "Since:", // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
 	"seeAlsoHoverTitle": "See Also:", // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
 	"openFileForTitle": "Open file for", // the in-line title for the 'open file hover'. The sentence is used as-is and is followed only by a OS file path
+	"failedToReadFile": "Failed to read file: ${0}",
+	"badInlineRename": "In-line rename is only available for local variables and declarations.",
+	"failedRename": "In-line rename failed: ${0}",
+	
 	//All refs
 	"functionDecls": "Function Declarations",
 	"functionCalls": "Function Calls",
@@ -149,5 +158,7 @@ define({//Default message bundle
 	"notHtmlOffset": "Not a valid offset in HTML",
 	"allProjectRefs": "Finding all project references...",
 	"allWorkspaceRefs": "Finding all workspace references...",
-	"refsFoundIn": "References found in file: \'${0}\' (${1}/${2})"
+	"refsFoundIn": "References found in file: \'${0}\' (${1}/${2})",
+	"addToTernCommand": "Add to .tern-project",
+	"addToTernCommandTooltip": "The JavaScript tooling will always load the contents of this file to Tern"
 });

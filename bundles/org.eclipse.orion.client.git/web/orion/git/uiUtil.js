@@ -14,23 +14,40 @@
  * This class extends orion/git/util to provide UI-related utility methods.
  */
 define([
+	'i18n!git/nls/gitmessages',
+	'orion/webui/tooltip',
 	'orion/compare/compareCommands',
 	'orion/compare/resourceComparer',
 	'orion/webui/littlelib',
-	'orion/git/util',
-], function(mCompareCommands, mResourceComparer, lib, mGitUtil) {
+	'orion/git/util'
+], function(messages, Tooltip, mCompareCommands, mResourceComparer, lib, mGitUtil) {
 	var exports = Object.create(mGitUtil); // extend util
 
 	function createFilter(section, msg, callback) {
 		var filterDiv = document.createElement("div"); //$NON-NLS-0$
 		filterDiv.className = "gitFilterBox"; //$NON-NLS-0$
+			
 		var filter = document.createElement("input"); //$NON-NLS-0$
+		filter.type = "search"; //$NON-NLS-1$
 		filter.placeholder = msg;
+		filter.setAttribute("aria-label", msg); //$NON-NLS-1$ 
 		filterDiv.appendChild(filter);
+		
+		var createTooltip = function(button) {
+			var tooltip = new Tooltip.Tooltip({
+				node: button,
+				text: msg,
+				position: ["above", "below", "right", "left"] //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
+			});
+			return tooltip;
+		};
+		
 		var button = document.createElement("button"); //$NON-NLS-0$
-		button.tabIndex = -1;
+		button.setAttribute("aria-label", messages["Filter"]); //$NON-NLS-1$
 		button.className = "core-sprite-filter searchButton"; //$NON-NLS-0$
+		var commandTooltip = createTooltip(button);
 		filterDiv.appendChild(button);
+			
 		var doFilter = function() {
 			callback(filter.value);
 			if (filter.value) {
@@ -41,17 +58,35 @@ define([
 				button.classList.add("core-sprite-filter"); //$NON-NLS-0$
 			}
 		};
-		button.addEventListener("click", function(){ //$NON-NLS-0$
+		
+		var clickFilter = function() {
 			doFilter();
-		});
+		};
+		button.addEventListener("click", clickFilter); //$NON-NLS-0$
+		
 		var sectionContent = section.getContentElement();
 		sectionContent.insertBefore(filterDiv, sectionContent.firstChild);
-		filter.addEventListener("keydown", function(event) { //$NON-NLS-0$
-			if (event.keyCode === 13) {
+		
+		var keyDownFilter  = function(e) {
+			if (e.keyCode === 13) {
 				doFilter();
 			}
-		});
-		return filter;
+		};
+		filter.addEventListener("keydown", keyDownFilter); //$NON-NLS-0$	
+		
+		return {
+			filter: filter,
+			button: button,
+			commandTooltip: commandTooltip,
+			clickFilter: clickFilter,
+			keyDownFilter: keyDownFilter,
+			
+			destroy: function() {
+				this.commandTooltip.destroy();
+				this.button.removeEventListener("click", this.clickFilter);
+				this.filter.removeEventListener("keydown", this.keyDownFilter);
+			}
+		};
 	}
 	exports.createFilter = createFilter;
 
@@ -112,20 +147,22 @@ define([
 		var mode = "inline";  //$NON-NLS-0$
 		if (preferencesService) {
 			cmdProvider.addEventListener("compareConfigChanged", function(e) { //$NON-NLS-0$
-				preferencesService.getPreferences("/git/compareSettings").then(function(prefs) {  //$NON-NLS-0$
-					switch (e.name) {
-						case "mode":  //$NON-NLS-0$
-							prefs.put("mode", e.value);  //$NON-NLS-0$
-						break;
-						case "ignoreWhiteSpace":  //$NON-NLS-0$
-							prefs.put("ignoreWhitespace", e.value);  //$NON-NLS-0$
-						break;
-					}
-				});
+				var data;
+				switch (e.name) {
+					case "mode":  //$NON-NLS-0$
+						data = {mode: e.value};
+					break;
+					case "ignoreWhiteSpace":  //$NON-NLS-0$
+						data = {ignoreWhitespace: e.value};
+					break;
+				}
+				if (data) {
+					preferencesService.put("/git/compareSettings", data); //$NON-NLS-1$
+				}
 			}.bind(this));
-			preferencesService.getPreferences("/git/compareSettings").then(function(prefs) {  //$NON-NLS-0$
-				ignoreWhitespace = prefs.get("ignoreWhitespace") || ignoreWhitespace; //$NON-NLS-0$
-				mode =  prefs.get("mode") || mode; //$NON-NLS-0$
+			preferencesService.get("/git/compareSettings").then(function(prefs) {  //$NON-NLS-0$
+				ignoreWhitespace = prefs["ignoreWhitespace"] || ignoreWhitespace; //$NON-NLS-0$
+				mode =  prefs["mode"] || mode; //$NON-NLS-0$
 				setCompareSelection(diffProvider, cmdProvider, ignoreWhitespace, mode);
 			});
 		} else {

@@ -12,12 +12,12 @@
 /*eslint-env node, amd*/
 /*globals infer tern walk*/
 define([
-	"../lib/infer", 
-	"../lib/tern", 
+	"tern/lib/infer", 
+	"tern/lib/tern", 
 	"acorn/dist/walk"
 ],/* @callback */ function(infer, tern, walk) {
 	
-	tern.registerPlugin('ternPlugins', /* @callback */ function(server, options) { //$NON-NLS-1$
+	tern.registerPlugin('plugins', /* @callback */ function(server, options) { //$NON-NLS-1$
 		return {}; //TODO I don't think we need to hook any phases
 	});
 	

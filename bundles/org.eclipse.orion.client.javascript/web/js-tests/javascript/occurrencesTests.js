@@ -17,16 +17,13 @@ define([
 	'javascript/astManager',
 	'javascript/cuProvider',
 	'javascript/occurrences',
-	'javascript/validator',
 	'eslint/lib/eslint',
 	'mocha/mocha'  //must stay at the end, not a module
-], function(chai, Esprima, Deferred, ASTManager, CUProvider, Occurrences, Validator, ESLint) {
+], function(chai, Esprima, Deferred, ASTManager, CUProvider, Occurrences, ESLint) {
 	var assert = chai.assert;
 	
 	describe('Occurrences Tests', function() {
 		var astManager = new ASTManager.ASTManager(Esprima);
-		var validator = new Validator(astManager, CUProvider);
-		validator._enableOnly("NOTARULE");
 		var occurrences = new Occurrences.JavaScriptOccurrences(astManager, CUProvider);
 		var editorContext = {
 			text: "",
@@ -2356,11 +2353,8 @@ define([
 			 */
 			it('Unnamed Define statement 3', function() {
 				editorContext.text = "define(['A', 'B'], function (a, b) { var x = a; var y = b; });";
-				// TODO This functionality depends on having node.parent which is currently added to the AST by ESLint
-				return validator.computeProblems(editorContext).then(function() {
-					return occurrences.computeOccurrences(editorContext, setContext(46,46)).then(function(results) {
-						assertOccurrences(results, [{start:8, end:11}, {start:29, end:30}, {start:45, end:46}]);
-					});
+				return occurrences.computeOccurrences(editorContext, setContext(46,46)).then(function(results) {
+					assertOccurrences(results, [{start:8, end:11}, {start:29, end:30}, {start:45, end:46}]);
 				});
 			});
 			/**
@@ -2389,11 +2383,8 @@ define([
 			 */
 			it('Unnamed Define statement 6', function() {
 				editorContext.text = "define(['A', 'B'], function (a, b) { var x = a; var y = b; });";
-				// TODO This functionality depends on having node.parent which is currently added to the AST by ESLint
-				return validator.computeProblems(editorContext).then(function() {
-					return occurrences.computeOccurrences(editorContext, setContext(56,56)).then(function(results) {
-						assertOccurrences(results, [{start:13, end:16}, {start:32, end:33}, {start:56, end:57}]);
-					});
+				return occurrences.computeOccurrences(editorContext, setContext(56,56)).then(function(results) {
+					assertOccurrences(results, [{start:13, end:16}, {start:32, end:33}, {start:56, end:57}]);
 				});
 			});			
 			/**
@@ -2422,13 +2413,9 @@ define([
 			 */
 			it('Named Define statement 3', function() {
 				editorContext.text = "define('ABC', ['A', 'B'], function (a, b) { var x = a; var y = b; });";
-				// TODO This functionality depends on having node.parent which is currently added to the AST by ESLint
-				return validator.computeProblems(editorContext).then(function() {
-					return occurrences.computeOccurrences(editorContext, setContext(52,53)).then(function(results) {
-						assertOccurrences(results, [{start:15, end:18}, {start:36, end:37}, {start:52, end:53}]);
-					});
+				return occurrences.computeOccurrences(editorContext, setContext(52,53)).then(function(results) {
+					assertOccurrences(results, [{start:15, end:18}, {start:36, end:37}, {start:52, end:53}]);
 				});
-
 			});
 			/**
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=451957
@@ -2456,13 +2443,9 @@ define([
 			 */
 			it('Named Define statement 6', function() {
 				editorContext.text = "define('ABC', ['A', 'B'], function (a, b) { var x = a; var y = b; });";
-				// TODO This functionality depends on having node.parent which is currently added to the AST by ESLint
-				return validator.computeProblems(editorContext).then(function() {
-					return occurrences.computeOccurrences(editorContext, setContext(64,64)).then(function(results) {
-						assertOccurrences(results, [{start:20, end:23}, {start:39, end:40}, {start:63, end:64}]);
-					});
+				return occurrences.computeOccurrences(editorContext, setContext(64,64)).then(function(results) {
+					assertOccurrences(results, [{start:20, end:23}, {start:39, end:40}, {start:63, end:64}]);
 				});
-
 			});
 			/**
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=451957
@@ -2490,11 +2473,8 @@ define([
 			 */
 			it('Mismatched Define statement 3', function() {
 				editorContext.text = "define(['A', 'B'], function (a) { var x = a; var b = null; });";
-				// TODO This functionality depends on having node.parent which is currently added to the AST by ESLint
-				return validator.computeProblems(editorContext).then(function() {
-					return occurrences.computeOccurrences(editorContext, setContext(43,43)).then(function(results) {
-						assertOccurrences(results, [{start:8, end:11}, {start:29, end:30}, {start:42, end:43}]);
-					});
+				return occurrences.computeOccurrences(editorContext, setContext(43,43)).then(function(results) {
+					assertOccurrences(results, [{start:8, end:11}, {start:29, end:30}, {start:42, end:43}]);
 				});
 			});
 			/**
@@ -2814,7 +2794,7 @@ define([
 				editorContext.text = '<html><head><script>this.xx = function(){};</script></head><body><a onclick="xx()">xx()</a></body></html>';
 				editorContext.contentTypeId = "text/html";
 				return occurrences.computeOccurrences(editorContext, setContext(25,25)).then(function(results) {
-					assertOccurrences(results, [{start:25, end:27}, {start:76, end:78}]);
+					assertOccurrences(results, [{start:25, end:27}]);
 				});
 			});
 			/**
@@ -2826,7 +2806,31 @@ define([
 				editorContext.text = '<html><head><script>this.xx = function(){};</script></head><body><a onclick="xx()">xx()</a></body></html>';
 				editorContext.contentTypeId = "text/html";
 				return occurrences.computeOccurrences(editorContext, setContext(77,77)).then(function(results) {
-					assertOccurrences(results, [{start:25, end:27}, {start:76, end:78}]);
+					assertOccurrences(results, [{start:77, end:79}]);
+				});
+			});
+			/**
+			 * Tests support for occurrences inside embedded script blocks in HTML
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=476592
+			 * @since 10.0
+			 */
+			it('HTML wrapped function call - script blocks show occurrences 3', function() {
+				editorContext.text = '<html><head><script>var xx = function(){};</script></head><body><a onclick="xx()">xx()</a></body></html>';
+				editorContext.contentTypeId = "text/html";
+				return occurrences.computeOccurrences(editorContext, setContext(24,24)).then(function(results) {
+					assertOccurrences(results, [{start:24, end:26}, {start:76, end:78}]);
+				});
+			});
+			/**
+			 * Tests support for occurrences inside embedded script blocks in HTML
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=476592
+			 * @since 10.0
+			 */
+			it('HTML wrapped function call - script blocks show occurrences 4', function() {
+				editorContext.text = '<html><head><script>var xx = function(){};</script></head><body><a onclick="xx()">xx()</a></body></html>';
+				editorContext.contentTypeId = "text/html";
+				return occurrences.computeOccurrences(editorContext, setContext(76,76)).then(function(results) {
+					assertOccurrences(results, [{start:24, end:26}, {start:76, end:78}]);
 				});
 			});
 			/**
@@ -2838,7 +2842,7 @@ define([
 				editorContext.text = '<html><body><a onclick="xx()">xx()</a><script>this.xx = function(){};</script></body></html>';
 				editorContext.contentTypeId = "text/html";
 				return occurrences.computeOccurrences(editorContext, setContext(25,25)).then(function(results) {
-					assertOccurrences(results, [{start:23, end:25}, {start:51, end:53}]);
+					assertOccurrences(results, [{start:24, end:26}]);
 				});
 			});
 			/**
@@ -2850,7 +2854,31 @@ define([
 				editorContext.text = '<html><body><a onclick="xx()">xx()</a><script>this.xx = function(){};</script></body></html>';
 				editorContext.contentTypeId = "text/html";
 				return occurrences.computeOccurrences(editorContext, setContext(51,53)).then(function(results) {
-					assertOccurrences(results, [{start:23, end:25}, {start:51, end:53}]);
+					assertOccurrences(results, [{start:51, end:53}]);
+				});
+			});
+			/**
+			 * Tests support for occurrences inside embedded script blocks in HTML
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=476592
+			 * @since 10.0
+			 */
+			it('HTML wrapped function call - occurrences ignore order 3', function() {
+				editorContext.text = '<html><body><a onclick="xx()">xx()</a><script>var xx = function(){};</script></body></html>';
+				editorContext.contentTypeId = "text/html";
+				return occurrences.computeOccurrences(editorContext, setContext(25,25)).then(function(results) {
+					assertOccurrences(results, [{start:24, end:26}, {start:50, end:52}]);
+				});
+			});
+			/**
+			 * Tests support for occurrences inside embedded script blocks in HTML
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=476592
+			 * @since 10.0
+			 */
+			it('HTML wrapped function call - occurrences ignore order 4', function() {
+				editorContext.text = '<html><body><a onclick="xx()">xx()</a><script>var xx = function(){};</script></body></html>';
+				editorContext.contentTypeId = "text/html";
+				return occurrences.computeOccurrences(editorContext, setContext(50,52)).then(function(results) {
+					assertOccurrences(results, [{start:24, end:26}, {start:50, end:52}]);
 				});
 			});
 			/**
@@ -2865,6 +2893,7 @@ define([
 					assertOccurrences(results, []);
 				});
 			});
+			
 		});
 	});
 });

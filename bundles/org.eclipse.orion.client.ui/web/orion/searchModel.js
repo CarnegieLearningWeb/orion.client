@@ -46,8 +46,9 @@ define([
         this._filterText = null;
         this._indexedFileItems = [];
         this._location2ModelMap = [];
-        this._lineDelimiter = "\n"; //$NON-NLS-0$
+        this._lineDelimiter = ""; //$NON-NLS-0$
         this.onMatchNumberChanged = options.onMatchNumberChanged;
+        this._matchFilter = options.matchFilter;
         this._searchHelper = mSearchUtils.generateSearchHelper(searchParams);
     }
     SearchResultModel.prototype = new mExplorer.ExplorerModel();
@@ -257,9 +258,9 @@ define([
             	var newChildren = [];
             	children.forEach(function(child) {
 					for(var j = 0; j < child.matches.length; j++){
-						/*if(child.matches[j].confidence < 0) {
-							continue;
-						}*/
+	    				if(!this._filterOnMatch(child.matches[j])) {
+	    					continue;
+	    				}
 						var matchNumber = j+1;
 						var newMatch = {confidence: child.matches[j].confidence, parent: fileNode, matches: child.matches, lineNumber: child.lineNumber, matchNumber: matchNumber, 
 							checked: child.matches[j].confidence === 100 ? true: false, type: "detail", //$NON-NLS-1$
@@ -267,7 +268,7 @@ define([
 						};
 						newChildren.push(newMatch);
 					}
-            	});
+            	}.bind(this));
  				newChildren.sort(function(a, b) {
  					if(a.confidence === b.confidence) {
  						return a.lineNumber - b.lineNumber;
@@ -278,8 +279,10 @@ define([
             	fileNode.children = newChildren;
             }
             //this._location2ModelMap[fileNode.location] = fileNode;
-            this.getListRoot().children.push(fileNode);
-            this._indexedFileItems.push(fileNode);
+            if(!children || (fileNode.children && fileNode.children.length > 0)) {
+	            this.getListRoot().children.push(fileNode);
+	            this._indexedFileItems.push(fileNode);
+        	}
 	    },
 	    
 	    _match2Category: function _match2Category(match) {
@@ -318,7 +321,17 @@ define([
 	    	}
 	    	return hasOne;
 	    },
-	    
+	    _filterOnMatch: function _filterOnMatch(match) {
+	    	if(!this._matchFilter) {
+	    		return true;
+	    	}
+			for (var prop in this._matchFilter) {
+				if(this._matchFilter[prop].filterFunc(match.confidence, this._matchFilter[prop].flag)) {
+					return true;
+				}
+			}
+			return false;
+	    },
 	    _buildCategoryResult: function _buildCategoryResult(singleFileResult) {
     		var matchLines = singleFileResult.children;
     		if(matchLines) {
@@ -328,10 +341,14 @@ define([
 	    			var matches = matchLine.matches;
 	    			for (var j = 0, len2 = matches.length; j < len2; j++) {
 	    				var match = matches[j];
+	    				if(!this._filterOnMatch(match)) {
+	    					continue;
+	    				}
 						var matchNumber = j+1;
 	    				match.lineNumber = matchLine.lineNumber;
 	    				match.matchNumber = matchNumber;
 	    				match.matches = matches;
+	    				match.checked = match.confidence === 100 ? true: false;
 	    				if(matchLine.name) {
 	    					match.lineString = matchLine.name;
 	    					match.name = matchLine.name;

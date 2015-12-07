@@ -39,13 +39,11 @@ if (_all_script && _all_script.length && _all_script.length > 0) {
 }
 define([
 	'embeddedEditor/helper/embeddedFileImpl',
-	'orion/serviceregistry',
 	'orion/pluginregistry',
 	'orion/Deferred',
 	'orion/URL-shim'
 ], function(
 	EmbeddedFileImpl,
-	mServiceRegistry, 
 	mPluginRegistry,
 	Deferred
 ) {
@@ -58,21 +56,34 @@ define([
 		"../plugins/embeddedToolingPlugin.html"
 	];
 
-	function startup(options) {
+	function startup(serviceRegistry, cTypeRegistry, options) {
 		if (once) {
 			return once;
 		}
-		//TODO: We should create this hidden div somewhere else
-		//The hidden DIV that allows some commands for editorCommnads to be rendered. We only want to use keybinding of them though.
-		var orionHiddenDiv = document.createElement("div");
-		orionHiddenDiv.id = "_orion_hidden_actions";
-		document.body.appendChild(orionHiddenDiv);
-		orionHiddenDiv.style.display = "none";
 		//options._defaultPlugins is for internal use to load plugins in dev mode
-		var pluginsToLoad = (options && options._defaultPlugins) ? options._defaultPlugins : defaultPluginURLs;
+		var pluginsToLoad;
+		if(options && options._defaultPlugins) {
+			pluginsToLoad = options._defaultPlugins;
+		} else {
+			pluginsToLoad = defaultPluginURLs;
+		}			
+		if(options && options.defaultPlugins) {
+			var newArray = [];
+			options.defaultPlugins.forEach(function(pl) {
+				var splitPl = pl.split("/").pop();
+				var hasOne = null;
+				pluginsToLoad.some(function(item) {
+					if(item.indexOf(splitPl) !== -1) {
+						newArray.push(item);
+						return true;
+					}
+					return false;
+				});
+			});
+			pluginsToLoad = newArray;
+		}
 		
 		once = new Deferred();
-		var serviceRegistry = new mServiceRegistry.ServiceRegistry();
 		var fService = new EmbeddedFileImpl(fPattern);
 		serviceRegistry.registerService("orion.core.file", fService, {
 			Name: 'Embedded File System',
@@ -99,6 +110,10 @@ define([
 				serviceRegistry: serviceRegistry,
 				pluginRegistry: pluginRegistry
 			};
+			//We need to register the parent contentType for text type if user just use the widget as bare-bone without registering any default plugins
+			if(!cTypeRegistry.getContentType("text/plain")) {
+				serviceRegistry.registerService('orion.core.contenttype', {}, {contentTypes: [{	id: "text/plain", name: "Text",	extension: ["txt"]}]});
+			}
 			once.resolve(result);
 			return result;
 		});

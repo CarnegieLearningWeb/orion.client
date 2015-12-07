@@ -481,7 +481,7 @@ eclipse.GitService = (function() {
 			return clientDeferred;
 		},
 		
-		addRemote : function(gitRemoteParentURI, remoteName, remoteURI) {
+		addRemote : function(gitRemoteParentURI, remoteName, remoteURI, isGerrit) {
 			var service = this;
 			
 			var clientDeferred = new Deferred();
@@ -493,7 +493,8 @@ eclipse.GitService = (function() {
 				timeout : GIT_TIMEOUT,
 				data: JSON.stringify({
 					"Remote" : remoteName, //$NON-NLS-0$
-					"RemoteURI" : remoteURI //$NON-NLS-0$
+					"RemoteURI" : remoteURI, //$NON-NLS-0$
+					"IsGerrit" : isGerrit //$NON-NLS-0$
 				})
 			}).then(function(result) {
 				service._getGitServiceResponse(clientDeferred, result);
@@ -1217,7 +1218,45 @@ eclipse.GitService = (function() {
 			
 			return clientDeferred;
 		},
+		
+		doPullRequestList : function(pullRequestLocation, gitRepoUrl, gitSshUsername, gitSshPassword, gitSshKnownHost, privateKey, passphrase) {
+			var service = this;
+			var postData = {};
+			if(gitRepoUrl){
+				postData.GitUrl=gitRepoUrl;
+			}
+			if(gitSshUsername){
+				postData.GitSshUsername = gitSshUsername;
+			}
+			if(gitSshPassword){
+				postData.GitSshPassword = gitSshPassword;
+			}
+			if(gitSshKnownHost){
+				postData.GitSshKnownHost = gitSshKnownHost;
+			}
+			if(privateKey) {
+				postData.GitSshPrivateKey=privateKey;
+			}
+			if(passphrase) {
+				postData.GitSshPassphrase=passphrase;
+			}
+			var clientDeferred = new Deferred();
+			xhr("POST", pullRequestLocation, { 
+				headers : { 
+					"Orion-Version" : "1",
+					"Content-Type" : contentType
+				},
+				timeout : GIT_TIMEOUT,
+				data: JSON.stringify(postData)
+			}).then(function(result) {
+				service._getGitServiceResponse(clientDeferred, result);
+			}, function(error){
+				service._handleGitServiceResponseError(clientDeferred, error);
+			});
 
+			return clientDeferred;
+		},
+		
 
 		_getGitServiceResponse : function(deferred, result) {
 			var response =  result.response ? JSON.parse(result.response) : null;

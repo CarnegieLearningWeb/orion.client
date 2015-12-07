@@ -27,8 +27,9 @@ define([
 	'orion/i18nUtil',
 	'orion/git/util',
 	'orion/webui/littlelib',
-	'orion/objects'
-], function(messages, KeyBinding, mGitChangeList, mGitFileList, mGitCommitInfo, mSection, mSelection, mCommands, Deferred, mExplorer, mHTMLFragments, mGitCommands, i18nUtil, util, lib, objects) {
+	'orion/objects',
+	'orion/bidiUtils'
+], function(messages, KeyBinding, mGitChangeList, mGitFileList, mGitCommitInfo, mSection, mSelection, mCommands, Deferred, mExplorer, mHTMLFragments, mGitCommands, i18nUtil, util, lib, objects, bidiUtils) {
 
 	var pageQuery = "page=1&pageSize=20"; //$NON-NLS-0$
 
@@ -163,8 +164,13 @@ define([
 			return this.filterQuery || this.authorQuery || this.committerQuery || this.sha1Query || this.repositoryPath || this.fromDateQuery || this.toDateQuery;
 		},
 		isRebasing: function() {
-			var repository = this.root.repository;
-			return repository && repository.status && repository.status.RepositoryState === "REBASING_INTERACTIVE"; //$NON-NLS-0$
+			return util.isRebasing(this.root.repository);
+		},
+		isMerging: function() {
+			return util.isMerging(this.root.repository);
+		},
+		isCherryPicking: function() {
+			return util.isCherryPicking(this.root.repository);
 		},
 		isNewBranch: function(branch) {
 			return util.isNewBranch(branch);
@@ -196,8 +202,9 @@ define([
 					that.progressService.progress(that.gitClient.getGitBranch(repository.BranchLocation + "?commits=0&page=1&pageSize=1"), currentBranchMsg).then(function(resp) { //$NON-NLS-0$
 						var currentBranch = resp.Children[0];
 						that.currentBranch = currentBranch;
-						if (!that.currentBranch && that.isRebasing()) {
+						if (that.isRebasing()) {
 							if (section) section.setTitle(messages["RebaseProgress"]);
+							getSimpleLog();
 							onComplete([]);
 							if (progress) progress.done();
 							return;
@@ -213,10 +220,18 @@ define([
 						var activeBranch = that.getActiveBranch();
 						var targetRef = that.getTargetReference();
 						if (section) {
-							if (that.simpleLog && targetRef) {
+							if (that.isMerging()) {
+								section.setTitle(messages["MergeProgress"]);
+							} else if (that.isCherryPicking()) {
+								section.setTitle(messages["CherryPickProgress"]);
+							} else if (that.simpleLog && targetRef) {
 								section.setTitle(i18nUtil.formatMessage(messages[targetRef.Type + ' (${0})'], util.shortenRefName(targetRef))); //$NON-NLS-1$
 							} else {
-								section.setTitle(i18nUtil.formatMessage(messages['Active Branch (${0})'], util.shortenRefName(activeBranch)));
+								var shortRefName = util.shortenRefName(activeBranch);
+								if (bidiUtils.isBidiEnabled) {
+									shortRefName = bidiUtils.enforceTextDirWithUcc(shortRefName);
+								}
+								section.setTitle(i18nUtil.formatMessage(messages['Active Branch (${0})'], shortRefName));
 							}
 						}
 						if (progress) progress.done();
@@ -886,7 +901,7 @@ define([
 				},
 				visibleWhen: function() {
 					filterCommand.imageClass = that.model.isFiltered() ? "core-sprite-show-filtered" : "core-sprite-filter"; //$NON-NLS-1$ //$NON-NLS-0$
-					return !that.model.isRebasing();
+					return true;
 				}
 			});
 			commandService.addCommand(filterCommand);
@@ -960,8 +975,19 @@ define([
 			if (lib.node(actionsNodeScope)) {
 				commandService.destroy(actionsNodeScope);
 			}
+			var itemActionScope = "itemLevelCommands";
+			commandService.registerCommandContribution(itemActionScope, "eclipse.checkoutCommit", 1); //$NON-NLS-1$ //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.undoCommit", 2); //$NON-NLS-1$ //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.resetIndex", 3); //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.addTag", 4); //$NON-NLS-1$ //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.cherryPick", 5); //$NON-NLS-1$ //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.revert", 6); //$NON-NLS-1$ //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.openGitCommit", 7); //$NON-NLS-1$ //$NON-NLS-0$
+			commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.showCommitPatchCommand", 8); //$NON-NLS-1$ //$NON-NLS-0$
+								
 
 			if (model.isRebasing()) {
+				commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.commit.toggleFilter", 100, null, false, new KeyBinding.KeyBinding('h', true, true)); //$NON-NLS-1$ //$NON-NLS-0$
 				commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.rebaseContinueCommand", 200); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 				commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.rebaseSkipPatchCommand", 300); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 				commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.rebaseAbortCommand", 400); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
@@ -977,7 +1003,7 @@ define([
 			commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.sync", 100); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 
 				
-			if (currentBranch && !this.model.simpleLog && targetRef) {
+			if (currentBranch && !this.model.simpleLog && targetRef && !model.isCherryPicking() && !model.isMerging()) {
 				var incomingActionScope = this.incomingActionScope;
 				var outgoingActionScope = this.outgoingActionScope;
 				
@@ -1217,7 +1243,7 @@ define([
 						onlyFullMessage: !simple,
 						fullMessage: !simple,
 						showMore: true,
-						simple: simple,
+						simple: simple
 					});
 					commitInfo.display();
 					
@@ -1228,9 +1254,10 @@ define([
 					
 					var itemActionScope = "itemLevelCommands"; //$NON-NLS-0$
 					actionsArea = document.createElement("ul"); //$NON-NLS-0$
-					actionsArea.className = "layoutRight commandList"; //$NON-NLS-0$
+					actionsArea.className = "layoutLeft commandList toolComposite commitActions"; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0
 					actionsArea.id = itemActionScope;
-					horizontalBox.appendChild(actionsArea);
+					var moreDiv = commitInfo.moreButton.parentNode;
+					moreDiv.appendChild(actionsArea);
 					
 					item.Clone = repository;
 					

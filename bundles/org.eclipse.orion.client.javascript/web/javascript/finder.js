@@ -310,6 +310,10 @@ define([
 					blocks.push({text: "", offset: 0, dependencies: deps});
 					continue;
 				}
+				if (text === undefined){
+					// Inline script blocks with no dependents are not valid i.e. <script/>
+					continue;
+				}
 				var index = val.index+val[0].indexOf('>')+1;  //$NON-NLS-0$
 				if((offset == null || (index <= offset && index+text.length >= offset))) {
 					for(var i = 0; i < comments.length; i++) {
@@ -328,18 +332,19 @@ define([
 			
 			// Find onevent attribute values
 			var eventAttributes = {'blur':true, 'change':true, 'click':true, 'dblclick':true, 'focus':true, 'keydown':true, 'keypress':true, 'keyup':true, 'load':true, 'mousedown':true, 'mousemove':true, 'mouseout':true, 'mouseover':true, 'mouseup':true, 'reset':true, 'select':true, 'submit':true, 'unload':true};
-			var eventRegex = /\s+on(\w*)(\s*=\s*")([^"]*)"/ig;
+			var eventRegex = /(\s+)on(\w*)(\s*=\s*")([^"]*)"/ig;
 			var count = 0;
 			loop: while((val = eventRegex.exec(buffer)) != null) {
 				count++;
-				var attribute = val[1];
-				var assignment = val[2];
-				text = val[3];
-				if (attribute && attribute in eventAttributes){
-					if(!text || !assignment) {
-						continue;
+				var leadingWhitespace = val[1];
+				var attribute = val[2];
+				var assignment = val[3];
+				text = val[4];
+				if (attribute && attribute.toLowerCase() in eventAttributes){
+					if(!text){
+						text = "";
 					}
-					index = val.index + 2 + attribute.length + assignment.length;
+					index = val.index + leadingWhitespace.length + 2 + attribute.length + assignment.length;
 					if((offset == null || (index <= offset && index+text.length >= offset))) {
 						for(var j = 0; j < comments.length; j++) {
 							if(comments[j].start <= index && comments[j].end >= index) {

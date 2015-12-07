@@ -12,13 +12,9 @@
  /*eslint-env amd, browser*/
 define([
 'orion/objects',
-'javascript/finder',
 'orion/Deferred',
 'i18n!javascript/nls/messages'
-], function(Objects, Finder, Deferred, Messages) {
-
-	var cachedContext;
-	var deferred;
+], function(Objects, Deferred, Messages) {
 
 	/**
 	 * @description Creates a new open declaration command
@@ -42,43 +38,42 @@ define([
 		/* override */
 		execute: function(editorContext, options) {
 			var that = this;
-			return editorContext.getText().then(function(text) {
-				return that._findDecl(editorContext, options, text);
-			});
+			var deferred = new Deferred();
+			editorContext.getText().then(function(text) {
+				return that._findDecl(editorContext, options, text, deferred);
+			}, deferred.reject);
+			return deferred;
 		},
 
-		_findDecl: function(editorContext, options, text) {
-			cachedContext = editorContext;
-			deferred = new Deferred();
+		_findDecl: function(editorContext, options, text, deferred) {
 			if(this.timeout) {
 				clearTimeout(this.timeout);
 			}
 			this.timeout = setTimeout(function() {
-				cachedContext.setStatus({Severity: 'Error', Message: Messages['noDeclTimedOut']}); //$NON-NLS-1$
-				if(deferred) {
-					deferred.resolve(Messages['noDeclFound']);
-				}
+				deferred.reject({Severity: 'Error', Message: Messages['noDeclTimedOut']}); //$NON-NLS-1$
 				this.timeout = null;
 			}, 5000);
 			var files = [{type: 'full', name: options.input, text: text}]; //$NON-NLS-1$
 			this.ternworker.postMessage(
-				{request:'definition', args:{params:{offset: options.offset}, files: files, meta:{location: options.input}}}, //$NON-NLS-1$
+				{request:'definition', args:{params:{offset: options.offset}, guess: true, files: files, meta:{location: options.input}}}, //$NON-NLS-1$
 				function(response) {
 					if(response.request === 'definition') {
 						if(response.declaration && (typeof(response.declaration.start) === 'number' && typeof(response.declaration.end) === 'number')) {
+							if(response.declaration.guess) {
+								//TODO handle it being a guess, for now fall through
+							}
 							var opts = Object.create(null);
 							opts.start = response.declaration.start;
 							opts.end = response.declaration.end;
 							if(this.openMode != null && typeof(this.openMode) !== 'undefined') {
 								opts.mode = this.openMode;
 							}
-							deferred.resolve(cachedContext.openEditor(response.declaration.file, opts));
+							deferred.resolve(editorContext.openEditor(response.declaration.file, opts));
 						} else {
-							deferred.resolve(cachedContext.setStatus(Messages['noDeclFound']));
+							deferred.reject({Severity: 'Warning', Message: Messages['noDeclFound']}); //$NON-NLS-1$
 						}
 					}
 				}.bind(this)); //$NON-NLS-1$
-			return deferred;
 		}
 	});
 

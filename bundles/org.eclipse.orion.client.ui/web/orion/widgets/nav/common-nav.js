@@ -373,8 +373,8 @@ define([
 			});
 
 			// Retrieve and register project commands
-			return this.preferences.getPreferences("/common-nav").then(function(prefs) { //$NON-NLS-0$
-				var show = prefs.get("showNewProjectCommands"); //$NON-NLS-0$
+			return this.preferences.get("/common-nav").then(function(prefs) { //$NON-NLS-0$
+				var show = prefs["showNewProjectCommands"]; //$NON-NLS-0$
 				if (show === undefined || show) {
 					commandRegistry.addCommandGroup(fileActionsScope, "orion.projectsNewGroup", 100, messages["Project"], "orion.menuBarFileGroup/orion.newContentGroup"); //$NON-NLS-1$ //$NON-NLS-0$
 					commandRegistry.addCommandGroup(contextMenuActionsScope, "orion.projectsNewGroup", 100, messages["Project"], "orion.commonNavContextMenuGroup/orion.newGroup/orion.New"); //$NON-NLS-1$ //$NON-NLS-0$
@@ -385,7 +385,6 @@ define([
 						commandRegistry.registerCommandContribution(contextMenuActionsScope, command.id, position, "orion.commonNavContextMenuGroup/orion.newGroup/orion.New/orion.projectsNewGroup"); //$NON-NLS-0$
 						position++;
 					});
-
 					commandRegistry.registerCommandContribution(editActionsScope, "orion.project.initProject", 0, "orion.menuBarEditGroup");  //$NON-NLS-1$ //$NON-NLS-0$
 				}
 			});

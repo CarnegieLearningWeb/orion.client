@@ -97,6 +97,13 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 		getActiveViewModeId: function() {
 			return this.activeViewModeId;
 		},
+		getDefaultViewModeId: function() {
+			var id = localStorage.sidebarActiveViewModeId;
+			if (id && this.getViewMode(id)) {
+				return id;
+			}
+			return this.getNavigationViewMode().id;
+		},
 		/**
 		 * @param {String} id
 		 * @param {orion.sidebar.ViewMode} mode
@@ -123,6 +130,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 			delete this.viewModes[id];
 			if (this.getActiveViewModeId() === id) {
 				this.activeViewModeId = null;
+				delete localStorage.sidebarActiveViewModeId;
 			}
 		},
 		/**
@@ -149,6 +157,11 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 			lib.empty(this.parentNode);
 			mode = this.activeViewMode = this.getViewMode(id);
 			this.activeViewModeId = mode ? id : null;
+			if (this.activeViewModeId) {
+				localStorage.sidebarActiveViewModeId = this.activeViewModeId;
+			} else {
+				delete localStorage.sidebarActiveViewModeId;
+			}
 			if (mode && typeof mode.create === "function") { //$NON-NLS-0$
 				mode.create();
 			}
@@ -168,7 +181,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 		},
 
 		getProjectViewMode: function() {
-			return this._projectViewMode;
+			return this.projectViewMode;
 		},
 
 		getOutliner: function() {

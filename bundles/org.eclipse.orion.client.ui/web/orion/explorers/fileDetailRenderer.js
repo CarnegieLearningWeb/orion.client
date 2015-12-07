@@ -68,15 +68,11 @@ define([
         return span;
     }
 
-	function getFullPathPref(preferences, prefName, properties) {
-    	return preferences.getPreferences(prefName).then(function(prefs) { //$NON-NLS-0$
+	function getPrefs(preferences, prefName, properties) {
+    	return preferences.get(prefName).then(function(prefs) { //$NON-NLS-0$
 			var returnVal = [];
 			properties.forEach(function(property){
-				var value = prefs.get(property);
-				if (value === undefined) {
-					value = false;
-					prefs.put(property, value); //$NON-NLS-0$
-				}
+				var value = !!prefs[property];
 		        returnVal.push(value);
 			});
 	        return new Deferred().resolve(returnVal);
@@ -93,14 +89,15 @@ define([
         }
     }
 
-    function switchFullPathPref(preferences, prefName, properties) {
-    	return preferences.getPreferences(prefName).then(function(prefs) { //$NON-NLS-0$
+    function togglePrefs(preferences, prefName, properties) {
+    	return preferences.get(prefName).then(function(prefs) { //$NON-NLS-0$
 			var returnVal = [];
 			properties.forEach(function(property){
-				var value = !prefs.get(property);
-		        prefs.put(property, value);
+				var value = !prefs[property];
+		        prefs[property] = value;
 		        returnVal.push(value);
 			});
+			preferences.put(prefName, prefs);
 	        return new Deferred().resolve(returnVal);
 		}, function(/*err*/){
 			return new Deferred().resolve();
@@ -459,8 +456,8 @@ define([
 	
 	return {
 		FileDetailRenderer: FileDetailRenderer,
-		switchFullPathPref: switchFullPathPref,
-		getFullPathPref: getFullPathPref,
+		togglePrefs: togglePrefs,
+		getPrefs: getPrefs,
 		showFullPath: showFullPath
 	};
 

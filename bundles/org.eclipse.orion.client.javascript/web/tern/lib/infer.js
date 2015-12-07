@@ -14,12 +14,12 @@
 /* eslint-disable  */
 (function(root, mod) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
-    return mod(exports, require("acorn"), require("acorn/dist/acorn_loose"), require("acorn/dist/walk"),
+    return mod(exports, require("esprima/esprima"), require("acorn/dist/walk"),
                require("./def"), require("./signal"));
   if (typeof define == "function" && define.amd) // AMD
-    return define(["exports", "esprima/esprima" /*ORION*/, "acorn/dist/walk", "./def", "./signal"], mod);
-  mod(root.tern || (root.tern = {}), acorn, acorn.walk, tern.def, tern.signal); // Plain browser env
-})(this, function(exports, acorn, walk, def, signal) {
+    return define(["exports", "esprima/esprima" /*ORION*/, "acorn/dist/walk", "./def", "./signal", "javascript/util"], mod);
+  mod(root.tern || (root.tern = {}), acorn, acorn.walk, tern.def, tern.signal, Util); // Plain browser env
+})(this, function(exports, acorn, walk, def, signal, Util) {
   "use strict";
 
   var toString = exports.toString = function(type, maxDepth, parent) {
@@ -1271,15 +1271,6 @@
     if (arr) for (var i = 0; i < arr.length; ++i) arr[i].apply(null, args);
   }
 
-  //ORION
-  var emptyAST = Object.create(null);
-	emptyAST.type = "Program"; //$NON-NLS-0$
-	emptyAST.body = [];
-	emptyAST.comments = [];
-	emptyAST.tokens = [];
-	emptyAST.range = [0, 0];
-
-
   var parse = exports.parse = function(text, passes, options) {
     var ast;
     if (passes.preParse) for (var i = 0; i < passes.preParse.length; i++) {
@@ -1288,13 +1279,13 @@
     }
     var ast;
     try {
-        //TODO ORION we need to hook in the AST manager here
         options.tolerant = true;
         options.tokens = true;
         options.comment = true;
         options.range = true;
         options.deps = true;
         options.loc = true;
+        options.attachComment = true;
         ast = acorn.parse(text, options);
         if(typeof ast.sourceFile !== "object") {
 	        ast.sourceFile  = Object.create(null);
@@ -1304,53 +1295,13 @@
     }
     //ORION
     catch(e) {
-    	ast = emptyAST;
-		ast.range[1] = typeof(text) === "string" ? text.length : 0;
-		ast.errors = [e];
-		if(typeof ast.sourceFile !== "object") {
-	        ast.sourceFile  = Object.create(null);
-	        ast.sourceFile.text = options.directSourceFile.text;
-	        ast.sourceFile.name = options.directSourceFile.name;
-        }
+    	ast = Util.errorAST(e, options.directSourceFile.name, text); //ORION
     }
-    if (Array.isArray(ast.errors) && ast.errors.length > 0) {
-		_computeErrorTypes(ast.errors);
-		ast.errors = ast.errors.map(serializeError);
-	}
+	ast.errors = Util.serializeAstErrors(ast);
     runPasses(passes, "postParse", ast, text);
     return ast;
   };
 
-  //ORION
-  function serializeError(error) {
-	var result = error ? JSON.parse(JSON.stringify(error)) : error; // sanitizing Error object
-	if (error instanceof Error) {
-		result.__isError = true;
-		result.lineNumber = typeof(result.lineNumber) === 'number' ? result.lineNumber : error.lineNumber; //FF fails to include the line number from JSON.stringify
-		result.message = result.message || error.message;
-		result.name = result.name || error.name;
-		result.stack = result.stack || error.stack;
-	}
-	return result;
-  }
-
-  //ORION
-  function _computeErrorTypes(errors) {
-	if(errors && Array.isArray(errors)) {
-		errors.forEach(function(error) {
-			var msg = error.message;
-			//first sanitize it
-			error.message = msg = msg.replace(/^Line \d+: /, '');
-			if(/^Unexpected/.test(msg)) {
-				error.type = 1;
-				if(/end of input$/.test(msg)) {
-					error.type = 2;
-				}
-			}
-		});
-	}
-  }    
-    
   // ANALYSIS INTERFACE
 
   exports.analyze = function(ast, name, scope, passes) {
@@ -1687,7 +1638,7 @@
   var refFindWalker = walk.make({}, searchVisitor);
 
   exports.findRefs = function(ast, baseScope, name, refScope, f) {
-    refFindWalker.Identifier = function(node, scope) {
+    refFindWalker.Identifier = refFindWalker.VariablePattern = function(node, scope) {
       if (node.name != name) return;
       for (var s = scope; s; s = s.prev) {
         if (s == refScope) f(node, scope);

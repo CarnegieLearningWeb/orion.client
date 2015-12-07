@@ -9,7 +9,7 @@
  * Contributors:
  *   IBM Corporation - Various improvements
  ******************************************************************************/
-/*eslint-env amd, browser, node*/
+/*eslint-env amd, browser, node */
 define([
 	'i18n!javascript/nls/messages',
     'orion/Deferred',
@@ -18,13 +18,10 @@ define([
 	'orion/editor/templates',
 	'javascript/contentAssist/templates',
 	'javascript/hover',
-	'eslint/lib/load-rules-async',
-	'eslint/conf/environments',
-	'javascript/signatures',
 	'javascript/util',
 	'javascript/contentAssist/sigparser',
 	'orion/i18nUtil'
-], function(Messages, Deferred, Objects, Finder, mTemplates, Templates, Hover, Rules, ESLintEnv, Signatures, Util, SigParser, i18nUtil) {
+], function(Messages, Deferred, Objects, Finder, mTemplates, Templates, Hover, Util, SigParser, i18nUtil) {
 
 	/**
 	 * @description Creates a new delegate to create keyword and template proposals
@@ -43,13 +40,13 @@ define([
 			return !char || this.uninterestingChars.indexOf(char) === -1;
 		},
 
-		getTemplateProposals: function(prefix, offset, context, kind) {
+		getTemplateProposals: function(prefix, offset, context, ast) {
 			var proposals = [];
-			var k = kind ? kind.kind : null;
-			var templates = Templates.getTemplatesForKind(k);
+			var k = this.getKind(ast, offset);
+			var templates = Templates.getTemplatesForKind(k.kind);
 			for (var t = 0; t < templates.length; t++) {
 				var template = templates[t];
-				if (this.templateMatches(template, prefix, kind, context)) {
+				if (this.templateMatches(template, prefix, k, context)) {
 					var proposal = template.getProposal(prefix, offset, context);
 					var obj = Object.create(null);
 			        obj.type = 'markdown'; //$NON-NLS-1$
@@ -59,9 +56,6 @@ define([
 			        proposal.style = 'emphasis'; //$NON-NLS-1$
 					this.removePrefix(prefix, proposal);
 					proposal.kind = 'js'; //$NON-NLS-1$
-					if (k && (k === 'jsdoc' || k === 'doc')) {
-						//TODO proposal.tags = [{content: '@', cssClass: 'iconTagBlue'}]; //$NON-NLS-1$ //$NON-NLS-2$
-					}
 					proposals.push(proposal);
 				}
 			}
@@ -76,14 +70,6 @@ define([
 						return 1;
 					}
 					return 0;
-				});
-				// if any templates were added to the list of
-				// proposals, add a title as the first element
-				proposals.splice(0, 0, {
-					proposal: '',
-					description: Messages['templateAssistHeader'],
-					style: 'noemphasis_title', //$NON-NLS-1$
-					unselectable: true
 				});
 			}
 			return proposals;
@@ -116,338 +102,56 @@ define([
 		        return true;
 		    }
 		    return false;
+		},
+		
+		/**
+		 * @description Computes the kind of context to complete in
+		 * @param {Object} ast The backing AST to visit
+		 * @param {Number} offset The offset into the source
+		 * @param {String} contents The text of the file
+		 * @return {Object} Returns the deferred node and the completion kind
+		 */
+		getKind: function(ast, offset) {
+	    	var node = Finder.findNode(offset, ast, {parents:true});
+	    	if(node) {
+	    		if(node.parents && node.parents.length > 0) {
+		    		var prent = node.parents.pop();
+		    		switch(prent.type) {
+							case 'MemberExpression':
+								return { kind : 'member'}; //$NON-NLS-1$
+							case 'Program':
+							case 'BlockStatement':
+								break;
+							case 'VariableDeclarator':
+								if(!prent.init || offset < prent.init.range[0]) {
+									return null;
+								}
+								break;
+							case 'FunctionDelcaration':
+							case 'FunctionExpression':
+								if(offset < prent.body.range[0]) {
+									return null;
+								}
+								break;
+							case 'Property':
+								if(offset-1 >= prent.value.range[0] && offset-1 <= prent.value.range[1]) {
+									return { kind : 'prop'}; //$NON-NLS-1$
+								}
+								return null;
+							case 'SwitchStatement':
+								return {kind: 'swtch'}; //$NON-NLS-1$
+						}
+				}
+	    	}
+	    	node = Finder.findComment(offset, ast);
+	    	if(node) {
+	    		return {kind: 'doc', node: node}; //$NON-NLS-1$
+	    	}
+			return {kind:'top'}; //$NON-NLS-1$
 		}
  	});
 
  	var provider = new TemplateProvider();
-
-	/**
-	 * @description Create the template proposals
-	 * @private
-	 * @param {Object} params The completion context
-	 * @param {Object} kind The computed completion kind to make
-	 * @param {String} buffer The compilation unit buffer
-	 * @returns {Array} The array of template proposals
-	 */
-	function createTemplateProposals (params, kind, buffer) {
-		if((typeof params.template === 'undefined' || params.template) &&
-				provider.isValid(params.prefix, buffer, params.offset, params)) {
-			return provider.getTemplateProposals(params.prefix, params.offset, params, kind);
-		}
-		return [];
-	}
-
-    /**
-     * @description Get the prefix to use for the proposal, handles @-based prefixes
-     * @param {Object} context The proposal context
-     * @param {Object} kind The proposal kind we completing
-     * @param {String} buffer The text
-     * @returns {String} The prefix to use
-     */
-    function getPrefix(context, kind, buffer) {
-    	var prefix = context.prefix;
-    	if(kind && kind.kind) {
-		    if(typeof prefix === 'string' && typeof context.line === 'string') {
-		        switch(kind.kind) {
-		            case 'doc':
-		            case 'jsdoc': {
-		                var index = context.offset-1;
-		                var word = '', char = buffer.charAt(index);
-		                //do an initial check before looping + regex'ing
-		                if('{*,'.indexOf(char) > -1) {
-	    		            return word;
-	    		        }
-			            if(char === '@') {
-	    		            return '@';
-	    		        }
-		                while(index >= 0 && /\S/.test(char)) {
-		                    word = char+word;
-		                    if(char === '@') {
-		                        //we want the prefix to include the '@'
-	        		            return word;
-	        		        }
-		                    index--;
-		                    char = buffer.charAt(index);
-		                    if('{*,'.indexOf(char) > -1) {
-		                        // we don't want the prefix to include the '*'
-	    		                return word;
-	    		            }
-		                }
-	                    return word;
-		            }
-		        }
-		    }
-	    }
-	    return prefix;
-    }
-
-    /**
-	 * @description Computes the kind of context to complete in
-	 * @param {Object} ast The backing AST to visit
-	 * @param {Number} offset The offset into the source
-	 * @param {String} contents The text of the file
-	 * @return {Object} Returns the deferred node and the completion kind
-	 */
-	function getKind(ast, offset, contents) {
-	    var node = Finder.findComment(offset, ast);
-	    if(node) {
-	        switch(node.type) {
-	            case 'Block': {
-	                var start  = node.range[0];
-    		        if(contents.charAt(start) === '/' && contents.charAt(start+1) === '*') {
-                        if(contents.charAt(start+2) === '*' && offset > start+2) { // must be past the second '*'
-                            return {kind:'jsdoc', node: node}; //$NON-NLS-1$
-                        } else if(offset > start+1) { //must be past the '*'
-        		            return {kind:'doc', node: node}; //$NON-NLS-1$
-        		        }
-    		        }
-    		        break;
-	            }
-	            case 'Line': {
-	            	return {kind: 'linedoc', node: node}; //$NON-NLS-1$
-	            }
-	            //$FALLTHROUGH$
-	            default: return null;
-	        }
-	    }
-    	node = Finder.findNode(offset, ast, {parents:true});
-    	if(node) {
-    		if(node.parents && node.parents.length > 0) {
-	    		var prent = node.parents.pop();
-	    		switch(prent.type) {
-						case 'MemberExpression':
-							return { kind : 'member'}; //$NON-NLS-1$
-						case 'Program':
-						case 'BlockStatement':
-							break;
-						case 'VariableDeclarator':
-							if(!prent.init || offset < prent.init.range[0]) {
-								return null;
-							}
-							break;
-						case 'FunctionDelcaration':
-						case 'FunctionExpression':
-							if(offset < prent.body.range[0]) {
-								return null;
-							}
-							break;
-						case 'Property':
-							if(offset-1 >= prent.value.range[0] && offset-1 <= prent.value.range[1]) {
-								return { kind : 'prop'}; //$NON-NLS-1$
-							}
-							return null;
-						case 'SwitchStatement':
-							return {kind: 'swtch'}; //$NON-NLS-1$
-					}
-			}
-    	}
-		return {kind:'top'}; //$NON-NLS-1$
-	}
-
-    /**
-	 * @description Create proposals specific to JSDoc
-	 * @returns {Array} The array of proposals
-	 */
-	function createDocProposals(params, kind, ast, buffer, pluginenvs) {
-	    var proposals = [];
-	    if(!kind) {
-	    	return proposals;
-	    }
-	    if(kind.kind === 'jsdoc') {
-		    var offset = params.offset > params.prefix.length ? params.offset-params.prefix.length-1 : 0;
-		    switch(buffer.charAt(offset)) {
-		        case '{': {
-		        	//TODO @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=465029
-		            proposals = [];
-		            break;
-		        }
-		        case '.': {
-		        	//TODO @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=465029
-		            return [];
-		        }
-		        case '*':
-		        case ' ': {
-		            var node = Finder.findNodeAfterComment(kind.node, ast);
-    	            if(node) {
-	                   var val;
-	                   if((val = /\s*\*\s*\@name\s*(\w*)/ig.exec(params.line)) !== null) {
-	                       if(val[1] === params.prefix) {
-	                           var _name = getFunctionName(node);
-	                           if(_name) {
-        	                       proposals.push({
-        								proposal: _name,
-        								relevance: 100,
-        								name: _name,
-        								description: Messages['funcProposalDescription'],
-        								style: 'emphasis', //$NON-NLS-1$
-        								overwrite: true,
-        								kind: 'js' //$NON-NLS-1$
-    							   });
-							   }
-							}
-    	                 } else if((val = /\s*\*\s*\@param\s*(?:\{\w*\})?\s*(\w*)/ig.exec(params.line)) !== null) {
-        	                       if(val[1] === params.prefix) {
-        	                           var prms = getFunctionParams(node);
-        	                           if(Array.isArray(prms)) {
-        	                               for(var i = 0; i < prms.length; i++) {
-        	                                   _name = prms[i].name;
-        	                                   if(Util.looselyMatches(params.prefix, _name)) {
-            	                                   proposals.push({
-                        								proposal: _name,
-                        								relevance: 100,
-                        								name: _name,
-                        								description: Messages['funcParamProposalDescription'],
-                        								style: 'emphasis', //$NON-NLS-1$
-                        								overwrite: true,
-                        								kind: 'js' //$NON-NLS-1$
-                    							    });
-                							    }
-        	                               }
-        	                           }
-        	                       }
-        	                   }
-    	                   }
-		        }
-		    }
-        } else if(kind.kind === 'doc') {
-            var comment = kind.node.value;
-            if(comment) {
-	            if(/^\s*(?:\/\*)?\s*eslint(?:-enable|-disable)?\s+/gi.test(comment)) {
-	                //eslint eslint-enable eslint-disable
-	                var rules = Rules.getRules();
-	                var rulekeys = Object.keys(rules).sort();
-	                for(i = 0; i < rulekeys.length; i++) {
-	                    var rulekey = rulekeys[i];
-                        if(Util.looselyMatches(params.prefix, rulekey)) {
-                            var rule = rules[rulekey];
-                            var _p = {
-								proposal: rulekey,
-								relevance: 100,
-								name: rulekey,
-								description: Messages['eslintRuleProposalDescripton'],
-								prefix: params.prefix,
-								style: 'emphasis', //$NON-NLS-1$
-								overwrite: true,
-								kind: 'js' //$NON-NLS-1$
-						    };
-						    var hover = rule.description ? rule.description : '';
-						    if(rule.url) {
-						    	hover += i18nUtil.formatMessage.call(null, Messages['onlineDocumentationProposalEntry'], rule.url);
-						    }
-						    _p.hover = {content: hover, type: 'markdown'}; //$NON-NLS-1$
-                            proposals.push(_p);
-					    }
-	                }
-	            } else if(/^\s*(?:\/\*)?\s*eslint-env\s+/gi.test(comment)) {
-	                //eslint-env (comma-separated list)
-	                var _all = Objects.mixin(ESLintEnv, pluginenvs);
-	                var keys = Object.keys(_all).sort();
-	                for(i = 0; i < keys.length; i++) {
-	                    var key = keys[i];
-	                    if(key !== 'builtin' && Util.looselyMatches(params.prefix, key)) {
-	                        proposals.push({
-								proposal: key,
-								relevance: 100,
-								name: key,
-								description: Messages['eslintEnvProposalDescription'],
-								style: 'emphasis', //$NON-NLS-1$
-								overwrite: true,
-								kind: 'js' //$NON-NLS-1$
-						    });
-	                    }
-	                }
-	            }
-            }
-        }
-        return proposals;
-	}
-
-	/**
-	 * @description Returns the function name from the given node if it relates to a function in some way
-	 * @param {Object} node The AST node
-	 * @returns {String} The name of he related function or null
-	 * @since 10.0
-	 */
-	function getFunctionName(node) {
-		switch(node.type) {
-			case 'FunctionDeclaration': {
-				return node.id.name;
-			}
-			case 'Property': {
-				if(node.value.type === 'FunctionExpression') {
-					return node.value.id ? node.value.id.name : node.key.name;
-				}
-				break;
-			}
-			case 'ExpressionStatement': {
-				var _n = node.expression;
-				if(_n && _n.type === 'AssignmentExpression' && _n.right.type === 'FunctionExpression') {
-					if(_n.right.id) {
-						return _n.right.id.name;
-					}
-					if(_n.left.type === 'Identifier') {
-						return _n.left.name;
-					}
-					if(_n.left.type === 'MemberExpression') {
-						return Signatures.expandMemberExpression(_n.left, '');
-					}
-				}
-				break;
-			}
-			case 'VariableDeclaration': {
-				if(node.declarations.length > 0) {
-					//always pick the first one to attach the comment to
-					var decl = node.declarations[0];
-					if(decl.init && decl.init.type === 'FunctionExpression') {
-						if(decl.init.id) {
-							return decl.init.id.name;
-						}
-						return decl.id.name;
-					}
-				}
-				break;
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * @description Returns the parameters from the related function
-	 * @param {Object} node The AST node
-	 * @returns {Array.<Object>} The parameters from the related function or an empty array
-	 * @since 10.0
-	 */
-	function getFunctionParams(node) {
-		switch(node.type) {
-			case 'FunctionDeclaration': {
-				return node.params;
-			}
-			case 'Property': {
-				if(node.value.type === 'FunctionExpression') {
-					return node.value.params;
-				}
-				break;
-			}
-			case 'ExpressionStatement': {
-				var _n = node.expression;
-				if(_n && _n.type === 'AssignmentExpression' && _n.right.type === 'FunctionExpression') {
-					return _n.right.params;
-				}
-				break;
-			}
-			case 'VariableDeclaration': {
-				if(node.declarations.length > 0) {
-					//always pick the first one to attach the comment to
-					var decl = node.declarations[0];
-					if(decl.init && decl.init.type === 'FunctionExpression') {
-						return decl.init.params;
-					}
-				}
-				break;
-			}
-		}
-		return [];
-	}
 
 	/**
 	 * @description Creates a new TernContentAssist object
@@ -508,49 +212,36 @@ define([
 			});
 		},
 
-		doAssist: function(ast, params, meta, envs, contributedEnvs, htmlsource) {
-			var kind = getKind(ast, params.offset, ast.source);
-       		params.prefix = getPrefix(params, kind, ast.source);
-       		var proposals = [].concat(createDocProposals(params, kind, ast, ast.source, contributedEnvs),
-       								  createTemplateProposals(params, kind, ast.source));
-       		if(kind && (kind.kind === 'jsdoc' || kind.kind === 'doc' || kind.kind === 'linedoc')) {
-       			return new Deferred().resolve(proposals); //resolve now, no need to talk to the worker
-       		} else {
-       			var env = this.getActiveEnvironments(ast, envs);
-			    var files = [
-			    	{type:'full', name: meta.location, text: htmlsource ? htmlsource : ast.source} //$NON-NLS-1$
-			    ];
-			    if(typeof(params.keywords) === 'undefined') {
-			    	params.keywords = true;
-			    }
-			    var args = {params: params, meta: meta, envs:env, files: files};
-				var deferred = new Deferred();
-				deferred.proposals = proposals;
-				deferred.args = args;
-				var that = this;
-				this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
-					function(response) {
-						clearTimeout(that.timeout);
-						if(deferred.proposals) {
-			        		deferred.resolve([].concat(sortProposals(response.proposals ? response.proposals : [], deferred.args), deferred.proposals));
-			        	} else {
-			        		deferred.resolve(sortProposals(response.proposals, deferred.args));
-			        	}
-					}
-	        	);
-				
-				if(this.timeout) {
-					clearTimeout(this.timeout);
+		doAssist: function(ast, params, meta, envs, pluginenvs, htmlsource) {
+       		var templates = createTemplateProposals(params, ast);
+   			var env = this.getActiveEnvironments(ast, envs);
+		    var files = [
+		    	{type:'full', name: meta.location, text: htmlsource ? htmlsource : ast.source} //$NON-NLS-1$
+		    ];
+		    if(typeof(params.keywords) === 'undefined') {
+		    	params.keywords = true;
+		    }
+		    var args = {params: params, meta: meta, envs:env, files: files};
+			var deferred = new Deferred();
+			var that = this;
+			this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
+				function(response) {
+					clearTimeout(that.timeout);
+		        	deferred.resolve(sortProposals(response.proposals, templates, args));
 				}
-				this.timeout = setTimeout(function() {
-					if(deferred) {
-						// In the editor we can't return an error message here or it will be treated as a proposal and inserted into text
-						deferred.resolve(params.timeoutReturn ? params.timeoutReturn : []);
-					}
-					this.timeout = null;
-				}, params.timeout ? params.timeout : 5000);
-				return deferred;
-   			}
+        	);
+			
+			if(this.timeout) {
+				clearTimeout(this.timeout);
+			}
+			this.timeout = setTimeout(function() {
+				if(deferred) {
+					// In the editor we can't return an error message here or it will be treated as a proposal and inserted into text
+					deferred.resolve(params.timeoutReturn ? params.timeoutReturn : []);
+				}
+				that.timeout = null;
+			}, params.timeout ? params.timeout : 5000);
+			return deferred;
 		},
 
 		getActiveEnvironments: function getActiveEnvironements(ast, defenvs) {
@@ -582,6 +273,22 @@ define([
 		    return env;
 		}
 	});
+
+	/**
+	 * @description Create the template proposals
+	 * @private
+	 * @param {Object} params The completion context
+	 * @param {Object} ast The the backing AST
+	 * @param {String} buffer The compilation unit buffer
+	 * @returns {Array} The array of template proposals
+	 */
+	function createTemplateProposals (params, ast) {
+		if((typeof params.template === 'undefined' || params.template) &&
+				provider.isValid(params.prefix, ast.source, params.offset, params)) {
+			return provider.getTemplateProposals(params.prefix, params.offset, params, ast);
+		}
+		return [];
+	}
 
 	var operators = {
     	'delete': true,
@@ -651,25 +358,57 @@ define([
             overwrite: true,
             kind: 'js' //$NON-NLS-1$
         };
+        if(typeof(completion.overwrite) === 'boolean') {
+        	proposal.overwrite = completion.overwrite;
+        }
+        if(typeof(completion.prefix) === 'string') {
+        	//args.params.prefix = completion.prefix;
+        	proposal.prefix = completion.prefix;
+        }
         proposal.name = proposal.proposal = completion.name;
         if(typeof(completion.type) !== 'undefined') {
             if(/^fn/.test(completion.type)) {
-            	//TODO proposal.tags = [{content: 'F', cssClass: 'iconTagPurple'}]; //$NON-NLS-1$ //$NON-NLS-2$
+            	//TODO proposal.tags = [{content: 'F', cssClass: 'iconTagPurple'}];
             	calculateFunctionProposal(completion, args, proposal);
-            } else if(completion.type === 'template') {
-            	var _t = new mTemplates.Template(args.params.prefix, completion.description, completion.template, completion.name);
-            	var _prop = _t.getProposal(args.params.prefix, args.params.offset, {});
+            } else if(completion.type === 'template' || completion.type === 'jsdoc_template') {
+            	var prefix = proposal.prefix;
+            	if (!prefix){
+            		prefix = args.params.prefix;
+            	}
+            	var _t = new mTemplates.Template(prefix, completion.description, completion.template, completion.name);
+            	var _prop = _t.getProposal(prefix, args.params.offset, {});
             	var obj = Object.create(null);
 		        obj.type = 'markdown'; //$NON-NLS-1$
-		        obj.content = Messages['templateHoverHeader'];
-		        obj.content += _prop.proposal;
+		        
+		        obj.content = '';
+			    if(!completion.doc) {
+			        obj.content += Messages['templateHoverHeader'];
+		        	obj.content += _prop.proposal;
+			    } else {
+			    	var _h = Hover.formatMarkdownHover(completion.doc);
+			    	if(_h) {
+			    		obj.content += _h.content;
+			    	} else {
+			    		obj.content += proposal.name;
+			    	}
+			    }
+			    if(completion.url) {
+			        obj.content += i18nUtil.formatMessage.call(null, Messages['onlineDocumentationProposalEntry'], completion.url);
+			    }
 		        _prop.hover = obj;
-		        provider.removePrefix(args.params.prefix, _prop);
+		        provider.removePrefix(prefix, _prop);
 		        _prop.style = 'emphasis'; //$NON-NLS-1$
 		        _prop.kind = 'js'; //$NON-NLS-1$
+		        if(typeof(completion.prefix) === 'string') {
+		        	_prop.prefix = completion.prefix;
+		        }
 		        return _prop;
             } else {
-    		    proposal.description = convertTypes(' : ' + completion.type); //$NON-NLS-1$
+            	if(typeof(completion.description) === 'string') {
+            		proposal.description = completion.description;
+            	} else {
+	    		    proposal.description = convertTypes(' : ' + completion.type); //$NON-NLS-1$
+			    }
 		    }
         } else if(completion.isKeyword) {
         	proposal.relevance -= 2; //103
@@ -787,7 +526,7 @@ define([
 		return origin;
 	}
 
-	function sortProposals(completions, args) {
+	function sortProposals(completions, templates, args) {
 		var envs = args.envs ? args.envs : {};
 	    //bucket them by origin
 	    var _p = Object.create(null); // Grouped proposals from env and indexes
@@ -796,12 +535,17 @@ define([
 	    var keywords = [];
 	    for(var i = 0; i < completions.length; i++) {
 	        var _c = completions[i];
-	        if(Util.looselyMatches(args.params.prefix, _c.name)) {
+	        var _prefix = typeof(_c.prefix) === 'string' ? _c.prefix : args.params.prefix;
+	        if(Util.looselyMatches(_prefix, _c.name)) {
     	        var _o = _c.origin;
     	        if(_c.isKeyword) {
     	        	keywords.push(_formatTernProposal(_c, args));
     	        } else if(typeof(_o) === 'undefined') {
-    	        	locals.push(_formatTernProposal(_c, args));
+    	        	if(_c.isTemplate && _c.type !== 'jsdoc_template') {
+    	        		templates.push(_formatTernProposal(_c, args));
+    	        	} else {
+	    	        	locals.push(_formatTernProposal(_c, args));
+		        	}
     	        	continue;
     	        }
     	        _o = _o ? _o : '?';
@@ -837,16 +581,6 @@ define([
 				});
 	        proposals = proposals.concat(_d[key].sort(sorter));
 	    }
-	    if(keywords.length > 0) {
-	    	keywords.sort(sorter);
-	    	keywords.splice(0, 0, {
-					proposal: '',
-					description: Messages['keywordAssistHeader'],
-					style: 'noemphasis_title', //$NON-NLS-1$
-					unselectable: true
-				});
-			proposals = proposals.concat(keywords);
-	    } 
 	    keys = Object.keys(_p);
 	    for(i = 0; i < keys.length; i++) {
 	        key = keys[i];
@@ -858,10 +592,38 @@ define([
 				});
 	        proposals = proposals.concat(_p[key].sort(sorter));
 	    }
+	    if(templates.length > 0) {
+	    	templates.sort(function(p1, p2) {
+				if (p1.name < p2.name) {
+					return -1;
+				}
+				if (p1.name > p2.name) {
+					return 1;
+				}
+				return 0;
+			});
+			templates.splice(0, 0, {
+				proposal: '',
+				description: Messages['templateAssistHeader'],
+				style: 'noemphasis_title', //$NON-NLS-1$
+				unselectable: true
+			});
+			proposals = proposals.concat(templates);
+	    }
+	    if(keywords.length > 0) {
+	    	keywords.sort(sorter);
+	    	keywords.splice(0, 0, {
+					proposal: '',
+					description: Messages['keywordAssistHeader'],
+					style: 'noemphasis_title', //$NON-NLS-1$
+					unselectable: true
+				});
+			proposals = proposals.concat(keywords);
+	    } 
 	    return proposals;
 	}
 
 	return {
 		TernContentAssist : TernContentAssist
 	};
-});
+});

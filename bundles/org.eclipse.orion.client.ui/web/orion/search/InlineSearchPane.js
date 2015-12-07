@@ -100,6 +100,7 @@ define([
 				delete this._filledResult;
 				lib.empty(lib.node("searchResultsTitle"));
 				lib.empty(lib.node("searchPageActions"));
+				lib.empty(lib.node("searchPageActionsRight"));
 				lib.empty(this._searchResultsWrapperDiv);
 			}
 			this.hideReplacePreview();
@@ -127,6 +128,7 @@ define([
 					start: 0,
 					replace: replaceValue,
 					caseSensitive: this._caseSensitiveCB.checked,
+					wholeWord: this._wholeWordCB.checked,
 			        regEx: this._regExCB.checked,
 					fileNamePatterns: fileNamePatternsArray,
 			        resource: resource
@@ -347,15 +349,16 @@ define([
 			this._initFileNamePatternsBox();
 			
 			this._caseSensitiveCB = lib.$("#advSearchCaseSensitive", this._searchWrapper); //$NON-NLS-0$
+			this._wholeWordCB = lib.$("#advSearchWholeWord", this._searchWrapper); //$NON-NLS-0$
 			this._regExCB = lib.$("#advSearchRegEx", this._searchWrapper); //$NON-NLS-0$
 			this._toggleReplaceLink = lib.$("#toggleReplaceLink", this._searchWrapper); //$NON-NLS-0$
 			
 			this._toggleSearchOptionsLink = lib.$("#toggleSearchOptionsLink", this._searchWrapper); //$NON-NLS-0$
 			this._toggleSearchOptionsLink.addEventListener("click", this.showSearchOptions.bind(this)); //$NON-NLS-0$
-			this._toggleSearchOptionsLink.innerHTML = messages["^ Edit Search"]; //$NON-NLS-0$
+			this._toggleSearchOptionsLink.textContent = messages["^ Edit Search"]; //$NON-NLS-0$
 
 			if (this._replaceBoxIsHidden()) {
-	        	this._toggleReplaceLink.innerHTML = messages["Show Replace"]; //$NON-NLS-0$	
+	        	this._toggleReplaceLink.textContent = messages["Show Replace"]; //$NON-NLS-0$	
 	        }
 	        this._toggleReplaceLink.addEventListener("click", this._toggleReplaceFieldVisibility.bind(this)); //$NON-NLS-0$
 	        
@@ -363,8 +366,9 @@ define([
 		},
 		
 		_initHTMLLabels: function(){
-			this._replaceCompareTitleDiv.innerHTML = messages["Preview: "]; //$NON-NLS-0$
+			this._replaceCompareTitleDiv.textContent = messages["Preview: "]; //$NON-NLS-0$
 			lib.$("#advSearchCaseSensitiveLabel", this._searchWrapper).appendChild(document.createTextNode(messages["Case sensitive"])); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.$("#advSearchWholeWordLabel", this._searchWrapper).appendChild(document.createTextNode(messages["Whole Word"])); //$NON-NLS-1$ //$NON-NLS-0$
 			lib.$("#advSearchRegExLabel", this._searchWrapper).appendChild(document.createTextNode(messages["Regular expression"])); //$NON-NLS-1$ //$NON-NLS-0$
 			lib.$("#searchScopeLabel", this._searchWrapper).appendChild(document.createTextNode(messages["Scope"])); //$NON-NLS-1$ //$NON-NLS-0$
 			lib.$("#fileNamePatternsLabel", this._searchWrapper).appendChild(document.createTextNode(messages["File name patterns (comma-separated)"])); //$NON-NLS-1$ //$NON-NLS-0$
@@ -456,14 +460,14 @@ define([
 			this._searchBox.hideButton();
 			this._replaceWrapper.classList.remove("replaceWrapperHidden"); //$NON-NLS-0$
 			this._searchWrapper.classList.add("replaceModeActive"); //$NON-NLS-0$
-			this._toggleReplaceLink.innerHTML = messages["Hide Replace"]; //$NON-NLS-0$
+			this._toggleReplaceLink.textContent = messages["Hide Replace"]; //$NON-NLS-0$
 		},
 		
 		_hideReplaceField: function() {
 			this._searchBox.showButton();
 			this._replaceWrapper.classList.add("replaceWrapperHidden"); //$NON-NLS-0$
 			this._searchWrapper.classList.remove("replaceModeActive"); //$NON-NLS-0$
-			this._toggleReplaceLink.innerHTML = messages["Show Replace"]; //$NON-NLS-0$
+			this._toggleReplaceLink.textContent = messages["Show Replace"]; //$NON-NLS-0$
 			this.hideReplacePreview();
 		},
 		

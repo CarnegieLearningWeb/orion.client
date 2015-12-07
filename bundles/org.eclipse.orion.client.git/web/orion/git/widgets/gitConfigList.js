@@ -112,6 +112,8 @@ define([
 		this.gitClient = options.gitClient;
 		mGitCommands.getModelEventDispatcher().addEventListener("modelChanged", this._modelListener = function(event) { //$NON-NLS-0$
 			switch (event.action) {
+			case "addRemote": //$NON-NLS-0$
+			case "removeRemote": //$NON-NLS-0$
 			case "addConfig": //$NON-NLS-0$
 			case "editConfig": //$NON-NLS-0$
 			case "deleteConfig": //$NON-NLS-0$
@@ -126,6 +128,9 @@ define([
 			if (this._modelListener) {
 				mGitCommands.getModelEventDispatcher().removeEventListener("modelChanged", this._modelListener); //$NON-NLS-0$
 				this._modelListener = null;
+			}
+			if (this.section.filterBox) {
+				this.section.filterBox.destroy();
 			}
 			mExplorer.Explorer.prototype.destroy.call(this);
 		},
@@ -149,7 +154,10 @@ define([
 			return deferred;
 		},
 		createFilter: function() {
-			uiUtil.createFilter(this.section, messages["Filter items"],  function(value) {
+			if (this.section.filterBox) {
+				this.section.filterBox.destroy();
+			}
+			this.section.filterBox = uiUtil.createFilter(this.section, messages["Filter configuration entries"],  function(value) {
 				this.model.filterQuery = value;
 				this.changedItem();
 			}.bind(this));

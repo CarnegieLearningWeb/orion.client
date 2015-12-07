@@ -142,19 +142,28 @@ define([
 							assert.equal(ap.description, description, "Invalid proposal description"); //$NON-NLS-0$
 						}
 					}
-					if(expectedProposals[i].length === 3 && !ap.unselectable /*headers have no hover*/) {
+					if(ep.length >= 3 && !ap.unselectable /*headers have no hover*/) {
 					    //check for doc hover
 					    assert(ap.hover, 'There should be a hover entry for the proposal');
-					    assert(ap.hover.indexOf(ep[2]) === 0, "The doc should have started with the given value");
+					    assert(ap.hover.content.indexOf(ep[2]) === 0, "The doc should have started with the given value.\nActual: " + ap.hover.content + '\nExpected: ' + ep[2]);
+					}
+					if (ep.length >= 4 && typeof(ep[3]) === 'object'){
+						assert(ap.groups, "Expected template proposal with selection group");
+						assert(ap.groups[0].positions, "Expected template proposal with selection group")
+						var offset = ap.groups[0].positions[0].offset;
+						var length = ap.groups[0].positions[0].length;
+						assert.equal(offset, ep[3].offset, "Template proposal had different offset for selection group");
+						assert.equal(offset, ep[3].offset, "Template proposal had different offset for selection group");
+						assert.equal(length, ep[3].length, "Template proposal had different length for selection group");						
 					}
 				}
-				testworker._state.callback();
+				testworker.getTestState().callback();
 			}
 			catch(err) {
-				testworker._state.callback(err);
+				testworker.getTestState().callback(err);
 			}
 		}, function (error) {
-			testworker._state.callback(error);
+			testworker.getTestState().callback(error);
 		});
 	}
 
@@ -173,7 +182,7 @@ define([
 				callback: callback
 			};
 			var _p = setup(options);
-			testworker._state.warmup = true;
+			testworker.getTestState().warmup = true;
 			ternAssist.computeContentAssist(_p.editorContext, _p.params).then(/* @callback */ function (actualProposals) {
 				//do noting, warm up
 			});
@@ -2840,8 +2849,7 @@ define([
 					callback: done
 				};
 				return testProposals(options, [
-					//["eee", "eee : Error"],
-					
+					["eee", "eee : Error"],
 					["", "ecma5"],
 					['Error(message)', 'Error(message)'],
 					['EvalError(message)', 'EvalError(message)'],
@@ -2963,12 +2971,12 @@ define([
 					callback: done};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["function", "function - Keyword"],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"],
-						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"]
+						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
+						['', 'Keywords'],
+						["function", "function - Keyword"]
 						]);
 			});
 			/**
@@ -2986,12 +2994,12 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["function", "function - Keyword"],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"],
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
+						['', 'Keywords'],
+						["function", "function - Keyword"]
 						]);
 			});
 			/**
@@ -3009,12 +3017,12 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["function", "function - Keyword"],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"],
 						['ction(parameter) {\n\t\n}', 'function - member function expression'],
+						['', 'Keywords'],
+						["function", "function - Keyword"]
 						]);
 			});
 			/**
@@ -3032,12 +3040,12 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["function", "function - Keyword"],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"],
 						['ction(parameter) {\n\t\n}', 'function - member function expression'],
+						['', 'Keywords'],
+						["function", "function - Keyword"]
 						]);
 			});
 			/**
@@ -3055,12 +3063,12 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["function", "function - Keyword"],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()'],
 						["", "Templates"],
 						["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
+						['', 'Keywords'],
+						["function", "function - Keyword"]
 						]);
 			});
 			/*
@@ -3078,17 +3086,17 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["this", "this - Keyword"],
-						['throw', 'throw - Keyword'],
-						['try', 'try - Keyword'],
-						["typeof", "typeof - Keyword"],
 						['', 'ecma5'],
 						['TypeError(message)', 'TypeError(message)'],
 						["toLocaleString()", "toLocaleString() : string"],
 						["toString()", "toString() : string"],
 						['', 'ecma6'],
-						['TypedArray(length)', 'TypedArray(length)']
+						['TypedArray(length)', 'TypedArray(length)'],
+						['', 'Keywords'],
+						["this", "this - Keyword"],
+						['throw', 'throw - Keyword'],
+						['try', 'try - Keyword'],
+						["typeof", "typeof - Keyword"]
 						]);
 			});
 			/**
@@ -3125,11 +3133,11 @@ define([
 				};
 				return testProposals(options, [
 						//proposal, description
-						['', 'Keywords'],
-						["new", "new - Keyword"],
 						['', 'ecma5'],
 						['Number(value)', 'Number(value) : number'],
-						['NaN', 'NaN : number']
+						['NaN', 'NaN : number'],
+						['', 'Keywords'],
+						["new", "new - Keyword"]
 						]);
 			});
 		});
@@ -3167,11 +3175,10 @@ define([
 					templates: true
 				};
 				testProposals(options, [
-					['', 'Templates'],
 				    ['lint rule-id:0/1 ', 'eslint - ESLint rule enable or disable'],
 				    ['lint-disable rule-id ', 'eslint-disable - ESLint rule disablement directive'],
 				    ['lint-enable rule-id ', 'eslint-enable - ESLint rule enablement directive'],
-				    ['lint-env library', 'eslint-env - ESLint environment directive']]
+				    ['lint-env amd', 'eslint-env - ESLint environment directive']]  // When inside a comment we auto open content assist, selecting the first value
 				);
 			});
 			/**
@@ -3187,11 +3194,10 @@ define([
 					templates: true
 				};
 				testProposals(options, [
-					['', 'Templates'],
 				    ['lint rule-id:0/1 ', 'eslint - ESLint rule enable or disable'],
 				    ['lint-disable rule-id ', 'eslint-disable - ESLint rule disablement directive'],
 				    ['lint-enable rule-id ', 'eslint-enable - ESLint rule enablement directive'],
-				    ['lint-env library', 'eslint-env - ESLint environment directive']]
+				    ['lint-env amd', 'eslint-env - ESLint environment directive']]  // When inside a comment we auto open content assist, selecting the first value
 				);
 			});
 			/**
@@ -3206,12 +3212,7 @@ define([
 					callback: done,
 					templates: true
 				};
-				testProposals(options, [
-					['', 'Templates'],
-				    ['lint rule-id:0/1 ', 'eslint - ESLint rule enable or disable'],
-				    ['lint-disable rule-id ', 'eslint-disable - ESLint rule disablement directive'],
-				    ['lint-enable rule-id ', 'eslint-enable - ESLint rule enablement directive'],
-				    ['lint-env library', 'eslint-env - ESLint environment directive']]
+				testProposals(options, []
 				);
 			});
 			/**
@@ -3229,7 +3230,10 @@ define([
 				testProposals(options, []);
 			});
 			/**
-			 * Tests that eslint* templates will be proposed further in comment with no content beforehand
+			 * Tests that eslint* templates will be proposed further in comment with no content beforehand.
+			 * 
+			 * This test does not test a scenario from the real world - you can never activate assist past the end of a file. 
+			 * i.e. the offset of 10 is 2 past the end of the file
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=440569
 			 * @since 7.0
 			 */
@@ -3246,24 +3250,42 @@ define([
 				    ['/* eslint rule-id:0/1*/', 'eslint - ESLint rule enable / disable directive'],
 				    ['/* eslint-disable rule-id */', 'eslint-disable - ESLint rule disablement directive'],
 				    ['/* eslint-enable rule-id */', 'eslint-enable - ESLint rule enablement directive'],
-				    ['/* eslint-env library*/', 'eslint-env - ESLint environment directive']]
-				);
+				    ['/* eslint-env library*/', 'eslint-env - ESLint environment directive']
+				]);
+			});
+			
+			/**
+			 * Tests that eslint* templates will be proposed further in comment with no content beforehand.
+			 * This test actually tests the real world behavior
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=440569
+			 * @since 7.0
+			 */
+			it("test eslint* template 6a", function(done) {
+				var options = {
+					buffer: "/* \n\n es",
+					prefix: "es",
+					offset: 8,
+					callback: done,
+					templates: true
+				};
+				testProposals(options, [
+				]);
 			});
 			/**
 			 * Tests that no eslint* templates are in comments after other content
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=440569
 			 * @since 7.0
 			 */
-//			it("test eslint* template 7", function(done) {
-//				var options = {
-//					buffer: "/* foo \n\n es",
-//					prefix: "es",
-//					offset: 10,
-//					callback: done,
-//					templates: true
-//				};
-//				testProposals(options, []);
-//			});
+			it.skip("test eslint* template 7", function(done) {
+				var options = {
+					buffer: "/* foo \n\n es",
+					prefix: "es",
+					offset: 10,
+					callback: done,
+					templates: true
+				};
+				testProposals(options, []);
+			});
 			/**
 			 * Tests that no eslint* templates are proposed when there is already one
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=440569
@@ -3278,11 +3300,10 @@ define([
 					templates: true
 				};
 	            testProposals(options, [
-	            	['', 'Templates'],
 				    [' rule-id:0/1 ', 'eslint - ESLint rule enable or disable'],
 				    ['-disable rule-id ', 'eslint-disable - ESLint rule disablement directive'],
 				    ['-enable rule-id ', 'eslint-enable - ESLint rule enablement directive'],
-				    ['-env library', 'eslint-env - ESLint environment directive']]
+				    ['-env amd', 'eslint-env - ESLint environment directive']] // When inside a comment we auto open content assist, selecting the first value
 				);
 			});
 			/**
@@ -3300,15 +3321,33 @@ define([
 				};
 				testProposals(options, [
 				     ['amd', 'amd - ESLint environment name'],
+				     ['amqp', 'amqp - ESLint environment name'],
+				     ['applescript' , 'applescript - ESLint environment name'],
 				     ['browser', 'browser - ESLint environment name'],
+				     ['commonjs', 'commonjs - ESLint environment name'],
+				     ['embertest', 'embertest - ESLint environment name'],
+				     ['es6', 'es6 - ESLint environment name'],
+				     ['express', 'express - ESLint environment name'],
 				     ['jasmine', 'jasmine - ESLint environment name'],
+				     ['jest', 'jest - ESLint environment name'],
 					 ['jquery', 'jquery - ESLint environment name'],
 					 ['meteor', 'meteor - ESLint environment name'],
 				     ['mocha', 'mocha - ESLint environment name'],
+				     ['mongo', 'mongo - ESLint environment name'],
+				     ['mongodb', 'mongodb - ESLint environment name'],
+				     ['mysql', 'mysql - ESLint environment name'],
+				     ['nashorn', 'nashorn - ESLint environment name'],
 				     ['node', 'node - ESLint environment name'],
+				     ['pg', 'pg - ESLint environment name'],
 				     ['phantomjs', 'phantomjs - ESLint environment name'],
 					 ['prototypejs', 'prototypejs - ESLint environment name'],
-					 ['shelljs', 'shelljs - ESLint environment name']
+					 ['protractor', 'protractor - ESLint environment name'],
+				     ['qunit', 'qunit - ESLint environment name'],
+					 ['redis', 'redis - ESLint environment name'],
+					 ['serviceworker', 'serviceworker - ESLint environment name'],
+					 ['shelljs', 'shelljs - ESLint environment name'],
+					 ['webextensions', 'webextensions - ESLint environment name'],
+					 ['worker', 'worker - ESLint environment name']
 				     ]);
 			});
 			/**
@@ -3326,6 +3365,8 @@ define([
 				};
 				testProposals(options, [
 				     ['amd', 'amd - ESLint environment name'],
+				     ['amqp', 'amqp - ESLint environment name'],
+				     ['applescript', 'applescript - ESLint environment name']
 				     ]);
 			});
 			/**
@@ -3728,8 +3769,11 @@ define([
 					templates: true,
 					callback: done};
 				testProposals(options, [
-					['', 'Templates'],
-				    ['uthor ', '@author - Author JSDoc tag']
+					['@abstract', '@abstract'],
+					['@access', '@access'],
+					['@alias', '@alias'],
+					['@augments', '@augments'],
+				    ['uthor ', '@author']
 				]);
 			});
 			/**
@@ -3745,9 +3789,9 @@ define([
 					templates: true,
 					callback: done};
 				testProposals(options, [
-					['', 'Templates'],
-				    ['ends ', '@lends - Lends JSDoc tag'],
-				    ['icense ', '@license - License JSDoc tag']
+					['ends ', '@lends'],
+					['icense ', '@license'],
+					['@listens', '@listens'],
 				]);
 			});
 			/**
@@ -3875,6 +3919,38 @@ define([
 					offset: 14,
 					callback: done};
 				testProposals(options, []);
+			});
+			/**
+			 * Tests @param tag template proposal
+			 * @since 11.0
+			 */
+			it("test param tag template completion 1", function(done) {
+				var options = {
+					buffer: "/**\n* @para\n@return nothing \n*/function foo(aa){}",
+					line: '* @para',
+					prefix: "@para",
+					offset: 11,
+					callback: done};
+					
+				testProposals(options, [
+				    ['m {type} ', '@param', 'Document the parameter', {length: 4, offset: 14}]  // Check that the selection offset is right
+				]);
+			});
+			/**
+			 * Tests @param tag template proposal
+			 * @since 11.0
+			 */
+			it("test param tag template completion 2", function(done) {
+				var options = {
+					buffer: "/**\n* @par\n@return nothing \n*/function foo(aa){}",
+					line: '* @par',
+					prefix: "@par",
+					offset: 10,
+					callback: done};
+					
+				testProposals(options, [
+				    ['am {type} ', '@param', 'Document the parameter', {length: 4, offset: 14}]  // Check that the selection offset is right
+				]);
 			});
 			/**
 			 * Tests func decl param name proposals no prefix, no type
@@ -4124,21 +4200,34 @@ define([
 					['aa', 'aa - Function parameter']
 				]);
 			});
-
 			/**
-			 * Tests var decl func expr name proposals
-			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
-			 * @since 10.0
+			 * Tests var decl func expr param name proposals
+			 * @since 11.0
 			 */
-			it("test param name completion 14", function(done) {
+			it("test param name completion 14 - period in type name", function(done) {
 				var options = {
-					buffer: "/**\n* @name \n*/var baz = function baz(aa, bb, cc){}",
-					line: '* @name ',
-					prefix: "",
-					offset: 12,
+					buffer: "/**\n* @param {type.atype} a\n*/var baz = function a(aa, bb, cc){}",
+					line: '* @param {type.atype} a',
+					prefix: "a",
+					offset: 27,
 					callback: done};
 				testProposals(options, [
-					['baz', 'baz - The name of the function']
+					['aa', 'aa - Function parameter']
+				]);
+			});
+			/**
+			 * Tests var decl func expr param name proposals
+			 * @since 11.0
+			 */
+			it("test param name completion 15 - with prefix, period in type name", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type.atype} a\n*/var baz = function a(aa, bb, cc){}",
+					line: '* @param {type.atype} a',
+					prefix: "a",
+					offset: 27,
+					callback: done};
+				testProposals(options, [
+					['aa', 'aa - Function parameter']
 				]);
 			});
 
@@ -4147,7 +4236,26 @@ define([
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
 			 * @since 10.0
 			 */
-			it("test param name completion 15", function(done) {
+			it("test param name completion 16 - no prefix, period in type name", function(done) {
+				var options = {
+					buffer: "/**\n* @param {type.atype} \n*/var baz = function a(aa, bb, cc){}",
+					line: '* @param {type.atype} a',
+					prefix: "a",
+					offset: 26,
+					callback: done};
+				testProposals(options, [
+					['aa', 'aa - Function parameter'],
+					['bb', 'bb - Function parameter'],
+					['cc', 'cc - Function parameter']
+				]);
+			});
+
+			/**
+			 * Tests var decl func expr name proposals
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
+			 * @since 10.0
+			 */
+			it("test param name completion 17", function(done) {
 				var options = {
 					buffer: "/**\n* @name \n*/var baz = function foo(aa, bb, cc){}",
 					line: '* @name ',
@@ -4164,7 +4272,7 @@ define([
 			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473425
 			 * @since 10.0
 			 */
-			it("test param name completion 16", function(done) {
+			it("test param name completion 18", function(done) {
 				var options = {
 					buffer: "/**\n* @name b\n*/var baz = function foo(aa, bb, cc){}",
 					line: '* @name ',
@@ -4189,9 +4297,9 @@ define([
 					templates: true,
 					callback: done};
 				testProposals(options, [
-					 ['', 'Templates'],
-				     ['ends ', '@lends - Lends JSDoc tag'],
-				     ['icense ', '@license - License JSDoc tag']
+				    ['ends ', '@lends'],
+				    ['icense ', '@license'],
+					['@listens', '@listens']
 				]);
 			});
 
@@ -4208,7 +4316,8 @@ define([
 					offset: 15,
 					callback: done};
 				testProposals(options, [
-				  //TODO   ['bject', 'Object', 'Object'],
+					['', 'ecma5'],
+					['Object', 'Object', 'Creates an object wrapper.'],
 				]);
 			});
 
@@ -4225,7 +4334,10 @@ define([
 					offset: 17,
 					callback: done};
 				testProposals(options, [
-				  //TODO   ['nfinity', 'Infinity', 'Infinity'],
+					['', 'ecma6'],
+					['Int16Array', 'Int16Array', 'The Int16Array typed array represents'],
+					['Int32Array', 'Int32Array', 'The Int32Array typed array represents'],
+					['Int8Array', 'Int8Array', 'The Int8Array typed array represents']
 				]);
 			});
 
@@ -4236,14 +4348,55 @@ define([
 			 */
 			it("test object doc completion 3", function(done) {
 				var options = {
-					buffer: "/*eslint-env amd*//**\n* @returns {I} \n*/",
+					buffer: "/*eslint-env browser*//**\n* @returns {D} \n*/",
 					line: '* @returns {I} ',
 					prefix: "I",
-					offset: 35,
+					offset: 39,
 					callback: done};
 				testProposals(options, [
-				  //TODO   ['mage', 'Image', 'Image'],
-				  ///   ['nfinity', 'Infinity', 'Infinity']
+					['', 'ecma5'],
+					['Date', 'Date', 'Creates JavaScript Date'],
+					['', 'ecma6'],
+					['DataView', 'DataView', 'The DataView view provides'],
+					['', 'browser'],
+					['DOMParser', 'DOMParser', 'DOMParser can parse XML or HTML'],
+					['DOMTokenList', 'DOMTokenList', 'This type represents a set of space-separated tokens.'],
+					['Document', 'Document', 'Each web page loaded in the browser has its own document object.'],
+					['DocumentFragment', 'DocumentFragment', 'Creates a new empty DocumentFragment.'],
+				]);
+			});
+			
+			/**
+			 * Tests object JSDoc completions
+			 * @since 11.0
+			 */
+			it("test object doc completion 4", function(done) {
+				var options = {
+					buffer: "/**\n* @param {N \n*/function foo(aa, bb, cc) {};",
+					line: '* @param {N ',
+					prefix: "N",
+					offset: 15,
+					callback: done};
+				testProposals(options, [
+					['', 'ecma5'],
+					['Number', 'Number', 'The Number JavaScript object is a wrapper']
+				]);
+			});
+			
+			/**
+			 * Tests object JSDoc completions
+			 * @since 11.0
+			 */
+			it("test object doc completion 5", function(done) {
+				var options = {
+					buffer: "/**\n* @returns {N} \n*/",
+					line: '* @returns {N} ',
+					prefix: "I",
+					offset: 17,
+					callback: done};
+				testProposals(options, [
+					['', 'ecma5'],
+					['Number', 'Number', 'The Number JavaScript object is a wrapper']
 				]);
 			});
 		});

@@ -309,6 +309,7 @@ define({//Default message bundle
 	"Removing remote branch: ": "Removing remote branch: ", //$NON-NLS-0$  //$NON-NLS-1$
 	"Delete Remote Branch": "Delete Remote Branch", //$NON-NLS-0$  //$NON-NLS-1$
 	"New Remote": "New Remote", //$NON-NLS-0$  //$NON-NLS-1$
+	"Gerrit": "Gerrit", //$NON-NLS-0$  //$NON-NLS-1$
 	"Git Remote": "Git Remote", //$NON-NLS-0$  //$NON-NLS-1$
 	"Go to Git Remote": "Open the remote Git Log page for this file or folder.", //$NON-NLS-0$  //$NON-NLS-1$
 	"Add a new remote to the repository": "Add a new remote to the repository", //$NON-NLS-0$  //$NON-NLS-1$
@@ -597,5 +598,28 @@ define({//Default message bundle
 	'SingleSubmodule' : "${0} (${1} submodule)", //$NON-NLS-1$ //$NON-NLS-0$
 	'PluralSubmodule' : "${0} (${1} submodules)", //$NON-NLS-1$ //$NON-NLS-0$
 	'UninitializedSubmodule' : " ( Uninitialized Submodule )", //$NON-NLS-1$ //$NON-NLS-0$
-	"Detach Head:": "Detach Head:" //$NON-NLS-0$  //$NON-NLS-1$
+	"Detach Head:": "Detach Head:", //$NON-NLS-0$ //$NON-NLS-1$
+	"Filter repositories": "Filter repositories", //$NON-NLS-0$ //$NON-NLS-1$
+	"Filter references": "Filter references", //$NON-NLS-0$ //$NON-NLS-1$
+	"Filter configuration entries": "Filter configuration entries", //$NON-NLS-0$ //$NON-NLS-1$
+	"ContinueTooltip": "Use after merging the conflicts and selecting all files", //$NON-NLS-0$  //$NON-NLS-1$
+	"SkipTooltip": "Bypass the current patch", //$NON-NLS-0$  //$NON-NLS-1$
+	"AbortTooltip": "Abort to end the rebase at any time", //$NON-NLS-0$  //$NON-NLS-1$
+	"CreatePullRequestRemoteConfirm": "In order to check out this pull request, a remote branch named ${0} with url ${1} will be created if it does not exist, are you sure?", //$NON-NLS-0$  //$NON-NLS-1$
+	"pull requests": "pull requests", //$NON-NLS-0$  //$NON-NLS-1$
+	"CheckoutPullRequest": "Checkout Pull Request", //$NON-NLS-0$  //$NON-NLS-1$
+	"CheckoutPullRequestMsg": "Checkout the pull request and make it active.", //$NON-NLS-0$  //$NON-NLS-1$
+	"Checking out pull request ${0}...": "Checking out pull request ${0}", //$NON-NLS-0$  //$NON-NLS-1$
+	"Checking out pull request...": "Checking out pull request", //$NON-NLS-0$  //$NON-NLS-1$
+	"Pull Request checked out.": "Pull Request checked out.", //$NON-NLS-0$  //$NON-NLS-1$
+	"Getting pull requests...": "Getting pull requests...", //$NON-NLS-0$  //$NON-NLS-1$
+	"PullRequestTreeItem":"${0}/${1} => ${2}/${3}", //$NON-NLS-0$  //$NON-NLS-1$
+	"MorePullRequests": "More pull requests for \"${0}\"", //$NON-NLS-0$  //$NON-NLS-1$
+	"MorePullRequestsProgress": "Loading more pull requests for \"${0}\"...", //$NON-NLS-0$  //$NON-NLS-1$
+	"Authorize to get pull requests": "Authorize to get pull requests", //$NON-NLS-0$  //$NON-NLS-1$
+	"CherryPickProgress": "Cherry Pick in progress", //$NON-NLS-0$  //$NON-NLS-1$
+	"MergeProgress": "Merge in progress", //$NON-NLS-0$  //$NON-NLS-1$
+	"OpenGithubPullRequest": "Open Github Page", //$NON-NLS-0$  //$NON-NLS-1$
+	"OpenGithubPullRequestMsg": "Open the Github page for this Pull Request.", //$NON-NLS-0$  //$NON-NLS-1$
+	"AllowPopUpMsg": "Please allow popups for this site." //$NON-NLS-0$  //$NON-NLS-1$
 });

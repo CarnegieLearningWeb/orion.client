@@ -495,10 +495,19 @@ define("orion/editor/rulers", [
 		_getAnnotationsAtLineIndex: function _getAnnotationsAtLineIndex(lineIndex){
 			if (lineIndex === undefined) { return; }
 			var view = this._view;
-			var model = view.getModel();
 			var annotationModel = this._annotationModel;
 			var annotations = [];
-			if (annotationModel) {
+			var model;
+			
+			//check if the current view exists, if not return empty array
+			if (view) {
+				model = view.getModel();
+			} else {
+				return [];
+			}
+			
+			// check if both model exists
+			if (annotationModel && model) {
 				var start = model.getLineStart(lineIndex);
 				var end = model.getLineEnd(lineIndex);
 				if (model.getBaseModel) {
@@ -1105,7 +1114,7 @@ define("orion/editor/rulers", [
 					div1.style.position = "fixed"; //$NON-NLS-0$
 					div1.style.left = "-1000px"; //$NON-NLS-0$
 					zoomView._clientDiv.appendChild(div1);
-					div1.innerHTML = new Array(Math.ceil(textView.getClientArea().width / textView._metrics.charWidth) + 1).join("a"); //$NON-NLS-0$
+					div1.textContent = new Array(Math.ceil(textView.getClientArea().width / textView._metrics.charWidth) + 1).join("a"); //$NON-NLS-0$
 					var rect1 = div1.getBoundingClientRect();
 					width = Math.min(150, Math.ceil(rect1.right - rect1.left)) + "px"; //$NON-NLS-0$
 				} else {

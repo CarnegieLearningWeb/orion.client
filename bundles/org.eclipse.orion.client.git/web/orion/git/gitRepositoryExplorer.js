@@ -104,6 +104,7 @@ define([
 			case "rebase": //$NON-NLS-0$
 			case "merge": //$NON-NLS-0$
 			case "mergeSquash": //$NON-NLS-0$
+			case "cherrypick": //$NON-NLS-0$
 				if (event.failed || event.rebaseAction) {
 					that.changedItem();
 				}
@@ -113,6 +114,37 @@ define([
 					window.location.href = require.toUrl(repoTemplate.expand({resource: that.lastResource = that.repository.Location}));
 				}
 				that.changedItem();
+				break;
+				
+			case "pullRequestCheckout": //$NON-NLS-0$
+				if(event.pullRequest){
+					var base = event.pullRequest.PullRequest.base;
+					var elementPos = that.branchesNavigator.model.root.children.map(function(x) {return x.Type; }).indexOf("Remote");
+					if(elementPos>-1){
+						var remote = that.branchesNavigator.model.root.children[elementPos];
+						if(remote.children){
+							var basePos = remote.children.map(function(x) {return x.Name; }).indexOf("origin/"+base.ref);
+							if(basePos>-1){
+								that.reference = remote.children[basePos];
+							}
+
+						}else{
+							that.branchesNavigator.model.getChildren(remote,function(children){
+								var basePos = children.map(function(x) {return x.Name; }).indexOf("origin/"+base.ref);
+								if(basePos>-1){
+									that.reference = children[basePos];
+								}								
+							})
+						}
+						
+					}
+				}
+				
+				if (that.repository) {
+					window.location.href = require.toUrl(repoTemplate.expand({resource: that.lastResource = that.repository.Location}));
+				}
+				that.changedItem();
+
 				break;
 			case "deleteSubmodule": //$NON-NLS-0$
 			case "removeClone": //$NON-NLS-0$
@@ -302,9 +334,7 @@ define([
 			that.repository = repository;
 			that.initTitleBar(repository || {});
 			if (repository) {
-				that.preferencesService.getPreferences("/git/settings").then(function(prefs) {  //$NON-NLS-0$
-					prefs.put("lastRepo", {Location: that.repository.Location});  //$NON-NLS-0$
-				});
+				that.preferencesService.put("/git/settings", {lastRepo: {Location: that.repository.Location}}); //$NON-NLS-1$
 				that.repositoriesNavigator.select(that.repository);
 				that.repositoriesSection.setTitle(repository.Name);
 				that.displayBranches(repository); 
@@ -317,8 +347,8 @@ define([
 		};
 	
 		if (!repository && this.repositoriesNavigator && this.repositoriesNavigator.model) {
-			this.preferencesService.getPreferences("/git/settings").then(function(prefs) {  //$NON-NLS-0$
-				var lastRepo = prefs.get("lastRepo"); //$NON-NLS-0$
+			this.preferencesService.get("/git/settings").then(function(prefs) {  //$NON-NLS-0$
+				var lastRepo = prefs["lastRepo"]; //$NON-NLS-0$
 				if (lastRepo) {
 					that.repositoriesNavigator.model.repositories.some(function(repo){
 						if (repo.Location === lastRepo.Location) {

@@ -219,7 +219,6 @@ define([
 			inputManager.setAutoLoadEnabled(prefs.autoLoad);
 			inputManager.setAutoSaveTimeout(prefs.autoSave ? prefs.autoSaveTimeout : -1);
 			inputManager.setSaveDiffsEnabled(prefs.saveDiffs);
-			inputManager.setEncodingCharset(prefs.encodingCharset);
 			this.differ.setEnabled(this.settings.diffService);
 			this.updateStyler(prefs);
 			var textView = editor.getTextView();
@@ -472,6 +471,7 @@ define([
 				if (textView) {
 					liveEditSession.start(inputManager.getContentType(), event.title);
 					textView.setOptions(this.updateViewOptions(this.settings));
+					this.markOccurrences.setOccurrencesVisible(this.settings.showOccurrences);
 					this.syntaxHighlighter.setup(event.contentType, editor.getTextView(), editor.getAnnotationModel(), event.title, true).then(function() {
 						this.updateStyler(this.settings);
 						if (editor.getContentAssist()) {
@@ -502,13 +502,13 @@ define([
 			this.problemService = new mProblems.ProblemService(serviceRegistry, this.problemsServiceID);
 			var markerService = serviceRegistry.getService(this.problemsServiceID);
 			if(markerService) {
-				markerService.addEventListener("problemsChanged", function(event) { //$NON-NLS-0$
-					editor.showProblems(event.problems);
+				markerService.addEventListener("problemsChanged", function(evt) { //$NON-NLS-0$
+					editor.showProblems(evt.problems);
 				});
 			}
 
 			var markOccurrences = this.markOccurrences = new mMarkOccurrences.MarkOccurrences(serviceRegistry, inputManager, editor);
-			markOccurrences.setOccurrencesVisible(this.settings.occurrencesVisible);
+			markOccurrences.setOccurrencesVisible(this.settings.showOccurrences);
 			markOccurrences.findOccurrences();
 			
 			var syntaxChecker = new mSyntaxchecker.SyntaxChecker(serviceRegistry, editor.getModel());
@@ -516,7 +516,7 @@ define([
 				syntaxChecker.setTextModel(editor.getModel());
 				var input = inputManager.getInput();
 				syntaxChecker.checkSyntax(inputManager.getContentType(), evt.title, evt.message, evt.contents, editor.getEditorContext()).then(function(problems) {
-					if (input === inputManager.getInput()) {
+					if (input === inputManager.getInput() && problems) {
 						serviceRegistry.getService(that.problemsServiceID)._setProblems(problems);
 					}
 				});

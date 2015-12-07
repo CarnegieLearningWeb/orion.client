@@ -44,7 +44,7 @@ define([
 		var buffer = state.buffer = typeof(options.buffer) === 'undefined' ? '' : options.buffer;
 		var offset = state.offset = typeof(options.offset) === 'undefined' ? 0 : options.offset;
 		var line = state.line = typeof(options.line) === 'undefined' ? '' : options.line;
-		
+		var prefix = state.prefix = typeof(options.prefix) === 'undefined' ? '' : options.prefix;
 		var contentType = options.contenttype ? options.contenttype : 'application/javascript';
 		var	file = state.file = jsFile;				
 		if (contentType === 'text/html'){
@@ -74,17 +74,13 @@ define([
 			    return new Deferred().resolve(o);
 			},
 			
-			setStatus: function(status) {
-				this.status = status;
-			},
-			
 			openEditor: function(file, options){
 				this.file = file;
 				this.options = options;
 			}
 		};
 		astManager.onModelChanging({file: {location: file}});
-		var params = {offset: offset, input: file, line: line, timeout: options.timeout ? options.timeout : 20000, timeoutReturn: timeoutReturn};
+		var params = {prefix: prefix, offset: offset, input: file, line: line, timeout: options.timeout ? options.timeout : 20000, timeoutReturn: timeoutReturn};
 		return {
 			editorContext: editorContext,
 			params: params
@@ -102,26 +98,41 @@ define([
 	function testOpenCommand(command, options, expected){
 		var _p = setup(options);
 		assert(_p, 'setup() should have completed normally');
-		command.execute(_p.editorContext, _p.params).then(function (){
+		command.execute(_p.editorContext, _p.params).then(function (result) {
 			try {
-				var status = _p.editorContext.status;
-				if (!expected){
-					assert(status, "Expected no result but error status not returned");
-					assert(typeof status === "string", "Expected no result but wrong status format returned");
-					testworker._state.callback();
+				if (!expected) {
+					// We expect an error status as the result
+					if (!result){
+						// If no error was returned, check to see if we have results
+						if (_p.editorContext.options){
+							var actual = _p.editorContext.options;
+							assert(false, 'Expected error status indicating no result, instead found result: ' + actual.start + '-' + actual.end);
+						}
+						assert(result, 'Expected error status indicating no result, instead result returned was ' + result);
+					}
+					testworker.getTestState().callback();
 					return;
 				}
-				assert(!status, "Error status returned: " + (status && status.message ? status.message : status));
 				assert(_p.editorContext.options, "OpenEditor was not called on the editor context");
-				var actual = _p.editorContext.options;
+				actual = _p.editorContext.options;
 				assert.equal(actual.start, expected.start, 'The offset starts are not the same. Actual ' + actual.start + '-' + actual.end + ' Expected ' + expected.start + '-' + expected.end);
 				assert.equal(actual.end, expected.end, 'The offset ends are not the same. Actual ' + actual.start + '-' + actual.end + ' Expected ' + expected.start + '-' + expected.end);
-				testworker._state.callback();
+				testworker.getTestState().callback();
 			} catch (err){
-				testworker._state.callback(err);
+				testworker.getTestState().callback(err);
 			}
-		}, function (error){
-			testworker._state.callback(error);
+		}, function (error) {
+			if (!expected) {
+				if (error.Severity === "Warning") {
+					testworker.getTestState().callback();
+					return;
+				}
+			}
+			if(error instanceof Error || toString.call(error) === '[object Error]') {
+				testworker.getTestState().callback(error);
+			} else {
+				testworker.getTestState().callback(new Error('Unknown error'));
+			}
 		});
 	}
 	
@@ -145,7 +156,7 @@ define([
 				callback: callback
 			};
 			var _p = setup(options);
-			testworker._state.warmup = true;
+			testworker.getTestState().warmup = true;
 			ternAssist.computeContentAssist(_p.editorContext, _p.params).then(/* @callback */ function (actualProposals) {
 				//do nothing, warm up
 			});
@@ -542,6 +553,23 @@ define([
 				callback: done
 			};
 			testOpenImpl(options, {start: 19, end: 20});
+		});
+		// TODO Do we want Tern to guess in this case?
+		it.skip('Open Declaration - Tern didGuess() === true', function(done) {
+			var options = {
+				buffer: "var a = {x: function() {}}; var b = {x: function() {}}; function test(z){ return z.x() }",
+				offset: 84,
+				callback: done
+			};
+			testOpenDecl(options, null);
+		});
+		it.skip('Open Implementation - Tern didGuess() === true', function(done) {
+			var options = {
+				buffer: "var a = {x: function() {}}; var b = {x: function() {}}; function test(z){ return z.x() }",
+				offset: 84,
+				callback: done
+			};
+			testOpenImpl(options, null);
 		});
 	});
 });

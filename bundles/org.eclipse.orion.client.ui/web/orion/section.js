@@ -15,8 +15,9 @@ define([
 	'orion/commonHTMLFragments', 
 	'orion/objects', 	
 	'orion/selection',
-	'orion/webui/tooltip'
-], function(EventTarget, lib, mHTMLFragments, objects, Selection, sTooltip){
+	'orion/webui/tooltip',
+	'orion/bidiUtils'
+], function(EventTarget, lib, mHTMLFragments, objects, Selection, sTooltip, bidiUtils){
 	/**
 	 * Generates a section
 	 * 
@@ -219,7 +220,7 @@ define([
 
 		this._contentParent = document.createElement("div"); //$NON-NLS-0$
 		this._contentParent.id = this.id + "Content"; //$NON-NLS-0$
-		this._contentParent.role = "region"; //$NON-NLS-0$
+		this._contentParent.setAttribute("role", "region"); //$NON-NLS-2$ //$NON-NLS-1$
 		this._contentParent.classList.add("sectionTable"); //$NON-NLS-0$
 		this._contentParent.setAttribute("aria-labelledby", this.titleNode.id); //$NON-NLS-0$
 		// initially style as hidden until we determine what needs to happen
@@ -242,8 +243,8 @@ define([
 			// should we consult a preference?
 			if (this._preferenceService) {
 				var self = this;
-				this._preferenceService.getPreferences("/window/views").then(function(prefs) {  //$NON-NLS-0$
-					var isExpanded = prefs.get(self.id);
+				this._preferenceService.get("/window/views").then(function(prefs) {  //$NON-NLS-0$
+					var isExpanded = prefs[self.id];
 					
 					if (isExpanded === undefined){
 						// pref not found, check options
@@ -456,7 +457,11 @@ define([
 						getCellHeaderElement: function(col_no){
 							var firstHeader = Object.getPrototypeOf(this).getCellHeaderElement.call(this, col_no);
 							if(firstHeader){
-								this.section.setTitle(firstHeader.innerHTML);
+								var sectionTitle = firstHeader.innerHTML;
+								if (bidiUtils.isBidiEnabled) {
+									sectionTitle = bidiUtils.enforceTextDirWithUcc(sectionTitle);
+								}
+								this.section.setTitle(sectionTitle);
 							}
 							return null;
 						}
@@ -502,6 +507,8 @@ define([
 		_changeExpandedState: function() {
 			if (this.hidden){
 				this._expand();
+				var nextTabbable = lib.firstTabbable(this.domNode.nextElementSibling);
+				if (nextTabbable && nextTabbable.tagName === "INPUT") nextTabbable.focus(); //$NON-NLS-0$
 			} else {
 				this._collapse();
 			}
@@ -522,9 +529,9 @@ define([
 			}
 			// if a preference service was specified, we remember the state.
 			if (this._preferenceService && storeValue) {
-				this._preferenceService.getPreferences("/window/views").then(function(prefs){ //$NON-NLS-0$
-					prefs.put(id, isExpanded);
-				}); 
+				var data = {};
+				data[id] = isExpanded;
+				this._preferenceService.put("/window/views", data); //$NON-NLS-1$
 			}
 			
 			// notify the client

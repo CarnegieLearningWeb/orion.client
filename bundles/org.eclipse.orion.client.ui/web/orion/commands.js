@@ -304,6 +304,9 @@ define([
 				element = clickTarget = document.createElement("button"); //$NON-NLS-0$
 				element.className = "orionButton"; //$NON-NLS-0$
 				element.classList.add(command.checked ? "orionToggleOn" : "orionToggleOff");  //$NON-NLS-1$ //$NON-NLS-0$
+				if (command.extraClass) {
+					element.classList.add(command.extraClass);
+				}
 				element.id = "orionToggle" + command.id; //$NON-NLS-0$
 				if(parent.id) {
 					element.id = element.id + parent.id;
@@ -621,7 +624,7 @@ define([
 					parent.appendChild(itemNode);
 					var node = document.createElement("span"); //$NON-NLS-0$
 					node.tabIndex = 0; 
-					node.role = "menuitem"; //$NON-NLS-0$
+					node.setAttribute("role", "menuitem");  //$NON-NLS-2$ //$NON-NLS-1$
 					node.classList.add("dropdownMenuItem"); //$NON-NLS-0$
 					if (addCheck) {
 						var check = document.createElement("span"); //$NON-NLS-0$

@@ -9,6 +9,15 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 define({//Default message bundle
+	"Globalization": "Globalization",
+	"Enable bidi support": "Enable bidi support",
+	"Base text direction": "Base text direction",
+	"Calendar type": "Calendar type",
+	"Left-To-Right": "Left-To-Right",
+	"Right-To-Left": "Right-To-Left",
+	"Auto direction": "Auto direction",
+	"Gregorian": "Gregorian",
+	"Hebrew": "Hebrew",
 	"Plugin Description": "Plug-in Description",
 	"Create": "Create",
 	"Loading...": "Loading...",
@@ -172,7 +181,6 @@ define({//Default message bundle
 	"wordWrap": "Word Wrap:",
 	"showMargin": "Show Margin:",
 	"marginOffset": "Margin Column:",
-	"encodingCharset": "Encoding",
 	"showWhitespaces": "Show Whitespace Characters:",
 	"autoSaveTimeoutInvalid": "Invalid save interval.",
 	"scrollAnimationTimeoutInvalid": "Invalid scrolling duration.",
@@ -216,6 +224,8 @@ define({//Default message bundle
 	"Show Guide": "Show Guide",
 	"Check Guide": "Check Guide",
 	"Cancel": "Cancel",
+	"Save Theme": "Save Theme",
+	"Delete Theme": "Delete Theme",
 	"Revert Theme": "Revert Theme",
 	"Update Theme": "Update Theme",
 	"clickDiagram": "Select a theme, or click elements in the diagram to style them individually.",

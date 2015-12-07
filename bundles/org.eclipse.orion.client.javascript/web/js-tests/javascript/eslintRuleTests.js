@@ -23,6 +23,40 @@ define([
 	}
 
 	describe('ESLint Rule Tests', function() {
+		/**
+		 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=481045
+		 */
+		describe("Unknown Rule Tests", function() {
+			it("missing rule - no options", function() {
+				var topic = '/*eslint myrule:2 */ var foo \n var bar';
+				var config = { rules: {} };
+    			config.rules['semi'] = 1;
+				var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+			});
+			it("missing rule - array options", function() {
+				var topic = '/*eslint strict: [2, "global"] */ var foo \n var bar';
+				var config = { rules: {} };
+    			config.rules['semi'] = 1;
+				var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+			});
+			it("missing rule - eslint-disable", function() {
+				var topic = '/*eslint-disable strict */ var foo \n var bar';
+				var config = { rules: {} };
+    			config.rules['semi'] = 1;
+				var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+			});
+			it("missing rule - eslint-enable", function() {
+				var topic = '/*eslint-enable strict */ var foo \n var bar';
+				var config = { rules: {} };
+    			config.rules['semi'] = 1;
+				var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+			});
+		});
+	
 // CURLY ---------------------------------------------
     	describe('curly', function() {
     	    var RULE_ID = 'curly';
@@ -3390,6 +3424,311 @@ define([
 				assert.equal(messages[0].node.type, "Literal");
 			});
     	});
+    	
+//UNNECESSARY-NLS -------------------------------------------------------
+    	describe('unnecessary-nls', function() {
+    	    var RULE_ID = "unnecessary-nls";
+    	    // TODO assert.equals prints out odd looking messages when one of the values contains special characters like $
+    		it("No literals single tag 0", function() {
+    			var topic = "var a = 1; //$NON-NLS-0$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-0$");
+    		});
+    		it("No literals single tag 1", function() {
+    			var topic = "var a = 1; //$NON-NLS-1$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-1$");
+    		});
+    		it("No literals single tag 2", function() {
+    			var topic = "var a = 1; //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-2$");
+    		});
+    		it("No literals with tags 0,1", function() {
+    			var topic = "var a = 1; //$NON-NLS-0$ //$NON-NLS-1$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-0$");
+    			assert.equal(messages[1].ruleId, RULE_ID);
+    			assert.equal(messages[1].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[1].args.data.nlsComment, "//$NON-NLS-1$");
+    		});
+    		it("No literals with tags 2,2", function() {
+    			var topic = "var a = 1; //$NON-NLS-2$ //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-2$");
+    			assert.equal(messages[1].ruleId, RULE_ID);
+    			assert.equal(messages[1].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[1].args.data.nlsComment, "//$NON-NLS-2$");
+    		});
+    		it("No literals with tags 0,1,2", function() {
+    			var topic = "var a = 1; //$NON-NLS-0$ //$NON-NLS-1$ //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 3);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-0$");
+    			assert.equal(messages[1].ruleId, RULE_ID);
+    			assert.equal(messages[1].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[1].args.data.nlsComment, "//$NON-NLS-1$");
+    			assert.equal(messages[2].ruleId, RULE_ID);
+    			assert.equal(messages[2].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[2].args.data.nlsComment, "//$NON-NLS-2$");
+    		});
+    		it("No literals with tags 2,2,2", function() {
+    			var topic = "var a = 1; //$NON-NLS-2$ //$NON-NLS-2$ //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 3);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-2$");
+    			assert.equal(messages[1].ruleId, RULE_ID);
+    			assert.equal(messages[1].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[1].args.data.nlsComment, "//$NON-NLS-2$");
+    			assert.equal(messages[2].ruleId, RULE_ID);
+    			assert.equal(messages[2].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[2].args.data.nlsComment, "//$NON-NLS-2$");
+    		});
+    		it("No literals single tag 0 extra characters", function() {
+    			var topic = "var a = 1; // foobar //$NON-NLS-0$ foobar";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "//$NON-NLS-0$");
+    		});
+    		it("No literals and block comment with tags 1,2", function() {
+    			var topic = "var a = 1; /* NON-NLS-3 */ //$NON-NLS-1$ //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 2);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-1$");
+    			assert.equal(messages[1].ruleId, RULE_ID);
+    			assert.equal(messages[1].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[1].args.data.nlsComment, "//$NON-NLS-2$");    			
+    		});
+    		
+    		it("Single literal with tags 1,2", function() {
+    			var topic = "var a = 'a'; //$NON-NLS-1$ //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "//$NON-NLS-2$");
+    		});
+    		it("Single literal with tags 2,1", function() {
+    			var topic = "var a = 'a'; //$NON-NLS-2$ //$NON-NLS-1$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-2$");
+    		});
+    		// TODO We currently allow 0 and 1 tags
+    		it.skip("Single literal with tags 0,1", function() {
+    			var topic = "var a = 'a'; //$NON-NLS-0$ //$NON-NLS-1$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-0$");
+    		});
+    		it.skip("Single literal with tags 0,0", function() {
+    			var topic = "var a = 'a'; //$NON-NLS-0$ //$NON-NLS-0$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-0$");
+    		});
+    		it("Single literal and block comment with tags 1,2", function() {
+    			var topic = "var a = 'a'; /* NON-NLS-3 */ //$NON-NLS-1$ //$NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "//$NON-NLS-2$");
+    		});
+    		
+    		it("Multiple literal with tags 1,2,3,9", function() {
+    			var topic = "var a = 'a'; var b = 'b'; var c = 'c'; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-9$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "//$NON-NLS-9$");
+    		});
+    		it("Multiple literal with tags 9,3,2,1", function() {
+    			var topic = "var a = 'a'; var b = 'b'; var c = 'c'; //$NON-NLS-9$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Unecessary $NON-NLS$ tag.");
+    			assert.equal(messages[0].args.data.nlsComment, "$NON-NLS-9$");
+    		});
+    		
+    		
+    		it("No literals malformed tag 1", function() {
+    			var topic = "var a = 1; // $NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("No literals malformed tag 2", function() {
+    			var topic = "var a = 1; //$ NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("No literals malformed tag 3", function() {
+    			var topic = "var a = 1; //$NON-NLS-A$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("Single literal malformed tag 1", function() {
+    			var topic = "var a = 'a'; // $NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("Single literal malformed tag 2", function() {
+    			var topic = "var a = 'a'; //$ NON-NLS-2$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("Single literal malformed tag 3", function() {
+    			var topic = "var a = 'a'; //$NON-NLS-A$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("Multiple literal malformed tag 1", function() {
+    			var topic = "var a = 'a'; var b = 'b'; // $NON-NLS-3$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("Multiple literal malformed tag 2", function() {
+    			var topic = "var a = 'a'; var b = 'b'; //$ NON-NLS-3$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("Multiple literal malformed tag 3", function() {
+    			var topic = "var a = 'a'; var b = 'b'; //$NON-NLS-A$";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+		});
 
 //NO-REDECLARE -------------------------------------------------------
     	describe('no-redeclare', function() {
@@ -6486,6 +6825,78 @@ define([
 
     			var messages = eslint.verify(topic, config);
     			assert.equal(messages.length, 0);
+    		});
+    	});
+// NO-MIXED-SPACES-AND-TABS --------------------------------------------
+// https://bugs.eclipse.org/bugs/show_bug.cgi?id=462980
+    	describe('no-mixed-spaces-and-tabs', function() {
+    	    var RULE_ID = "no-mixed-spaces-and-tabs";
+    		it("flag mixed spaces and tabs", function() {
+    			var topic = "	 	var a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].ruleId, RULE_ID);
+    			assert.equal(messages[0].message, "Mixed spaces and tabs.");
+    		});
+    		it("should not flag mixed spaces and tabs (only tabs)", function() {
+    			var topic = "		var a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("should not flag mixed spaces and tabs (only spaces)", function() {
+    			var topic = "     var a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("should not flag mixed spaces and tabs (spaces after tabs (smart-tabs))", function() {
+    			var topic = "		     var a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("should not flag mixed spaces and tabs inside comments", function() {
+    			var topic = " /* 	 	 */var a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 0);
+    		});
+    		it("flag mixed spaces and tabs outside of comments", function() {
+    			var topic = " 	 /* 	 	 */var a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].message, "Mixed spaces and tabs.");
+    		});
+    		it("flag mixed spaces and tabs outside of comments", function() {
+    			var topic = "	 	\n/* 	 	 */\nvar a;";
+
+    			var config = { rules: {} };
+    			config.rules[RULE_ID] = 1;
+
+    			var messages = eslint.verify(topic, config);
+    			assert.equal(messages.length, 1);
+    			assert.equal(messages[0].message, "Mixed spaces and tabs.");
     		});
     	});
     });

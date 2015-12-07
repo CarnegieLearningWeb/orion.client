@@ -144,7 +144,7 @@ define([
 			        });
 			    }
 			}, /* @callback */ function(err) {
-				deferred.resolve(Messages['noFileMeta']);
+				deferred.reject({Severity: 'Error', Message: Messages['noFileMeta']}); //$NON-NLS-1$
 			});
 			return deferred;
 		},
@@ -167,8 +167,7 @@ define([
 						{request: 'type', args: {meta: metadata, params: options}},  //$NON-NLS-1$
 						function(type, err) {
 							if(err) {
-								editorContext.setStatus({Severity: 'Error', Message: err}); //$NON-NLS-1$
-								deferred.resolve([]);
+								deferred.reject({Severity: 'Error', Message: err}); //$NON-NLS-1$
 							} else {
 								var expected = Object.create(null);
 								expected.total = 0;
@@ -183,10 +182,13 @@ define([
 								};
 								expected.params = searchParams;
 								expected.deferred = deferred;
+								var srcCache = {};
 								that.searchclient.search(searchParams, true, true).then(function(searchResult) {
 									expected.result = searchResult;
 									for (var h = 0, l1 = searchResult.length; h < l1; h++) {
 										var file = searchResult[h];
+										var source = Array.isArray(file.contents) ? file.contents.join("") : null;
+										srcCache[file.metadata.Location] = {};
 										for(var i = 0, l2 = file.children.length; i < l2; i++) {
 											var line = file.children[i];
 											expected.total += line.matches.length;
@@ -194,7 +196,14 @@ define([
 												var match = line.matches[j];
 												var v = Finder.findWord(line.name, match.startIndex);
 												if(v === node.name) {
-													that._checkType(type, file.metadata, match, expected);
+													//XXX do not send the full source more than once
+													//until bug https://bugs.eclipse.org/bugs/show_bug.cgi?id=474420 is fixed
+													var req = {request: 'checkRef', args: {meta:{location: file.metadata.Location}, params: {offset: match.end}, origin: type}} //$NON-NLS-1$
+													if(!srcCache[file.metadata.Location].src) {
+														srcCache[file.metadata.Location].src = true;
+														req.files = [{type: 'full', name: file.metadata.Location, text: source}]; //$NON-NLS-1$;
+													}													
+													that._checkType(type, file.metadata, match, expected, req);
 												} else {
 													match.category = categories.partial.category;
 													match.confidence = 0;
@@ -205,16 +214,14 @@ define([
 									}
 									that._checkDone(expected);
 								}, /* @callback */ function(err) {
-									editorContext.setStatus({Severity: 'Error', Message: i18nUtil.formatMessage(Messages['cannotComputeRefs'], err.message)}); //$NON-NLS-1$
-									deferred.resolve([]);
+									deferred.reject({Severity: 'Error', Message: i18nUtil.formatMessage(Messages['cannotComputeRefs'], err.message)}); //$NON-NLS-1$
 								}, /* @callback */ function(result) {
 									//TODO progress
 								});
 						  }
 					});
 				} else {
-					editorContext.setStatus({Severity: 'Error', Message: Messages['notAnIdentifier']}); //$NON-NLS-1$
-					deferred.resolve([]);
+					deferred.reject({Severity: 'Error', Message: Messages['notAnIdentifier']}); //$NON-NLS-1$
 				}
 			});
 		},
@@ -225,30 +232,28 @@ define([
 		 * @function
 		 * @private
 		 */
-		_checkType: function _checkType(original, file, match, expected) {
+		_checkType: function _checkType(original, file, match, expected, request) {
 			var that = this;
 			that.ternworker.postMessage(
-					{request: 'checkRef', args: {meta:{location: file.Location}, params: {offset: match.end}, origin: original}},  //$NON-NLS-1$
+					request, 
 					/* @callback */ function(type, err) {
 						if(type && type.type) {
 							var _t = type.type, _ot = original.type;
 							if(_t.name === _ot.name && _t.type === _ot.type && that._sameOrigin(_t.origin, _ot.origin)) {
-								match.confidence = 100;
+								if(_t.guess) {
+									//we took a stab at it, not 100% sure
+									match.confidence = 50;
+								} else {
+									match.confidence = 100;
+								}
 							} else if(_t.staticCheck) {
 								match.confidence = _t.staticCheck.confidence;
-							} else if(_t.category === 'blockcomments') {
+							} else if(_t.category === categories.strings.category ||	_t.category === categories.regex.category) {
 								match.confidence = 0;
-								//TODO propagate type infos to named elements in structured doc
-								//for example @name mentions func decl match
-							}
-							else {
-								match.confidence = 0;
-							}
-							match.category = _t.category;
-							//TODO for demo anything with parsererrors category is -1
-							if(_t.category === categories.syntax.category) {
+							} else {
 								match.confidence = -1;
 							}
+							match.category = _t.category;
 						} else if(err) {
 							match.category = categories.uncategorized.category;
 							match.confidence = -1;

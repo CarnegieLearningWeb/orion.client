@@ -37,8 +37,8 @@ define("orion/editor/tooltip", [ //$NON-NLS-0$
  * 	Contents {string, html element, annotation array, etc.} Contents to display, if undefined, the hover service will be asked for content
  * 	Context {source, offset, offsetStart, offsetEnd}} Information used to modify the tooltip position or contents
  * 	Position {String} One of left, right, top, bottom used to position the tooltip relative to the anchor area
- * 	AnchorArea {x, y, width, height} rectangle defining the source of the tooltip and where to position relative to
- * 	TooltipArea {x, y, width, height} rectangle to define the tooltip's exact placement rather than a relative position to the anchor
+ * 	AnchorArea {top, left, width, height} rectangle defining the source of the tooltip and where to position relative to
+ * 	TooltipArea {top, left, width, height} rectangle to define the tooltip's exact placement rather than a relative position to the anchor
  * 	TooltipOffsetX {Number} Hint to move the tooltip position horizontally
  * 	TooltipOffsetY {Number} Hint to move the tooltip position vertically
  * 
@@ -76,6 +76,10 @@ function Tooltip (view) {
 			}, true);
 			textUtil.addEventListener(document, "scroll", this._scrollHandler = function(event) { //$NON-NLS-0$
 				if (!self.isVisible()) return;
+
+				// Make sure the scroll isn't *inside* the tooltip...
+				if (textUtil.contains(tooltipDiv, event.target || event.srcElement)) { return; }
+
 				if (self._topPixel !== self._view.getTopPixel() || self._leftPixel !== self._view.getHorizontalPixel()) {
 					self.hide();
 				}
@@ -137,6 +141,7 @@ function Tooltip (view) {
 		 * @name show
 		 * @description Show the tooltip using the given target information
 		 * @function
+		 * @param tooltipInfo a function that will return the tooltip contents (see _processInfo())
 		 * @param target The target through which the info is obtained
 		 * @param locked If true locks the tooltip (never hides unless 'hide' is called)
 		 * @param giveFocus If true forces the focus onto the tooltip (used for F2 processing)
@@ -153,7 +158,7 @@ function Tooltip (view) {
 		 * @name update
 		 * @description Updates the information in an already visible tooltip
 		 * @function
-		 * @param tooltipInfo a function that will return the parameters need to update the information
+		 * @param tooltipInfo a function that will return the parameters need to update the information (see _processInfo())
 		 * @param noContent If true makes no attempt to gather new info and just updates the tooltip's position
 		 */
 		update: function(tooltipInfo, noContent) {
@@ -169,10 +174,11 @@ function Tooltip (view) {
 		
 		/**
 		 * @name onHover
-		 * @description Show the tooltip using the given target information. Only called for hover events.
+		 * @description Checks the x,y location and updates the tooltip contents or hides the tooltip as appropriate
 		 * @function
-		 * @param target
-		 * @param giveFocus
+		 * @param tooltipInfo a function that will return the parameters need to update the information (see _processInfo())
+		 * @param x coordinates of the mouse event
+		 * @param y coordinates of the mouse event
 		 */
 		onHover: function(tooltipInfo, x, y) {
 			if (!tooltipInfo) {
@@ -457,13 +463,13 @@ function Tooltip (view) {
 			
 			// Callers can specify the exact placement of the tooltip
 			if (info.tooltipArea && info.tooltipArea.top && info.tooltipArea.left && info.tooltipArea.height && info.tooltipArea.width){										 
-					tooltipDiv.style.overflowY = "auto"; //$NON-NLS-0$ // If caller specifies a height, allow scrolling
-					tooltipDiv.style.resize = "none"; //$NON-NLS-0$
-					tooltipDiv.style.top = (info.tooltipArea.top) + "px"; //$NON-NLS-0$
-					tooltipDiv.style.left = (info.tooltipArea.left) + "px"; //$NON-NLS-0$
-					tooltipDiv.style.height = (info.tooltipArea.height - padding) + "px"; //$NON-NLS-0$
-					tooltipDiv.style.width = (info.tooltipArea.width - padding) + "px"; //$NON-NLS-0$
-					return info.tooltipArea;
+				tooltipDiv.style.overflowY = "auto"; //$NON-NLS-0$ // If caller specifies a height, allow scrolling
+				tooltipDiv.style.resize = "none"; //$NON-NLS-0$
+				tooltipDiv.style.top = (info.tooltipArea.top) + "px"; //$NON-NLS-0$
+				tooltipDiv.style.left = (info.tooltipArea.left) + "px"; //$NON-NLS-0$
+				tooltipDiv.style.height = (info.tooltipArea.height - padding) + "px"; //$NON-NLS-0$
+				tooltipDiv.style.width = (info.tooltipArea.width - padding) + "px"; //$NON-NLS-0$
+				return info.tooltipArea;
 			}
 			
 			var divBounds = tooltipDiv.getBoundingClientRect();
@@ -494,8 +500,10 @@ function Tooltip (view) {
 				defHeight = Math.min(viewportHeight/2, 400);
 				tipRect.width = Math.min(tipRect.width, defWidth);
 				tipRect.height = Math.min(tipRect.height, defHeight);
+			} else if (tipRect.width > viewportWidth){
+				tipRect.width = viewportWidth;
 			}
-
+			
 			// Now that we have our width recalculate the desired height...
 			tooltipDiv.style.width = (tipRect.width - padding) + "px"; //$NON-NLS-1$
 			tipRect.height = Math.min(tooltipDiv.getBoundingClientRect().height, defHeight);
@@ -692,7 +700,11 @@ function Tooltip (view) {
 			// render the title, if any
 			if (data.title) {
 				var titleDiv = util.createElement(document, "div"); //$NON-NLS-0$;
-				titleDiv.innerHTML = this.hover.renderMarkDown ? this.hover.renderMarkDown(data.title) : data.title;
+				if (this.hover.renderMarkDown) {
+					titleDiv.innerHTML = this.hover.renderMarkDown(data.title);
+				} else {
+					titleDiv.textContent = data.title;
+				}
 				titleDiv.classList.add("hoverTooltipTitle"); //$NON-NLS-0$
 				sectionDiv.appendChild(titleDiv);
 			}
@@ -762,7 +774,7 @@ function Tooltip (view) {
 			}
 			
 			if (typeof contents === "string") { //$NON-NLS-0$
-				contentsDiv.innerHTML = contents;
+				contentsDiv.textContent = contents;
 				return true;
 			} else if (this._isNode(contents)) {
 				contentsDiv.appendChild(contents);

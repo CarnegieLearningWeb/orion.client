@@ -10,18 +10,73 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 define([
+	'orion/commandRegistry',
+	'orion/fileClient',
+	'orion/contentTypes',
+	'orion/editorCommands',
 	'embeddedEditor/helper/bootstrap',
 	'embeddedEditor/helper/editorSetup',
+	'orion/serviceregistry',
+	'orion/Deferred',
 	'orion/objects'
 ], function(
+	mCommandRegistry,
+	mFileClient,
+	mContentTypes,
+	mEditorCommands,
 	mBootstrap,
 	mEditorSetup,
+	mServiceRegistry, 
+	Deferred,
 	objects
 ) {
-	function CodeEdit() {
+	function CodeEdit(options) {
+		this.serviceRegistry = new mServiceRegistry.ServiceRegistry();
+		this.contentTypeRegistry = new mContentTypes.ContentTypeRegistry(this.serviceRegistry);
+		this._startupOptions = options;
+		this._toolbarId = options && options.toolbarId ? options.toolbarId : "__code__edit__hidden__toolbar";
 	}
-
+	var once;
 	objects.mixin(CodeEdit.prototype, {
+		_init: function(core) {
+			if(once) {
+				return once;
+			}
+			if(!(this._startupOptions && this._startupOptions.toolbarId)) {
+				//TODO: We should create this hidden div somewhere else
+				//The hidden DIV that allows some commands for editorCommnads to be rendered. We only want to use keybinding of them though.
+				var orionHiddenDiv = document.createElement("div");
+				orionHiddenDiv.id = this._toolbarId;
+				document.body.appendChild(orionHiddenDiv);
+				orionHiddenDiv.style.display = "none";
+			}
+			//once = new Deferred();
+			this._commandRegistry = new mCommandRegistry.CommandRegistry({});
+			this._fileClient = new mFileClient.FileClient(this.serviceRegistry);
+			this._editorCommands = new mEditorCommands.EditorCommandFactory({
+				serviceRegistry: this.serviceRegistry,
+				commandRegistry: this._commandRegistry,
+				fileClient: this._fileClient,
+				toolbarId: this._toolbarId,
+				navToolbarId: this._toolbarId
+			});
+			this._progressService = {
+				progress: function(deferred/*, operationName, progressMonitor*/){
+					return deferred;
+				},
+				showWhile: function(deferred/*, message, avoidDisplayError*/){
+					return deferred;
+				}
+			};			
+			this.serviceRegistry.registerService("orion.page.progress", this._progressService);
+			once = this._editorCommands.createCommands().then(function() {
+				this._editorCommands.registerCommands();
+				return new Deferred().resolve();
+			}.bind(this));
+			//once.resolve();
+			return once;
+		},
+		
 		/**
 		 * @class This object describes the options for <code>create</code>.
 		 * @name orion.editor.EditOptions
@@ -36,15 +91,24 @@ define([
 		 * @param {orion.editor.EditOptions} options the editor options.
 		 */
 		create: function(options) {
-			return mBootstrap.startup(options).then(function(core) {
+			return mBootstrap.startup(this.serviceRegistry, this.contentTypeRegistry, this._startupOptions).then(function(core) {
 				var serviceRegistry = core.serviceRegistry;
 				var pluginRegistry = core.pluginRegistry;
-				var editorHelper = new mEditorSetup.EditorSetupHelper({
-					serviceRegistry: serviceRegistry,
-					pluginRegistry: pluginRegistry
-				});
-				return editorHelper.createEditor(options);
-			});
+				return this._init(core).then( function () {
+					var editorHelper = new mEditorSetup.EditorSetupHelper({
+						serviceRegistry: serviceRegistry,
+						pluginRegistry: pluginRegistry,
+						commandRegistry: this._commandRegistry,
+						fileClient: this._fileClient,
+						contentTypeRegistry: this.contentTypeRegistry,
+						editorCommands: this._editorCommands,
+						progressService: this._progressService,
+						toolbarId: this._toolbarId
+					});
+					return editorHelper.createEditor(options);
+		 		}.bind(this));
+
+			}.bind(this));
 		}
 	});
 	return CodeEdit;

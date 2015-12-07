@@ -33,11 +33,12 @@ define([
 	'javascript/ternSettings',
 	'orion/widgets/settings/ThemeSettings',
 	'orion/widgets/settings/UserSettings',
+	'orion/widgets/settings/GlobalizationSettings',
 	'orion/editorPreferences',
 	'orion/metrics'
 ], function(messages, Deferred, mGlobalCommands, PageUtil, lib, objects, URITemplate, 
 		ThemeBuilder, SettingsList, mThemePreferences, editorThemeData, editorThemeImporter, SplitSelectionLayout, PluginList, 
-		GitSettings, EditorSettings, TernSettings, ThemeSettings, UserSettings, mEditorPreferences, mMetrics) {
+		GitSettings, EditorSettings, TernSettings, ThemeSettings, UserSettings, GlobalizationSettings, mEditorPreferences, mMetrics) {
 
 	/**
 	 * @param {Object} options
@@ -60,17 +61,8 @@ define([
 		show: function() {
 			var _self = this;
 
-			Deferred.all([this.preferences.getPreferences('/settingsContainer')]).then(function(results){
-				var prefs = results[0];
-				var categories = prefs.get( 'categories' ) || {};
-				
-				//Added by Jon
-//				categories.showUserSettings = false;
-//				categories.showGitSettings = false;
-//				categories.showPluginSettings = false;
-//				categories.showThemeSettings = false;
-				//end of edit
-				
+			this.preferences.get('/settingsContainer').then(function(prefs){ //$NON-NLS-1$
+				var categories = prefs[ 'categories' ] || {};
 				if (categories.showUserSettings === undefined || categories.showUserSettings) {
 					_self.settingsCategories.push({
 						id: "userSettings", //$NON-NLS-0$
@@ -118,6 +110,14 @@ define([
 						show: _self.showTernSettings
 					});
 				}
+				
+				if (categories.showGlobalizationSettings === undefined || categories.showGlobalizationSettings) {
+					_self.settingsCategories.push({
+						id: "Globalization", //$NON-NLS-0$
+						textContent: messages.Globalization,
+						show: _self.showGlobalizationSettings
+					});
+				}
 
 				_self.settingsCategories.forEach(function(item) {
 					item.show = item.show.bind(_self, item.id);
@@ -125,28 +125,13 @@ define([
 
 				// Add plugin-contributed extension categories
 				var settingsRegistry = _self.settingsRegistry;
-				
-				//Added by Jon
-				var pluginCategories = [];
-				for (var i = 0; i < settingsRegistry.getCategories().length; i++) {
-					var category = settingsRegistry.getCategories()[i];
-					if(category=='cloud')
-						continue;
-					pluginCategories.push({
+				var pluginCategories = settingsRegistry.getCategories().map(function(category) {
+					return {
 						id: category,
 						textContent: settingsRegistry.getCategoryLabel(category) || messages[category] || category,
 						show: _self.showPluginSettings.bind(_self, category)
-					});
-				}
-//				var pluginCategories = settingsRegistry.getCategories().map(function(category) {					
-//					return {
-//						id: category,
-//						textContent: settingsRegistry.getCategoryLabel(category) || messages[category] || category,
-//						show: _self.showPluginSettings.bind(_self, category)
-//					};
-//				});
-				//end edit
-				
+					};
+				});
 				_self.settingsCategories = _self.settingsCategories.concat(pluginCategories);
 				
 				// Sort all categories alphabetically by their title
@@ -171,9 +156,9 @@ define([
 		processHash: function() {
 			var pageParams = PageUtil.matchResourceParameters();
 			
-			this.preferences.getPreferences('/settingsContainer').then(function(prefs){
+			this.preferences.get('/settingsContainer').then(function(prefs){ //$NON-NLS-1$
 
-				var selection = prefs.get( 'selection' );
+				var selection = prefs['selection'];
 
 				var category = pageParams.category || selection; //$NON-NLS-0$
 
@@ -353,6 +338,34 @@ define([
 			this.ternWidget.show();
 		},
 		
+		showGlobalizationSettings: function(id){
+
+			this.selectCategory(id);
+
+			lib.empty(this.table);
+
+			if (this.globalizationWidget) {
+				this.globalizationWidget.destroy();
+			}
+
+			this.updateToolbar(id);
+			
+			var userNode = document.createElement('div'); //$NON-NLS-0$
+			this.table.appendChild(userNode);
+
+			this.globalizationWidget = new GlobalizationSettings({
+				registry: this.registry,
+				settings: this.settingsCore,
+				preferences: this.preferences,
+				statusService: this.preferencesStatusService,
+				dialogService: this.preferenceDialogService,
+				commandService: this.commandService,
+				userClient: this.userClient	
+			}, userNode);
+			
+			this.globalizationWidget.show();
+		},
+		
 		initPlugins: function(id){
 			lib.empty(this.table);
 
@@ -434,9 +447,7 @@ define([
 		},
 		
 		selectCategory: function(id) {
-			this.preferences.getPreferences('/settingsContainer').then(function(prefs){
-				prefs.put( 'selection', id );
-			} );
+			this.preferences.put('/settingsContainer', {selection: id}); //$NON-NLS-1$
 
 			superPrototype.selectCategory.apply(this, arguments);
 
@@ -468,9 +479,9 @@ define([
 
 		addCategory: function(category) {
 			category['class'] = (category['class'] || '') + ' navbar-item'; //$NON-NLS-1$ //$NON-NLS-0$
-			category.role = "tab";
+			category.role = "tab"; //$NON-NLS-1$
 			category.tabindex = -1;
-			category["aria-selected"] = "false"; //$NON-NLS-1$ //$NON-NLS-0$
+			category["aria-selected"] = "false"; //$NON-NLS-2$ //$NON-NLS-1$
 			category.onclick = category.show;
 			superPrototype.addCategory.apply(this, arguments);
 		},

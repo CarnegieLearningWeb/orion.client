@@ -11,13 +11,11 @@
  *******************************************************************************/
 /*eslint-env node, amd*/
 /*globals infer tern resolver*/
-(function(mod) {
-  if (typeof exports === "object" && typeof module === "object") // CommonJS
-    return mod(require("../lib/infer"), require("../lib/tern"), require);
-  if (typeof define === "function" && define.amd) // AMD
-    return define(["../lib/infer", "../lib/tern", './resolver'], mod);
-  mod(infer, tern, resolver);
-})(/* @callback */ function(infer, tern, resolver) {
+define([
+	"tern/lib/infer", 
+	"tern/lib/tern", 
+	"./resolver"
+], /* @callback */ function(infer, tern, resolver) {
 
 	var templates = [
 	/* eslint-disable missing-nls */
@@ -79,24 +77,31 @@
 	
 	/**
 	 * @description Gets the templates that apply to given context
+	 * @param {tern.File} file The backing file object from Tern
+	 * @param {Number} wordStart The start of the word to complete
+	 * @param {Number} wordEnd The end of the word to complete
+	 * @param {Function} gather The collector function to call when wanting to add a proposal
 	 * @since 9.0
 	 * @callback
 	 */
-	function getTemplates(file, start, end, completions) {
-		var wordEnd = tern.resolvePos(file, end);
-		var expr = infer.findExpressionAround(file.ast, null, wordEnd, file.scope);
+	function getTemplates(file, wordStart, wordEnd, gather) {  //file, start, end, completions) {
+		var expr = infer.findExpressionAround(file.ast, wordStart, wordEnd, file.scope);
 		var tmps = resolver.getTemplatesForNode(templates, expr);
-		if(tmps && tmps.length > 0) {
-			for (var i = 0; i < tmps.length; i++) {
-				var _t = tmps[i];
-				_t.origin = 'redis'; //$NON-NLS-1$
-				_t.type = 'template'; //$NON-NLS-1$
-				completions.push(_t);
-			}
+		if(tmps) {
+			tmps.forEach(function(template) {
+				gather(template.name, null, 0, function(c) {
+					c.prefix = template.prefix;
+					c.description = template.description;
+					c.template = template.template;
+					c.segments = template.segments;
+					c.origin = 'redis'; //$NON-NLS-1$
+					c.type = 'template'; //$NON-NLS-1$
+				});
+			});
 	    }
 	} 
 	
-	tern.registerPlugin("orionRedis", /* @callback */ function(server, options) { //$NON-NLS-1$
+	tern.registerPlugin("redis", /* @callback */ function(server, options) { //$NON-NLS-1$
 	    return {
 	      defs : defs,
 	      passes: {

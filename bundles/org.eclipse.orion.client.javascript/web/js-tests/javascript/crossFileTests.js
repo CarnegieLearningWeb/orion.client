@@ -46,7 +46,8 @@ define([
 		    keywords = typeof(options.keywords) === 'undefined' ? false : options.keywords,
 		    templates = typeof(options.templates) === 'undefined' ? false : options.templates,
 		    contentType = options.contenttype ? options.contenttype : 'application/javascript',
-		    timeout = options.timeout ? options.timeout : 5000,
+		    timeout = 5000,
+		    guess = typeof(options.guess) !== 'boolean' ? true : options.guess, //default to true, backwards compat
 			file = state.file = 'tern_crossfile_test_script.js';
 			assert(options.callback, 'You must provide a test callback for worker-based tests');
 			state.callback = options.callback;
@@ -68,7 +69,7 @@ define([
 			}
 		};
 		astManager.onModelChanging({file: {location: file}});
-		var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, timeout: timeout, timeoutReturn: timeoutReturn};
+		var params = {guess: guess, offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, timeout: timeout, timeoutReturn: timeoutReturn};
 		return {
 			editorContext: editorContext,
 			params: params,
@@ -114,6 +115,7 @@ define([
 		    msg.args.params.offset = _setup.params.offset;
 		    assert(typeof(_setup.buffer) === 'string', 'You must provide a buffer for the completion');
 		    msg.args.files.push({type: 'full', name: _setup.file, text: _setup.buffer});
+		    msg.args.guess = _setup.params.guess;
 			return msg;
 		},
 		'documentation': function(type, _setup) {
@@ -134,6 +136,7 @@ define([
 		    msg.args.params.offset = _setup.params.offset;
 		    assert(typeof(_setup.buffer) === 'string', 'You must provide a buffer for the completion');
 		    msg.args.files.push({type: 'full', name: _setup.file, text: _setup.buffer});
+		    msg.args.guess = _setup.params.guess;
 			return msg;
 		}
 	};
@@ -181,10 +184,10 @@ define([
 				buffer: "xx",
 				prefix: "xx",
 				offset: 1,
-				callback: callback
+				callback: callback,
+				warmup: true
 			};
 			var _p = setup(options);
-			testworker._state.warmup = true;
 			assist.computeContentAssist(_p.editorContext, _p.params).then(/* @callback */ function (actualProposals) {
 				//do nothing, warm up
 			});
@@ -210,7 +213,7 @@ define([
 					}
 					_compareProposals(actualProposals, expectedProposals);
 				}, function (error) {
-					testworker._state.callback(error);
+					testworker.getTestState().callback(error);
 				});
 			}
 			
@@ -232,7 +235,7 @@ define([
 						options.callback(); //TODO remove this once the real tests are running
 					}
 					catch(err) {
-						testworker._state.callback(err);
+						testworker.getTestState().callback(err);
 					}
 				});
 			}
@@ -266,10 +269,10 @@ define([
 						    assert(ap.hover.indexOf(ep[2]) === 0, "The doc should have started with the given value");
 						}
 					}
-					testworker._state.callback();
+					testworker.getTestState().callback();
 				}
 				catch(err) {
-					testworker._state.callback(err);
+					testworker.getTestState().callback(err);
 				}
 			}
 			
@@ -349,7 +352,7 @@ define([
 						_compareImpls(actual, expected);
 					}
 					catch(err) {
-						testworker._state.callback(err);
+						testworker.getTestState().callback(err);
 					}
 				});
 			}
@@ -383,9 +386,9 @@ define([
 					_sameFile(actual.file, expected.file);
 					assert.equal(actual.start, expected.start, 'The implementation starts are not the same. Actual ' + actual.start + '-' + actual.end + ' Expected ' + expected.start + '-' + expected.end);
 					assert.equal(actual.end, expected.end, 'The implementation ends are not the same. Actual ' + actual.start + '-' + actual.end + ' Expected ' + expected.start + '-' + expected.end);
-					testworker._state.callback();
+					testworker.getTestState().callback();
 				} catch(err) {
-					testworker._state.callback(err);
+					testworker.getTestState().callback(err);
 				}
 			}
 			

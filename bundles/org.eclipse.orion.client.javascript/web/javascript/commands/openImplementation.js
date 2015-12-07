@@ -16,9 +16,6 @@ define([
 'i18n!javascript/nls/messages'
 ], function(Objects, Deferred, Messages) {
 
-	var cachedContext;
-	var deferred;
-
 	/**
 	 * @description Creates a new open declaration command
 	 * @constructor
@@ -40,38 +37,34 @@ define([
 		/* override */
 		execute: function(editorContext, options) {
 			var that = this;
-			return editorContext.getText().then(function(text) {
-		     	return that._findImpl(editorContext, options, text);
-			});
+			var deferred = new Deferred();
+			editorContext.getText().then(function(text) {
+		     	return that._findImpl(editorContext, options, text, deferred);
+			}, deferred.reject);
+			return deferred;
 		},
 
-		_findImpl: function(editorContext, options, text) {
-			cachedContext = editorContext;
-			deferred = new Deferred();
+		_findImpl: function(editorContext, options, text, deferred) {
 			if(this.timeout) {
 				clearTimeout(this.timeout);
 			}
 			this.timeout = setTimeout(function() {
-				cachedContext.setStatus({Severity: 'Error', Message: "Could not compute implementation, the operation timed out"}); //$NON-NLS-1$
-				if(deferred) {
-					deferred.resolve("No implementation was found");
-				}
+				deferred.reject({Severity: 'Error', Message: Messages['implTimedOut']}); //$NON-NLS-1$
 				this.timeout = null;
 			}, 5000);
 			var files = [{type: 'full', name: options.input, text: text}]; //$NON-NLS-1$
 			this.ternworker.postMessage(
-				{request:'implementation', args:{params:{offset: options.offset}, files: files, meta:{location: options.input}}}, //$NON-NLS-1$
+				{request:'implementation', args:{params:{offset: options.offset}, guess: true, files: files, meta:{location: options.input}}}, //$NON-NLS-1$
 				function(response) {
 					if(response.implementation && (typeof(response.implementation.start) === 'number' && typeof(response.implementation.end) === 'number')) {
-						var options = Object.create(null);
-						options.start = response.implementation.start;
-						options.end = response.implementation.end;
-						deferred.resolve(cachedContext.openEditor(response.implementation.file, options));
+						var opts = Object.create(null);
+						opts.start = response.implementation.start;
+						opts.end = response.implementation.end;
+						deferred.resolve(editorContext.openEditor(response.implementation.file, opts));
 					} else {
-						deferred.resolve(cachedContext.setStatus("No implementation was found"));
+						deferred.reject({Severity: 'Warning', Message: Messages['noImplFound']}); //$NON-NLS-1$
 					}
 				});
-			return deferred;
 		}
 	});
 
