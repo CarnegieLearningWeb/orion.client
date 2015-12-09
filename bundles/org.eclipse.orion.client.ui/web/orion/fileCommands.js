@@ -537,6 +537,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
             if (!explorer || !explorer.isCommandsVisible()) {
                 return false;
             }
+
+            if (isDirectory(item)) {
+                return false;
+            }
+
             var items = Array.isArray(item) ? item : [item];
             if (items.length === 0) {
                 return false;
@@ -678,6 +683,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     if (!explorer || !explorer.isCommandsVisible()) {
                         return false;
                     }
+
+                    if (isDirectory(item)) {
+                        return false;
+                    }
+
                     if (Array.isArray(item)) {
                         return item.length === 1 && item[0].Name;
                     }
@@ -1277,6 +1287,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
             if (!explorer || !explorer.isCommandsVisible()) {
                 return false;
             }
+
+            if (isDirectory(items)) {
+                return false;
+            }
+
             return checkFolderSelection(items);
         };
 
@@ -1360,14 +1375,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                 name: messages["Duplicate"],
                 id: "eclipse.duplicateFile",
                 visibleWhen: function(item) {
-                    var currItem    = forceSingleItem(item);
-                    var isDirectory = currItem.Directory;
-
                     if (!explorer || !explorer.isCommandsVisible()) {
                         return false;
                     }
 
-                    if (isDirectory) {
+                    if (isDirectory(item)) {
                         return false;
                     }
 
@@ -1577,6 +1589,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
             var newFileName = prefix + '_' + nextFileName + '.' + fileExt;
 
             return newFileName;
+        }
+
+        var isDirectory = function(item) {
+            var currItem = forceSingleItem(item);
+
+            return currItem.Directory;
         }
 
         return new Deferred().resolve();
