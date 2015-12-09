@@ -3,6 +3,9 @@
 /target/
 /*/*/target/
 
+# Admin created folder
+bundles/org.eclipse.orion.client.users/web/profile/users/
+
 # JSDoc
 /doc/org.eclipse.orion.doc.isv/jsdoc/files.html
 /doc/org.eclipse.orion.doc.isv/jsdoc/index.html
