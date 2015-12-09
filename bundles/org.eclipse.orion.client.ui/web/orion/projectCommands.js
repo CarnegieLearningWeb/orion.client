@@ -1237,6 +1237,10 @@ define(['require', 'i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 
 					if (!explorer || !explorer.isCommandsVisible()) {
 						return false;
 					}
+
+					// We do not want students to have this option. Always return false
+					return false;
+
 					item = forceSingleItem(item);
 					return(!!item.Location);
 				}
@@ -1329,6 +1333,10 @@ define(['require', 'i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 
 					if (!explorer || !explorer.isCommandsVisible()) {
 						return false;
 					}
+
+					// We do not want students to have this option. Always return false
+					return false;
+
 					item = forceSingleItem(item);
 					return(!!item.Location);
 				}
@@ -1363,6 +1371,10 @@ define(['require', 'i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 
 						if (!explorer || !explorer.isCommandsVisible()) {
 							return false;
 						}
+
+						// We do not want students to have this option. Always return false
+						return false;
+
 						item = forceSingleItem(item);
 						return(!!item.Location);
 					}
