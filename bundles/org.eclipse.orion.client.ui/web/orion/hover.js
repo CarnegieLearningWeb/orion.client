@@ -51,22 +51,22 @@ define ([
 			});
 			this._qfToolbars = [];
 		},
-				
-		renderQuickFixes: function(annotation, parentDiv) {
+		
+		// TODO The allAnnotations iterator was collected using editor API, currently unused as we instead just get the annotation model from the annotation itself (not official API)
+		renderQuickFixes: function(annotation, allAnnotations, parentDiv) {
 			if  (!annotation || !parentDiv){
 				return;
 			}
-
+			
 			var actionsDiv = document.createElement("div"); //$NON-NLS-0$
 			actionsDiv.className = "commandList"; //$NON-NLS-0$ 
-//			this._qfToolbars.push(actionsDiv);
+			parentDiv.appendChild(actionsDiv);
 			
 			var nodeList = [];
 			var metadata = this.inputManager.getFileMetadata();
 			metadata.annotation = annotation;
-			this.commandRegistry.renderCommands("orion.edit.quickfix", actionsDiv, metadata, this.editor, 'quickfix', annotation, nodeList); //$NON-NLS-1$ //$NON-NLS-0$
+			this.commandRegistry.renderCommands("orion.edit.quickfix", actionsDiv, metadata, this.editor, 'quickfix', annotation, nodeList); //$NON-NLS-1$ //$NON-NLS-2$
 			delete metadata.annotation;
-			parentDiv.appendChild(actionsDiv);
 		}
 
 	};

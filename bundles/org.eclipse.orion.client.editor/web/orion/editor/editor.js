@@ -288,6 +288,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		this._contentAssistFactory = options.contentAssistFactory;
 		this._keyBindingFactory = options.keyBindingFactory;
 		this._hoverFactory = options.hoverFactory;
+		this._syntaxHighlighter = options.syntaxHighlighter;
 		this._annotationStyler = null;
 		this._annotationModel = null;
 		this._annotationRuler = null;
@@ -362,7 +363,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		 * @returns {orion.editor.Tooltip}
 		*/
 		getTooltip: function() {
-			return mTooltip.Tooltip.getTooltip(this._textView);
+			return mTooltip.Tooltip.getTooltip(this._textView, this);
 		},
 		/**
 		 * Returns the zoom ruler of the editor.
@@ -610,6 +611,17 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			return selections;
 		},
 
+		getStyleAccessor: function() {
+			var styleAccessor = null;
+			if (this._syntaxHighlighter) {
+				var styler = this._syntaxHighlighter.getStyler();
+				if (styler && styler.getStyleAccessor) {
+					styleAccessor = styler.getStyleAccessor();
+				}
+			}
+			return styleAccessor;
+		},
+
 		_expandOffset: function(offset) {
 			var model = this._textView.getModel();
 			var annotationModel = this._annotationModel;
@@ -803,7 +815,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 				this._contentAssist = contentAssistMode.getContentAssist();
 			}
 
-			var tooltip = mTooltip.Tooltip.getTooltip(this._textView);
+			var tooltip = mTooltip.Tooltip.getTooltip(this._textView, this);
 			if (this._hoverFactory) {
 				this._hover = this._hoverFactory.createHover(this);
 				tooltip.hover = this._hover;

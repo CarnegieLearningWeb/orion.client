@@ -13,25 +13,38 @@
 define([
 'orion/objects',
 'orion/Deferred',
-'i18n!javascript/nls/messages'
-], function(Objects, Deferred, Messages) {
+'i18n!javascript/nls/messages',
+'orion/i18nUtil',
+'orion/URITemplate',
+], function(Objects, Deferred, Messages, i18nUtil, URITemplate) {
+	
+	var ternworker;
 
 	/**
 	 * @description Creates a new open declaration command
 	 * @constructor
 	 * @public
-	 * @param {javascript.ASTManager} ASTManager The backing AST manager
 	 * @param {TernWorker} ternWorker The running Tern worker
-	 * @param {javascript.CUProvider} cuProvider
 	 * @returns {javascript.commands.OpenDeclarationCommand} A new command
 	 * @since 8.0
 	 */
-	function OpenDeclarationCommand(ASTManager, ternWorker, cuProvider, openMode) {
-		this.astManager = ASTManager;
-		this.ternworker = ternWorker;
-		this.cuprovider = cuProvider;
+	function OpenDeclarationCommand(ternWorker, openMode) {
+		ternworker = ternWorker;
 		this.openMode = openMode;
 		this.timeout = null;
+	}
+
+	/**
+	 * @description Create a human-readable name to display for the file in the declaration object
+	 * @param {Object} declaration The decl
+	 * @returns {String} The formatted string of the file the declaration references
+	 * @since 11.0
+	 */
+	function displayFileName(declaration) {
+		var fileName = declaration.file;
+		fileName = fileName.replace(/^\/file\//, "");
+		fileName = fileName.substring(fileName.indexOf("/")+1, fileName.length);
+		return i18nUtil.formatMessage(Messages['declDisplayName'], fileName, declaration.start, declaration.end);
 	}
 
 	Objects.mixin(OpenDeclarationCommand.prototype, {
@@ -52,28 +65,44 @@ define([
 			this.timeout = setTimeout(function() {
 				deferred.reject({Severity: 'Error', Message: Messages['noDeclTimedOut']}); //$NON-NLS-1$
 				this.timeout = null;
-			}, 5000);
+			}, 10000);
 			var files = [{type: 'full', name: options.input, text: text}]; //$NON-NLS-1$
-			this.ternworker.postMessage(
+			ternworker.postMessage(
 				{request:'definition', args:{params:{offset: options.offset}, guess: true, files: files, meta:{location: options.input}}}, //$NON-NLS-1$
 				function(response) {
-					if(response.request === 'definition') {
-						if(response.declaration && (typeof(response.declaration.start) === 'number' && typeof(response.declaration.end) === 'number')) {
-							if(response.declaration.guess) {
-								//TODO handle it being a guess, for now fall through
-							}
+					if(response.declaration) {
+						if (response.declaration.results) {
+							// build up the message based on potential matches
+							var display = Object.create(null);
+							display.Severity = 'Status'; //$NON-NLS-0$
+							var message = Messages['declPotentialHeader'];
+							var declarations = response.declaration.results;
+							declarations.forEach(function(decl) {
+								if (typeof decl.start  === 'number' && typeof decl.end === 'number') {
+									var href = new URITemplate("#{,resource,params*}").expand( //$NON-NLS-1$
+										{
+											resource: decl.file,
+											params: {start:decl.start, end: decl.end}
+										});
+									var fName = decl.file.substring(decl.file.lastIndexOf('/')+1);
+									message += '*    ['+fName+ '](' + href + ') - '+displayFileName(decl)+'\n'; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+								}
+							}, this);
+							display.stayOnTarget = true;
+							display.Message = message;
+							return deferred.reject(display);
+						} else if (typeof response.declaration.start  === 'number' && typeof response.declaration.end === 'number') {
 							var opts = Object.create(null);
 							opts.start = response.declaration.start;
 							opts.end = response.declaration.end;
-							if(this.openMode != null && typeof(this.openMode) !== 'undefined') {
+							if(this.openMode !== null && typeof this.openMode !== 'undefined') {
 								opts.mode = this.openMode;
 							}
-							deferred.resolve(editorContext.openEditor(response.declaration.file, opts));
-						} else {
-							deferred.reject({Severity: 'Warning', Message: Messages['noDeclFound']}); //$NON-NLS-1$
+							return deferred.resolve(editorContext.openEditor(response.declaration.file, opts));
 						}
 					}
-				}.bind(this)); //$NON-NLS-1$
+					deferred.reject({Severity: 'Warning', Message: Messages['noDeclFound']}); //$NON-NLS-1$
+				}.bind(this));
 		}
 	});
 

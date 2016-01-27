@@ -12,26 +12,23 @@
  /*eslint-env amd, browser*/
 define([
 'orion/objects',
-'javascript/finder',
 'orion/Deferred',
 'i18n!javascript/nls/messages',
 "orion/i18nUtil"
-], function(Objects, Finder, Deferred, Messages, i18nUtil) {
+], function(Objects, Deferred, Messages, i18nUtil) {
 
 	/**
 	 * @description Creates a new rename command
 	 * @constructor
 	 * @public
-	 * @param {ASTManager} ASTManager The backing AST manager
 	 * @param {TernWorker} ternWorker The running Tern worker
+	 * @param {ScriptResolver} scriptResolver The backing script resolver
 	 * @returns {javascript.commands.RenameCommand} A new command
 	 * @since 9.0
 	 */
-	function RenameCommand(ASTManager, ternWorker, scriptResolver, CUProvider) {
-		this.astManager = ASTManager;
+	function RenameCommand(ternWorker, scriptResolver) {
 		this.ternworker = ternWorker;
 		this.scriptResolver = scriptResolver;
-		this.cuprovider = CUProvider;
 		this.timeout = null;
 	}
 
@@ -49,20 +46,7 @@ define([
 				} else {
 					that.scriptResolver.setSearchLocation(null);	
 				}
-			    if(options.contentType.id === 'application/javascript') {
-	    			return that._doRename(editorContext, options, deferred);
-			    } else {
-			        return editorContext.getText().then(function(text) {
-			        	var offset = options.offset;
-			        	var cu = that.cuprovider.getCompilationUnit(function(){
-		            		return Finder.findScriptBlocks(text);
-		            	}, {location:options.input, contentType:options.contentType});
-    			        if(cu.validOffset(offset)) {
-    			        	return that._doRename(editorContext, options, deferred);
-    			        }
-    			        return [];
-			        }, deferred.reject);
-			    }
+	    		return that._doRename(editorContext, options, deferred);
 			}, /* @callback */ function(err) {
 				deferred.reject({Severity: 'Error', Message: Messages['noFileMeta']}); //$NON-NLS-1$
 			});
@@ -88,8 +72,13 @@ define([
 					that.timeout = null;
 				}, 5000);
 				var files = [{type:'full', name:params.input, text:text}]; //$NON-NLS-1$
+				var offset = params.offset;
+				if (params.annotation) {
+					// this is used in the quickfix to get the right offset
+					offset = params.annotation.start;
+				}
 				that.ternworker.postMessage(
-					{request:'rename', args:{params:{offset: params.offset}, files: files, meta:{location: params.input}, newname:''}}, //$NON-NLS-1$
+					{request:'rename', args:{params:{offset: offset}, files: files, meta:{location: params.input}, newname:''}}, //$NON-NLS-1$
 					function(response) {
 						var changes = response.changes;
 						if(changes && changes.changes && changes.changes.length > 0) {
@@ -107,7 +96,7 @@ define([
 							editorContext.exitLinkedMode().then(function() {
 								editorContext.enterLinkedMode(linkModel).then(deferred.resolve, deferred.reject);
 							}, deferred.reject);
-						} else if(typeof(response.error) === 'string') {
+						} else if(typeof response.error === 'string') {
 							deferred.reject({Severity: 'Warning', Message: badRename(response.error)}); //$NON-NLS-1$
 						}
 					});

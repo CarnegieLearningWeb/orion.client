@@ -39,104 +39,104 @@ define([
 		
 //	var templates = [
 //		{
-//			tag: 'img', //$NON-NLS-1$
-//			prefix: "<img", //$NON-NLS-1$
-//			name: "<img>", //$NON-NLS-1$
+//			tag: 'img',
+//			prefix: "<img",
+//			name: "<img>",
 //			description: Messages['imageElementDescription'],
-//			template: "<img src=\"${URI}\" alt=\"${Image}\"/>", //$NON-NLS-1$
-//			url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img" //$NON-NLS-1$
+//			template: "<img src=\"${URI}\" alt=\"${Image}\"/>",
+//			url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img"
 //		},
 //		{
-//			tag: 'a', //$NON-NLS-1$
-//			prefix: "<a", //$NON-NLS-1$
-//			name: "<a>", //$NON-NLS-1$
+//			tag: 'a',
+//			prefix: "<a",
+//			name: "<a>",
 //			description: Messages['anchorElementDescription'],
-//			template: "<a href=\"${cursor}\"></a>", //$NON-NLS-1$
-//			url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a" //$NON-NLS-1$
+//			template: "<a href=\"${cursor}\"></a>",
+//			url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a"
 //		},
 //		{
-//			tag: 'ul', //$NON-NLS-1$
-//			prefix: "<ul", //$NON-NLS-1$
-//			name: "<ul>", //$NON-NLS-1$
+//			tag: 'ul',
+//			prefix: "<ul",
+//			name: "<ul>",
 //			description: Messages['ulElementDescription'],
-//			template: "<ul>\n\t<li>${cursor}</li>\n</ul>", //$NON-NLS-1$
-//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/ul' //$NON-NLS-1$
+//			template: "<ul>\n\t<li>${cursor}</li>\n</ul>",
+//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/ul'
 //		},
 //		{
-//			tag: 'ol', //$NON-NLS-1$
-//			prefix: "<ol", //$NON-NLS-1$
-//			name: "<ol>", //$NON-NLS-1$
+//			tag: 'ol',
+//			prefix: "<ol",
+//			name: "<ol>",
 //			description: Messages['olElementDescription'],
-//			template: "<ol>\n\t<li>${cursor}</li>\n</ol>", //$NON-NLS-1$
-//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/ol' //$NON-NLS-1$
+//			template: "<ol>\n\t<li>${cursor}</li>\n</ol>",
+//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/ol'
 //		},
 //		{
-//			tag: 'dl', //$NON-NLS-1$
-//			prefix: "<dl", //$NON-NLS-1$
-//			name: "<dl>", //$NON-NLS-1$
+//			tag: 'dl',
+//			prefix: "<dl",
+//			name: "<dl>",
 //			description: Messages['dlElementDescription'],
-//			template: "<dl>\n\t<dt>${cursor}</dt>\n\t<dd></dd>\n</dl>", //$NON-NLS-1$
-//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/dl' //$NON-NLS-1$
+//			template: "<dl>\n\t<dt>${cursor}</dt>\n\t<dd></dd>\n</dl>",
+//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/dl'
 //		},
 //		{
-//			tag: 'table', //$NON-NLS-1$
-//			prefix: "<table", //$NON-NLS-1$
-//			name: "<table>", //$NON-NLS-1$
+//			tag: 'table',
+//			prefix: "<table",
+//			name: "<table>",
 //			description: Messages['basicTableDescription'],
-//			template: "<table>\n\t<tr>\n\t\t<td>${cursor}</td>\n\t</tr>\n</table>", //$NON-NLS-1$
-//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/table' //$NON-NLS-1$
+//			template: "<table>\n\t<tr>\n\t\t<td>${cursor}</td>\n\t</tr>\n</table>",
+//			url: 'https://developer.mozilla.org/en/docs/Web/HTML/Element/table'
 //		},
 //	];
 //
 //	//elements that are typically placed on a single line (e.g., <b>, <h1>, etc)
 //	var element, template, description, i;
 //	var singleLineElements = [
-//		"abbr","b","button","canvas","cite", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"command","dd","del","dfn","dt", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"em","embed","font","h1","h2", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"h3","h4","h5","h6","i", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"ins","kbd","label","li","mark", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"meter","object","option","output","progress", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"q","rp","rt","samp","small", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"strong","sub","sup","td","time", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"title","tt","u","var" //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+//		"abbr","b","button","canvas","cite",
+//		"command","dd","del","dfn","dt",
+//		"em","embed","font","h1","h2",
+//		"h3","h4","h5","h6","i",
+//		"ins","kbd","label","li","mark",
+//		"meter","object","option","output","progress",
+//		"q","rp","rt","samp","small",
+//		"strong","sub","sup","td","time",
+//		"title","tt","u","var"
 //	];
 //	for (i = 0; i < singleLineElements.length; i++) {
 //		element = singleLineElements[i];
-//		description = "<" + element + "></" + element + ">"; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-//		template = "<" + element + ">${cursor}</" + element + ">"; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-//		templates.push({prefix: "<" + element, description: description, template: template}); //$NON-NLS-0$
+//		description = "<" + element + "></" + element + ">";
+//		template = "<" + element + ">${cursor}</" + element + ">";
+//		templates.push({prefix: "<" + element, description: description, template: template});
 //	}
 //
 //	//elements that typically start a block spanning multiple lines (e.g., <p>, <div>, etc)
 //	var multiLineElements = [
-//		"address","article","aside","audio","bdo", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"blockquote","body","caption","code","colgroup", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"datalist","details","div","fieldset","figure", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"footer","form","head","header","hgroup", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"iframe","legend","map","menu","nav", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"noframes","noscript","optgroup","p","pre", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"ruby","script","section","select","span", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"style","tbody","textarea","tfoot","th", //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-//		"thead","tr","video" //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+//		"address","article","aside","audio","bdo",
+//		"blockquote","body","caption","code","colgroup",
+//		"datalist","details","div","fieldset","figure",
+//		"footer","form","head","header","hgroup",
+//		"iframe","legend","map","menu","nav",
+//		"noframes","noscript","optgroup","p","pre",
+//		"ruby","script","section","select","span",
+//		"style","tbody","textarea","tfoot","th",
+//		"thead","tr","video"
 //	];
 //	for (i = 0; i < multiLineElements.length; i++) {
 //		element = multiLineElements[i];
-//		description = "<" + element + "></" + element + ">"; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-//		template = "<" + element + ">\n\t${cursor}\n</" + element + ">"; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-//		templates.push({prefix: "<" + element, description: description, template: template}); //$NON-NLS-0$
+//		description = "<" + element + "></" + element + ">";
+//		template = "<" + element + ">\n\t${cursor}\n</" + element + ">";
+//		templates.push({prefix: "<" + element, description: description, template: template});
 //	}
 //
 //	//elements with no closing element (e.g., <hr>, <br>, etc)
 //	var emptyElements = [
-//		"area","base","br","col", //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-4$
-//		"hr","input","link","meta", //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-4$
-//		"param","keygen","source" //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-4$
+//		"area","base","br","col",
+//		"hr","input","link","meta",
+//		"param","keygen","source"
 //	];
 //	for (i = 0; i < emptyElements.length; i++) {
 //		element = emptyElements[i];
-//		template = description = "<" + element + "/>"; //$NON-NLS-1$ //$NON-NLS-2$
-//		templates.push({prefix: "<" + element, description: description, template: template}); //$NON-NLS-1$
+//		template = description = "<" + element + "/>";
+//		templates.push({prefix: "<" + element, description: description, template: template});
 //	}
 
 	/**
@@ -178,7 +178,6 @@ define([
 		 * @since 10.0 
 		 */
 		computeProposalsFromAst: function(ast, params) {
-			var proposals = [];
 			var node = util.findNodeAtOffset(ast, params.offset);
 			if(node) {
 				if(this.inScriptOrStyle(node, params.offset, ast.source) || this.inClosingTag(node, params.offset, ast.source)) {
@@ -193,20 +192,14 @@ define([
 				} else if (this.isCompletingTag(node, params)){
 					if (this.isCompletingCommentOpen(node)){
 						return this.getComment(node, true);
-					} else {
-						return this.getTags(ast.source, params);
-					}
-				} else {
-					return this.getProposalsForTextContent(node, ast.source, params);
-				}
-			} else {
-				// If the user has no completed tags, still offer tag templates
-				// TODO Can be removed if the parser creates text node for unfinished tags Bug 472659
-				if (ast.source.match(/^\s*<?\s*$/)) {
+					} 
 					return this.getTags(ast.source, params);
 				}
+				return this.getProposalsForTextContent(node, ast.source, params);
 			}
-			return proposals;
+			
+			// If we have a non-empty source file with no valid tags, still offer tag completions
+			return this.getTags(ast.source, params);
 		},
 		
 		/**
@@ -234,7 +227,7 @@ define([
 								var inwhite = true;
 								while (inwhite && pos > node.range[0]){
 									pos--;
-									posChar = source.charAt(pos)
+									posChar = source.charAt(pos);
 									inwhite = whitespace.indexOf(posChar) >= 0;
 								}
 								if (posChar === '>'){
@@ -260,8 +253,13 @@ define([
 			if(node && source) {
 				switch(node.type) {
 					case 'tag': {
+						// Smarter way now that we have end ranges
+						if (node.endrange){
+							return offset > node.endrange[0] && offset < node.endrange[1];
+						}
+						// TODO Delete the old way
 						var _s = source.slice(node.range[0], node.range[1]);
-						var _r = new RegExp("<\\s*\/\\s*"+node.name+"\\s*>$");
+						var _r = new RegExp("<\\s*\/\\s*"+node.name+"\\s*>$"); //$NON-NLS-1$ //$NON-NLS-2$
 						var _m = _r.exec(_s);
 						if(_m) {
 							return offset > (_m.index+node.range[0]) && offset < node.range[1];
@@ -271,7 +269,7 @@ define([
 					default: {
 						var _p = node.parent;
 						if(_p && _p.type === 'tag') {
-							return Array.isArray(_p.children) && (offset > _p.children[_p.children.length-1].range[1]) && offset <= _p.range[1];
+							return Array.isArray(_p.children) && _p.children.length > 0 && (offset > _p.children[_p.children.length-1].range[1]) && offset <= _p.range[1];
 						}
 						break;
 					}
@@ -346,7 +344,11 @@ define([
 			if(node) {
 				var offset = params.offset;
 				if(node.type === 'tag') {
-					if (offset >= node.range[0] && offset <= node.range[1]){
+					if (node.openrange){
+						if (offset >= node.openrange[0] && offset <= node.openrange[1]){
+							return true;
+						}
+					} else if (offset >= node.range[0] && offset <= node.range[1]){
 						return true;
 					}
  				}
@@ -364,13 +366,25 @@ define([
 		getTags: function(source, params) {
 			var tags = Tags.tagTemplates;
 			var proposals = [];
+			var namePrefix = params.prefix ? params.prefix : "";
+			var precedingChar = source.charAt(params.offset - namePrefix.length - 1);
+			if (namePrefix.length === 0){
+				while (precedingChar === '!' || precedingChar === '-'){
+					namePrefix = precedingChar + namePrefix;
+					precedingChar = source.charAt(params.offset - namePrefix.length - 1);
+				}
+				if (namePrefix.match(/^!-?$/)){
+					var prefix = '<' + namePrefix;
+					proposals.push(this.makeComputedProposal("<!-- ", Messages['openCommentName'], " - <!-- -->", null, prefix)); //$NON-NLS-1$ //$NON-NLS-2$
+					return proposals;
+				}
+			}
+			var leadingBracket = false;
+			if (precedingChar === '<'){
+				leadingBracket = true;
+			}
 			for(var j = 0; j < tags.length; j++) {
 				var tag = tags[j];
-				var namePrefix = params.prefix ? params.prefix : "";
-				var leadingBracket = false;
-				if (source.charAt(params.offset - namePrefix.length - 1) === '<'){
-					leadingBracket = true;
-				}
 				if(jsUtil.looselyMatches(namePrefix, tag.name)) {
 					var hover = Object.create(null);
 					hover.type = 'markdown'; //$NON-NLS-1$
@@ -391,28 +405,28 @@ define([
 					switch (tag.type) {
 						case 'single':
 							proposalText = "<" + tag.name + "></" + tag.name + ">"; //$NON-NLS-1$
-//							desc = " - " + proposalText; //$NON-NLS-1$
+//							desc = " - " + proposalText;
 							if (leadingBracket){
 								proposalText = proposalText.substring(1);
 							}
 							break;
 						case 'multi':
 							proposalText = "<" + tag.name + ">\n\n</" + tag.name + ">"; //$NON-NLS-1$
-//							desc = " - " + proposalText; //$NON-NLS-1$
+//							desc = " - " + proposalText;
 							if (leadingBracket){
 								proposalText = proposalText.substring(1);
 							}
 							break;
 						case 'empty':
 							proposalText = "<" + tag.name + "/>"; //$NON-NLS-1$
-//							desc = " - " + proposalText; //$NON-NLS-1$
+//							desc = " - " + proposalText;
 							if (leadingBracket){
 								proposalText = proposalText.substring(1);
 							}
 							break;
 						default:
 							proposalText = "<" + tag.name + ">";
-//							desc = " - " + proposalText; //$NON-NLS-1$
+//							desc = " - " + proposalText;
 							if (leadingBracket){
 								proposalText = proposalText.substring(1);
 							}
@@ -421,7 +435,7 @@ define([
 					if (tag.category === "Obsolete and deprecated elements"){
 						desc += Messages['obsoleteTagDesc'];
 					}
-					var proposal = this.makeComputedProposal(proposalText, tag.name, desc, hover, params.prefix); //$NON-NLS-1$
+					var proposal = this.makeComputedProposal(proposalText, tag.name, desc, hover, params.prefix);
 					// The prefix not being includes prevents content assist staying open while typing
 //					if (source.charAt(params.offset - prefix.length - 1) === '<'){
 //						prefix = '<' + prefix;
@@ -506,10 +520,24 @@ define([
 				}
 
 			}
+			if(Array.isArray(attrs.aria)) {
+				arr = this.addProposals(node, attrs.aria, params);
+				if(arr.length > 0) {
+					proposals.push({
+							proposal: '',
+							description: 'ARIA', //$NON-NLS-1$
+							style: 'noemphasis_title', //$NON-NLS-1$
+							unselectable: true,
+							kind: 'html' //$NON-NLS-1$
+					});
+					proposals = proposals.concat(arr);
+				}
+			}
 			return proposals;	
 		},
 		
 		addProposals: function addProposals(node, attrs, params) {
+			// TODO Try adding spaces ahead of the attribute if previous attribute had no trailing whitespace
 			var proposals = [];
 			var tagNode = node;
 			if (node.type === 'attr' && node.parent){
@@ -532,11 +560,21 @@ define([
 					if (attr.doc){
 						hover.content += attr.doc;
 					}
+					if (Array.isArray(attr.values)) {
+						hover.content += Messages['possibleValues'];
+						for(var v = 0; v < attr.values.length; v++) {
+							var val = attr.values[v];
+							hover.content += i18nUtil.formatMessage(Messages['valueNameDocMarkdown'], val.name, val.doc);
+						}
+					}
 					if(attr.url) {
 						hover.content += i18nUtil.formatMessage(Messages['onlineDocumentation'], attr.url);
 					}
-					var proposalText = attr.name+'=""'; //$NON-NLS-1$
-					var proposal = this.makeComputedProposal(proposalText, attr.name, desc, hover, prefix); //$NON-NLS-1$
+					var proposalText = attr.name;
+					if (typeof node.value !== 'string'){
+						proposalText += '=""'; //$NON-NLS-1$
+					}
+					var proposal = this.makeComputedProposal(proposalText, attr.name, desc, hover, prefix);
 					proposal.escapePosition = params.offset - prefix.length + attr.name.length + 2;
 					proposals.push(proposal);
 				}
@@ -612,8 +650,12 @@ define([
 		 * @since 10.0 
 		 */
 		getValuesForAttribute: function(node, params) {
-			//TODO compute the options for the given attribute
-			return [];	
+			var vals = Attributes.getValuesForAttribute(node);
+			var proposals = [];
+			if(Array.isArray(vals)) {
+				proposals = proposals.concat(this.addProposals(node, vals, params));
+			}
+			return proposals;	
 		},
 		/**
 		 * Returns any proposals (if any) for when the user is editing text contents based upon
@@ -631,6 +673,8 @@ define([
 				// If we have an uncompleted tag '</' offer to complete the tag
 				if (node.type === 'text' && node.parent && node.parent.type === 'tag'){
 					startTag = node.parent;
+				} else if (node.type === 'tag' && node.openrange && params.offset > node.openrange[1]){
+					startTag = node;
 				} else if (node.type === 'tag' && (params.offset > node.range[1] || params.offset < node.range[0])){
 					startTag = node;
 				}
@@ -656,6 +700,7 @@ define([
 		 * @since 10.0 
 		 */
 		isCompletingAttributeValue: function(node, source, params) {
+			// TODO We can do better with the new parser, handle no quotes cases too
 			if(node && node.type === 'attr') {
 				return this.within('"', '"', source, params.offset, node.range) || //$NON-NLS-1$ //$NON-NLS-2$
 						this.within("'", "'", source, params.offset, node.range); //$NON-NLS-1$ //$NON-NLS-2$

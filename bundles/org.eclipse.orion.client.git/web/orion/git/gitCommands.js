@@ -208,6 +208,7 @@ var exports = {};
 			spriteClass: "gitCommandSprite", //$NON-NLS-0$
 			id: "eclipse.checkoutBranch", //$NON-NLS-0$
 			callback: function(data) {
+				var commandInvocation = data;
 				var item = data.items;
 				var service = serviceRegistry.getService("orion.git.provider"); //$NON-NLS-0$
 				var messageService = serviceRegistry.getService("orion.page.message"); //$NON-NLS-0$
@@ -243,6 +244,10 @@ var exports = {};
 									dispatchModelEventOn({type: "modelChanged", action: "checkout"}); //$NON-NLS-1$ //$NON-NLS-0$
 								},
 								function(error){
+									if(error.status===409){
+										commandInvocation.parameters = branchNameParameters;
+										commandService.collectParameters(commandInvocation);
+									}
 									displayErrorOnStatus(error);
 								}
 							);
@@ -267,6 +272,7 @@ var exports = {};
 			id: "eclipse.addBranch", //$NON-NLS-0$
 			parameters: branchNameParameters,
 			callback: function(data) {
+				var commandInvocation = data;
 				var item = data.items;
 				var progress = serviceRegistry.getService("orion.page.progress"); //$NON-NLS-0$
 				
@@ -274,7 +280,13 @@ var exports = {};
 					var addMsg = i18nUtil.formatMessage(messages["Adding branch ${0}..."], name);
 					progress.progress(serviceRegistry.getService("orion.git.provider").addBranch(branchLocation, name), addMsg).then(function() { //$NON-NLS-0$
 						dispatchModelEventOn({type: "modelChanged", action: "addBranch", branch: name}); //$NON-NLS-1$ //$NON-NLS-0$
-					}, displayErrorOnStatus);
+					}, function(error){
+						if(error.status===409){
+							commandInvocation.parameters = branchNameParameters;
+							commandService.collectParameters(commandInvocation);
+						}
+						displayErrorOnStatus(error);
+					});
 				};
 				
 				var branchLocation;
@@ -1300,6 +1312,7 @@ var exports = {};
 			spriteClass: "gitCommandSprite", //$NON-NLS-0$
 			id: "eclipse.checkoutPullRequest", //$NON-NLS-0$
 			callback: function(data) {
+				var commandInvocation = data;
 				var item = data.items;
 				var base = item.PullRequest.base;
 				var head = item.PullRequest.head;
@@ -1334,30 +1347,35 @@ var exports = {};
 							);
 						},
 						function(error){
+							if(error.status===409){
+								commandInvocation.parameters = branchNameParameters;
+								commandService.collectParameters(commandInvocation);
+							}
 							displayErrorOnStatus(error);
+					
 						 }
 					);	
+				};
+				var createRemoteFunction = function(remoteLocation, name, url) {
+					var msg = i18nUtil.formatMessage(messages["Adding remote ${0}..."], remoteLocation);
+					progressService.progress(serviceRegistry.getService("orion.git.provider").addRemote(remoteLocation, name, url), msg).then(function(remoteResult) { //$NON-NLS-0$
+						dispatchModelEventOn({type: "modelChanged", action: "addRemote", remote: name}); //$NON-NLS-1$ //$NON-NLS-0$
+						data.items.Location = remoteResult.Location;
+						data.items.Name = name;
+						fetchCallback(data).then(function(){
+							localBranchCheckOut(name);
+						});
+								
+					}, displayErrorOnStatus);
 				};
 				if(head.user.login !== base.user.login){
 					commandService.confirm(data.domNode, i18nUtil.formatMessage(messages["CreatePullRequestRemoteConfirm"], head.user.login, head.repo.clone_url), messages.OK, messages.Cancel, false, function(doit) {
 						if (!doit) return;
-						var createRemoteFunction = function(remoteLocation, name, url) {
-							var msg = i18nUtil.formatMessage(messages["Adding remote ${0}..."], remoteLocation);
-							progressService.progress(serviceRegistry.getService("orion.git.provider").addRemote(remoteLocation, name, url), msg).then(function(remoteResult) { //$NON-NLS-0$
-								dispatchModelEventOn({type: "modelChanged", action: "addRemote", remote: name}); //$NON-NLS-1$ //$NON-NLS-0$
-								data.items.Location = remoteResult.Location;
-								data.items.Name = name;
-								fetchCallback(data).then(function(){
-									localBranchCheckOut(name);
-								});
-								
-							}, displayErrorOnStatus);
-						};
+
 						createRemoteFunction(remote, head.user.login, head.repo.clone_url);
 					});
 				}else{
-					localBranchCheckOut("origin");
-				//}
+					createRemoteFunction(remote, "origin", item.GitUrl);
 				}
 
 					

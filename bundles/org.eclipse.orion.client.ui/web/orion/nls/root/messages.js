@@ -164,6 +164,7 @@ define({//Default message bundle
 	"minutes": "${0} minutes",
 	"timeAgo": "${0} ago", //${0} represent the time elapsed
 	"justNow": "just now", //Represent that the time elapsed is less than 1 minute
-	"Orion HTML Editor": "Orion HTML Editor",
-	"Orion JavaScript Editor": "Orion JavaScript Editor"
+    "Orion HTML Editor": "Orion HTML Editor",
+	"Orion JavaScript Editor": "Orion JavaScript Editor",
+	"fixAll": "Fix all"
 });

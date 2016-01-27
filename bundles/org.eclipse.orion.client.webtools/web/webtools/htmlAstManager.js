@@ -16,8 +16,153 @@ define([
 	'orion/objects',
 	'javascript/lru',
 	'orion/metrics',
-	'htmlparser/htmlparser'  //stays last, exports into global scope
-], function(Deferred, Objects, LRU, Metrics) {
+	'htmlparser2/parser',
+], function(Deferred, Objects, LRU, Metrics, HtmlParser2) {
+
+	var handler = {
+		ast: null,
+		tagstack: [],
+		errors: [],
+		attribstack: [],
+	    onopentag: function(name, attribs, range){
+	    	this.trailingTag = null;
+	    	var node = Object.create(null);
+	    	node.range = [0, 0];
+	    	if(Array.isArray(range)) {
+	    		node.range[0] = range[0];
+	    		node.range[1] = range[1]; // Inline tags don't have separate onclosetag calls
+	    		node.openrange = [range[0], range[1]];
+	    	} 
+	    	node.name = name;
+	    	node.type = 'tag'; //$NON-NLS-1$
+	    	
+	    	node.attributes = Object.create(null);
+	    	for (var i=0; i<this.attribstack.length; i++){
+	    		var attrib = this.attribstack[i];
+	    		if (attrib.name){
+	    			node.attributes[attrib.name] = attrib;
+	    		}
+	    	}
+ 	    	node.children = [];
+	    	var tag = this._getLastTag();
+	    	if(tag) {
+	    		tag.children.push(node);
+	    	} else {
+	    		this.ast.children.push(node);
+	    	}
+	    	this.attribstack = [];
+	    	this.tagstack.push(node);
+	    },
+	    onclosetag: function(tagname, range){
+	    	var tag = this._getLastTag();
+	    	if(tag && tag.name === tagname) {
+	    		if (range){
+	    			tag.range[1] = range[1];
+	    			tag.endrange = [range[0], range[1]];
+    			} else {
+    				// No matching closing tag or void element
+    				// TODO Need to add tests for this, can it have children as well as text?
+    				if (tag.openrange && tag.text){
+    					tag.range[1] = tag.openrange[1] + tag.text.value.length;
+    					tag.endrange = [tag.range[1], tag.range[1]];
+    				}	
+    			}
+	    		this.tagstack.pop();
+	    	}
+	    },
+	    onopentagname: function(name, rangeStart) {
+	    	this.trailingTag = {name: name, start: rangeStart};
+	    },
+	    onattribname: function(name, rangeStart) {
+	    	this.trailingAttrib = {name: name, start: rangeStart};
+	    },
+	    onattribute: function(name, value, range) {
+	    	this.trailingAttrib = null;
+	    	var node = Object.create(null);
+	    	node.range = Array.isArray(range) ? [range[0], range[1]] : [0, 0];
+	    	node.name = name;
+	    	node.type = 'attr'; //$NON-NLS-1$
+	    	node.value = value;
+	    	this.attribstack.push(node);
+	    },
+	    onprocessinginstruction: function(name, data, range) {
+	    	var node = Object.create(null);
+	    	node.range = Array.isArray(range) ? [range[0], range[1]] : [0, 0];
+	    	node.name = name;
+	    	node.type = 'instr'; //$NON-NLS-1$
+	    	node.value = data;
+	    	var tag = this._getLastTag();
+	    	if(tag) {
+	    		tag.children.push(node);
+	    	} else {
+	    		this.ast.children.push(node);
+	    	}
+	    },
+	    oncomment: function(data, range) {
+	    	var node = Object.create(null);
+	    	node.range = Array.isArray(range) ? [range[0], range[1]] : [0, 0];
+	    	node.type = 'comment'; //$NON-NLS-1$
+	    	node.data = data;
+	    	
+	    	var tag = this._getLastTag();
+	    	if(tag) {
+	    		tag.children.push(node);
+	    	} else {
+	    		this.ast.children.push(node);
+	    	}
+	    },
+	    oncdatastart: function() {
+	    	var node = Object.create(null);
+	    	node.range = [0, 0];
+	    	node.type = 'cdata'; //$NON-NLS-1$
+	    },
+	    ontext: function(text) {
+	    	var node = Object.create(null);
+	    	node.range = [0, 0];
+	    	node.type = 'text'; //$NON-NLS-1$
+	    	node.value = text;
+	    	var tag = this._getLastTag();
+	    	if(tag) {
+	    		tag.text = node;
+	    	}
+	    },
+	    onerror: function(error) {
+	    	var err = Object.create(null);
+	    	err.error = error;
+	    	err.range = [0, 0];
+	    	this.errors.push(err);
+	    },
+	    onend: function(range) {
+	    	// The ordering is important here as trailing attributes need to be added to the tag
+	    	if (this.trailingAttrib){
+	    		// TODO Recover trailing value
+	    		this.onattribute(this.trailingAttrib.name, null, [this.trailingAttrib.start,range[1]]);
+	    	}
+	    	if (this.trailingTag){
+	    		this.onopentag(this.trailingTag.name, null, [this.trailingTag.start,range[1]]);
+	    	}
+	    	
+	    	if(Array.isArray(range)) {
+	    		this.ast.range[0] = this.ast.children.length > 0 ? this.ast.children[0].range[0] : 0;
+	    		this.ast.range[1] = range[1];
+	    	}
+	    },
+	    onreset: function() {
+			this.ast = Object.create(null);
+			this.ast.range = [0,0];
+			this.ast.children = [];
+			this.tagstack = [];
+			this.comments = [];
+			this.errors = [];
+			this.attribstack = [];
+	    },
+	    _getLastTag: function() {
+	    	if(this.tagstack && this.tagstack.length > 0) {
+	    		return this.tagstack[this.tagstack.length-1];
+	    	} 
+	    	return null;
+	    }
+	};
 
 	/**
 	 * Provides a shared AST.
@@ -70,20 +215,17 @@ define([
 		 * @returns {Object} The AST.
 		 */
 		parse: function(text) {
-		    var domResult;
-			var handler = new Tautologistics.NodeHtmlParser.HtmlBuilder(function(error, dom) {
-				if (!error) {
-					//parsing done
-					domResult = dom;
-				}
-			}, {ignoreWhitespace: true, includeLocation: true, verbose: false});
-			var parser = new Tautologistics.NodeHtmlParser.Parser(handler);
+			var parser = new HtmlParser2(handler, {decodeEntities: true, recognizeSelfClosing: true});
 			var start = Date.now();
-			parser.parseComplete(text);
+			parser.reset();
+			parser.write(text);
+			parser.done();
 			var end = Date.now()-start;
+			if(handler.ast) {
+				handler.ast.source = text;
+			}
 			Metrics.logTiming('language tools', 'parse', end, 'text/html'); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-			domResult.source = text;
-			return domResult;
+			return handler.ast;
 		},
 
 		/**

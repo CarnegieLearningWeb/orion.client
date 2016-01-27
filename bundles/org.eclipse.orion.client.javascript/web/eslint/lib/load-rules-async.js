@@ -10,6 +10,7 @@
  *	 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env amd*/
+/*globals importScripts onmessage:true onconnect:true requirejs*/
 /**
  * Implements eslint's load-rules API for AMD. Our rules are loaded as AMD modules.
  */
@@ -19,106 +20,113 @@ define([
 'javascript/finder',
 'i18n!javascript/nls/problems',
 'estraverse/estraverse',
-'orion/editor/stylers/application_javascript/syntax'
-], function(util, Logger, Finder, ProblemMessages, Estraverse, JsSyntax) {
+'orion/editor/stylers/application_javascript/syntax',
+'./rules/accessor-pairs',
+'./rules/no-control-regex',
+'./rules/no-duplicate-case',
+'./rules/no-else-return',
+'./rules/no-empty-character-class',
+'./rules/no-empty-label',
+'./rules/no-eq-null',
+'./rules/no-extra-boolean-cast',
+'./rules/no-extra-parens',
+'./rules/no-invalid-regexp',
+'./rules/no-negated-in-lhs',
+'./rules/no-obj-calls',
+'./rules/no-self-compare',
+'./rules/no-irregular-whitespace',
+], function(util, Logger, Finder, ProblemMessages, Estraverse, JsSyntax, 
+		accessorPairs, noControlRegex, noDuplicateCase, noElseReturn, noEmptyCharClasses, 
+		noEmptyLabel, noEqNull, noExtraBoolCast, noExtraParens, noInvalidRegExp, noNegatedInLhs, noObjCalls, noSelfCompare, noIrregularWhitespace) {
 
     var rules = {
-        "curly" : {
-            description: ProblemMessages['curly-description'],
-            url: 'http://eslint.org/docs/rules/curly', //$NON-NLS-1$
-            rule: function(context) {
-        		/**
-        		 * Checks the following AST element for a BlockStatement
-        		 */
-        		function checkBlock(node) {
-        			try {
-        			    switch(node.type) {
-        			        case 'IfStatement': {
-            					if(node.consequent && node.consequent.type !== 'BlockStatement') {
-            						//flag the first token of the statement that should be in the block
-            						context.report(node.consequent, ProblemMessages['curly'], null /*, context.getTokens(node.consequent)[0]*/);
-            					}
-            					if(node.alternate && node.alternate.type !== 'BlockStatement' && node.alternate.type !== 'IfStatement') {
-            						//flag the first token of the statement that should be in the block
-            						context.report(node.alternate, ProblemMessages['curly'], null /*, context.getTokens(node.alternate)[0]*/);
-            					}
-            					break;
-        				    }
-        				    case 'DoWhileStatement':
-        				    case 'WhileStatement':
-        				    case 'WithStatement':
-        				    case 'ForStatement':
-                            case 'ForInStatement': {
-            					if(node.body && node.body.type !== 'BlockStatement') {
-            						//flag the first token of the statement that should be in the block
-            						context.report(node.body, ProblemMessages['curly'], null /*, context.getTokens(node.body)[0]*/);
-            					}
-            					break;
-        					}
-        				}
-        			}
-        			catch(ex) {
-        				Logger.log(ex);
-        			}
-        		}
-
-        		return {
-        			'IfStatement' : checkBlock,
-        			'WhileStatement' : checkBlock,
-        			'ForStatement' : checkBlock,
-        			'ForInStatement' : checkBlock,
-        			'WithStatement': checkBlock,
-        			'DoWhileStatement': checkBlock
-        		};
-        	}
+        "curly": function(context) {
+	        		/**
+	        		 * Checks the following AST element for a BlockStatement
+	        		 */
+	        		function checkBlock(node) {
+	        			try {
+	        			    switch(node.type) {
+	        			        case 'IfStatement': {
+	            					if(node.consequent && node.consequent.type !== 'BlockStatement') {
+	            						//flag the first token of the statement that should be in the block
+	            						context.report(node.consequent, ProblemMessages['curly'], null /*, context.getTokens(node.consequent)[0]*/);
+	            					}
+	            					if(node.alternate && node.alternate.type !== 'BlockStatement' && node.alternate.type !== 'IfStatement') {
+	            						//flag the first token of the statement that should be in the block
+	            						context.report(node.alternate, ProblemMessages['curly'], null /*, context.getTokens(node.alternate)[0]*/);
+	            					}
+	            					break;
+	        				    }
+	        				    case 'DoWhileStatement':
+	        				    case 'WhileStatement':
+	        				    case 'WithStatement':
+	        				    case 'ForStatement':
+	                            case 'ForInStatement': 
+	                            case 'ForOfStatement': {
+	            					if(node.body && node.body.type !== 'BlockStatement') {
+	            						//flag the first token of the statement that should be in the block
+	            						context.report(node.body, ProblemMessages['curly'], null /*, context.getTokens(node.body)[0]*/);
+	            					}
+	            					break;
+	        					}
+	        				}
+	        			}
+	        			catch(ex) {
+	        				Logger.log(ex);
+	        			}
+	        		}
+	
+	        		return {
+	        			'IfStatement' : checkBlock,
+	        			'WhileStatement' : checkBlock,
+	        			'ForStatement' : checkBlock,
+	        			'ForInStatement' : checkBlock,
+	        			'ForOfStatement': checkBlock,
+	        			'WithStatement': checkBlock,
+	        			'DoWhileStatement': checkBlock
+	        		};
         },
-		"eqeqeq": {
-		    description: ProblemMessages['eqeqeq-description'],
-		    url: "http://eslint.org/docs/rules/eqeqeq", //$NON-NLS-1$
-		    rule: function(context) {
-		        function getOperatorToken(context, node) {
-            		var tokens = context.getTokens(node), len = tokens.length, operator = node.operator;
-            		for (var i=0; i < len; i++) {
-            			var t = tokens[i];
-            			if (t.value === operator) {
-            				return t;
-            			}
-            		}
-            		return null;
-            	}
-            	function isNullness(node) {
-            		if(node && node.type) {
-            			return (node.type === 'Literal' && node.value == null) || (node.type === 'Identifier' && node.name === 'undefined');  //$NON-NLS-0$  //$NON-NLS-1$  //$NON-NLS-2$
-            		}
-            		return false;
-            	}
-        		return {
-        			"BinaryExpression": function(node) {  //$NON-NLS-0$
-        				try {
-        					if(isNullness(node.left) || isNullness(node.right)) {
-        						return;
-        					}
-        					var op = node.operator;
-        					var expected = null;
-        					if (op === "==") {  //$NON-NLS-0$
-        					    expected = '===';
-        						context.report(node, ProblemMessages['eqeqeq'], {0: expected, 1:op}, getOperatorToken(context, node));
-        					} else if (op === "!=") {  //$NON-NLS-0$
-        					    expected = '!==';
-        						context.report(node, ProblemMessages['eqeqeq'], {0:expected, 1:op}, getOperatorToken(context, node));
-        					}
-        				}
-        				catch(ex) {
-        					Logger.log(ex);
-        				}
-        			}
-        		};
-        	}
+		"eqeqeq": function(context) {
+			        function getOperatorToken(context, node) {
+	            		var tokens = context.getTokens(node), len = tokens.length, operator = node.operator;
+	            		for (var i=0; i < len; i++) {
+	            			var t = tokens[i];
+	            			if (t.value === operator) {
+	            				return t;
+	            			}
+	            		}
+	            		return null;
+	            	}
+	            	function isNullness(node) {
+	            		if(node && node.type) {
+	            			return (node.type === 'Literal' && node.value === null) || (node.type === 'Identifier' && node.name === 'undefined');
+	            		}
+	            		return false;
+	            	}
+	        		return {
+	        			"BinaryExpression": function(node) {
+	        				try {
+	        					if(isNullness(node.left) || isNullness(node.right)) {
+	        						return;
+	        					}
+	        					var op = node.operator;
+	        					var expected = null;
+	        					if (op === "==") {
+	        					    expected = '===';
+	        						context.report(node, ProblemMessages['eqeqeq'], {0: expected, 1:op}, getOperatorToken(context, node));
+	        					} else if (op === "!=") {
+	        					    expected = '!==';
+	        						context.report(node, ProblemMessages['eqeqeq'], {0:expected, 1:op}, getOperatorToken(context, node));
+	        					}
+	        				}
+	        				catch(ex) {
+	        					Logger.log(ex);
+	        				}
+	        			}
+	        		};
         },
-		"missing-doc" : {
-		    description: ProblemMessages['missing-doc-description'],
-		    url: 'http://eslint.org/docs/rules/valid-jsdoc', //$NON-NLS-1$
-		    rule: function(context) {
+		"missing-doc": function(context) {
                 function validComment(comments) {
                     if(comments && comments.leading) {
                         var len = comments.leading.length;
@@ -131,19 +139,19 @@ define([
         				var comments;
         				var name;
         				switch(node.type) {
-        					case 'Property':  //$NON-NLS-0$
-        						if(node.value && (node.value.type === 'FunctionExpression')) {  //$NON-NLS-0$  //$NON-NLS-1$
+        					case 'Property':
+        						if(node.value && node.value.type === 'FunctionExpression') {
         							comments = context.getComments(node);
-        							if(comments.leading.length < 1 && comments.trailing.length < 1) {
+        							if(!comments || comments.leading.length < 1) {
         							    //TODO see https://github.com/jquery/esprima/issues/1071
     							        comments = context.getComments(node.key);
         							}
         							if(!validComment(comments)) {
         								switch(node.key.type) {
-        									case 'Identifier':  //$NON-NLS-0$
+        									case 'Identifier':
         										name = node.key.name;
         										break;
-        									case 'Literal':  //$NON-NLS-0$
+        									case 'Literal':
         										name = node.key.value;
         										break;
         								}
@@ -151,20 +159,20 @@ define([
         							}
         						}
         						break;
-        					case 'FunctionDeclaration':  //$NON-NLS-0$
+        					case 'FunctionDeclaration':
     							comments = context.getComments(node);
-    							if(comments.leading.length < 1 && comments.trailing.length < 1) {
+    							if(!comments || comments.leading.length < 1) {
     							    //TODO see https://github.com/jquery/esprima/issues/1071
 							        comments = context.getComments(node.id);
-    							}
+    							} 
     							if(!validComment(comments)) {
     								context.report(node.id, ProblemMessages['missing-doc'], {0:node.id.name}, { type: 'decl' });  //$NON-NLS-1$
     							}
         						break;
-        					case 'ExpressionStatement':  //$NON-NLS-0$
-        						if(node.expression && node.expression.type === 'AssignmentExpression') {  //$NON-NLS-0$  //$NON-NLS-1$
+        					case 'ExpressionStatement':
+        						if(node.expression && node.expression.type === 'AssignmentExpression') {
         							var anode = node.expression;
-        							if(anode.right && (anode.right.type === 'FunctionExpression') && anode.left && (anode.left.type === 'MemberExpression')) {  //$NON-NLS-0$  //$NON-NLS-1$
+        							if(anode.right && (anode.right.type === 'FunctionExpression') && anode.left && (anode.left.type === 'MemberExpression')) {
         								//comments are attached to the enclosing expression statement
         								comments = context.getComments(node);
         								if(comments.leading.length < 1 && comments.trailing.length < 1) {
@@ -186,16 +194,12 @@ define([
         		}
 
         		return {
-        			"Property": checkDoc,  //$NON-NLS-0$
-        			"FunctionDeclaration": checkDoc,  //$NON-NLS-0$
-        			"ExpressionStatement": checkDoc  //$NON-NLS-0$
+        			"Property": checkDoc,
+        			"FunctionDeclaration": checkDoc,
+        			"ExpressionStatement": checkDoc
         		};
-        	}
         },
-		"new-parens" : {
-		    description: ProblemMessages['new-parens-description'],
-		    url: 'http://eslint.org/docs/rules/new-parens', //$NON-NLS-1$
-		    rule: function(context) {
+		"new-parens": function(context) {
         		return {
         			'NewExpression' : function(node) {
         				try {
@@ -215,34 +219,26 @@ define([
         				}
         			}
         		};
-        	}
         },
-        "no-caller": {
-            description: ProblemMessages['no-caller-description'],
-            url: 'http://eslint.org/docs/rules/no-caller', //$NON-NLS-1$
-            rule: function(context) {
+        "no-caller": function(context) {
                 return {
-                    "MemberExpression": function(node) { //$NON-NLS-0$
+                    "MemberExpression": function(node) {
                         var func = Finder.findParentFunction(node);
                         if(func) {
                             var object = node.object;
-                            if (!object || object.name !== "arguments" || object.type !== "Identifier") { //$NON-NLS-1$ //$NON-NLS-0$
+                            if (!object || object.name !== "arguments" || object.type !== "Identifier") {
                                 return;
                             }
                             var prop = node.property;
                             var name = prop.name ? prop.name : prop.value;
-                            if (name === "callee" || name === "caller") {//$NON-NLS-1$ //$NON-NLS-0$
+                            if (name === "callee" || name === "caller") {
                                 context.report(prop, ProblemMessages['no-caller'], {0: name});
                             }
                         }
                     }
                 };
-            }
         },
-        "no-comma-dangle": {
-            description: ProblemMessages['no-comma-dangle-description'],
-            url: 'http://eslint.org/docs/rules/no-comma-dangle', //$NON-NLS-1$
-            rule: function(context) {
+        "no-comma-dangle": function(context) {
                 return {
                     'ObjectExpression': function(node) {
                         var token  = context.getLastToken(node, 1);
@@ -251,12 +247,8 @@ define([
                         }
                     }
                 };
-            }
         },
-        "no-cond-assign": {
-            description: ProblemMessages['no-cond-assign-description'],
-            url: 'http://eslint.org/docs/rules/no-cond-assign', //$NON-NLS-1$
-            rule: function(context) {
+        "no-cond-assign": function(context) {
 
                 var statements = {
                     'IfStatement': true,
@@ -327,12 +319,8 @@ define([
                   'ForStatement': checkForAssignment,
                   'DoWhileStatement': checkForAssignment
                 };
-            }
         },
-        "no-console": {
-            description: ProblemMessages['no-console-description'],
-            url: 'http://eslint.org/docs/rules/no-console', //$NON-NLS-1$
-            rule: function(context) {
+        "no-console": function(context) {
                 return {
                     'MemberExpression': function(node) {
                         if(node.object.name === 'console') {
@@ -343,12 +331,8 @@ define([
                         }
                     }
                 };
-            }
         },
-        "no-constant-condition": {
-            description: ProblemMessages['no-constant-condition-description'],
-            url: 'http://eslint.org/docs/rules/no-constant-condition', //$NON-NLS-1$
-            rule: function(context) {
+        "no-constant-condition": function(context) {
                 /**
                  * @param {Object} node The AST node
                  * @returns {Boolean} If the given node has a 'truthy' constant value
@@ -384,12 +368,8 @@ define([
                     'ForStatement': checkCondition,
                     'ConditionalExpression': checkCondition
                 };
-            }
         },
-		"no-debugger" : {
-		    description: ProblemMessages['no-debugger-description'],
-		    url: 'http://eslint.org/docs/rules/no-debugger', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-debugger": function(context) {
         		return {
         			"DebuggerStatement": function(node) {
         				try {
@@ -400,12 +380,8 @@ define([
         				}
         			}
         		};
-        	}
         },
-		"no-dupe-keys" : {
-		    description: ProblemMessages['no-dupe-keys-description'],
-		    url: 'http://eslint.org/docs/rules/no-dupe-keys', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-dupe-keys": function(context) {
         		return {
         			"ObjectExpression": function(node) {
         				try {
@@ -420,7 +396,7 @@ define([
         							if(prop.kind !== "init") {
         								continue;
         							}
-        							var name = (prop.key.name ? prop.key.name : prop.key.value);
+        							var name = prop.key.name ? prop.key.name : prop.key.value;
         							if(Object.prototype.hasOwnProperty.call(seen, name)) {
         								context.report(prop, ProblemMessages['no-dupe-keys'], {0:name}, context.getTokens(prop)[0]);
         							}
@@ -435,12 +411,8 @@ define([
         				}
         			}
         		};
-        	}
         },
-		'no-empty-block' : {
-		    description: ProblemMessages['no-empty-block-description'],
-		    url: 'http://eslint.org/docs/rules/no-empty', //$NON-NLS-1$
-		    rule: function(context) {
+		'no-empty-block': function(context) {
         		var comments;
 
         		return {
@@ -465,12 +437,8 @@ define([
         			    }
         			}
         		};
-        	}
         },
-		"no-eval" : {
-		    description: ProblemMessages['no-eval-description'],
-		    url: 'http://eslint.org/docs/rules/no-eval', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-eval": function(context) {
         		return {
         			"CallExpression": function(node) {
         				try {
@@ -487,18 +455,14 @@ define([
         				}
         			}
         		};
-        	}
         },
-		"no-extra-semi": {
-		    description: ProblemMessages['no-extra-semi-description'],
-		    url: 'http://eslint.org/docs/rules/no-extra-semi', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-extra-semi": function(context) {
         		return {
-        			"EmptyStatement": function(node) {  //$NON-NLS-0$
+        			"EmptyStatement": function(node) {
         				try {
         					var tokens = context.getTokens(node);
         					var t = tokens[tokens.length - 1];
-        					if (t && t.type === "Punctuator" && t.value === ";") {  //$NON-NLS-0$  //$NON-NLS-1$
+        					if (t && t.type === "Punctuator" && t.value === ";") {
         						context.report(node, ProblemMessages['no-extra-semi'], null, t /* expose the bad token */);
         					}
         				}
@@ -507,12 +471,8 @@ define([
         				}
         			}
         		};
-        	}
         },
-		'no-fallthrough' : {
-		    description: ProblemMessages['no-fallthrough-description'],
-		    url: 'http://eslint.org/docs/rules/no-fallthrough', //$NON-NLS-1$
-		    rule: function(context) {
+		'no-fallthrough': function(context) {
         		function fallsthrough(node) {
         		    // cases with no statements or only a single case are implicitly fall-through
         		    if(node.consequent) {
@@ -585,12 +545,8 @@ define([
         			    }
         			 }
         		};
-        	}
         },
-        "no-implied-eval" : {
-        	description: ProblemMessages['no-implied-eval-description'],
-        	url: 'http://eslint.org/docs/rules/no-implied-eval', //$NON-NLS-1$
-        	rule: function(context) {
+        "no-implied-eval": function(context) {
         		return {
         			"CallExpression": function(node) {
         				try {
@@ -625,15 +581,11 @@ define([
         				}
         			}
         		};
-        	}
         },
-        "no-iterator": {
-            description: ProblemMessages['no-iterator-description'],
-            url: 'http://eslint.org/docs/rules/no-iterator', //$NON-NLS-1$
-            rule: function(context) {
+        "no-iterator": function(context) {
                 return {
                     'MemberExpression': function(node) {
-                        if(node.property != null) {
+                        if(node.property !== null) {
                             if(node.computed) {
                                 if(node.property.value === '__iterator__') {
                                     context.report(node.property, ProblemMessages['no-iterator']);
@@ -644,15 +596,11 @@ define([
                         }
                     }
                 };
-            }
         },
-        "no-proto": {
-            description: ProblemMessages['no-proto-description'],
-            url: 'http://eslint.org/docs/rules/no-proto.html', //$NON-NLS-1$
-            rule: function(context) {
+        "no-proto": function(context) {
                 return {
                     'MemberExpression': function(node) {
-                        if(node.property != null) {
+                        if(node.property !== null) {
                             if(node.computed) {
                                 if(node.property.value === '__proto__') {
                                     context.report(node.property, ProblemMessages['no-proto']);
@@ -663,11 +611,8 @@ define([
                         }
                     }
                 };
-            }
         },
-		'no-jslint': {
-		    description: ProblemMessages['no-jslint-description'],
-		    rule: function(context) {
+		'no-jslint': function(context) {
         		return {
         			'Program' : function(node) {
         			    try {
@@ -696,18 +641,15 @@ define([
         			    }
         			 }
         		};
-        	}
         },
-		"no-new-array": {
-		    description: ProblemMessages['no-new-array-description'],
-		    rule: function(context) {
+		"no-new-array": function(context) {
 		    	function checkNode(node) {
 		    		var callee = node.callee;
 	    			if (callee && callee.name === 'Array') {
 						var args = node.arguments;
 						if(args.length > 1) {
 							context.report(callee, ProblemMessages['no-new-array']);
-						} else if(args.length === 1 && (args[0].type === 'Literal' && typeof(args[0].value) !== 'number')) {
+						} else if(args.length === 1 && (args[0].type === 'Literal' && typeof args[0].value !== 'number')) {
 							context.report(callee, ProblemMessages['no-new-array']);
 						}
 					}
@@ -716,12 +658,8 @@ define([
         			'NewExpression': checkNode,
         			'CallExpression': checkNode
         		};
-        	}
         },
-		"no-new-func": {
-		    description: ProblemMessages['no-new-func-description'],
-		    url: 'http://eslint.org/docs/rules/no-new-func', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-new-func": function(context) {
         		return {
         			'NewExpression': function(node) {
         				var callee = node.callee;
@@ -730,12 +668,8 @@ define([
 	    				}
         			}
         		};
-        	}
         },
-		"no-new-object": {
-		    description: ProblemMessages['no-new-object-description'],
-		    url: 'http://eslint.org/docs/rules/no-new-object', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-new-object": function(context) {
 		   		return {
         			'NewExpression': function(node) {
         				var callee = node.callee;
@@ -744,12 +678,8 @@ define([
 	    				}
         			}
         		};
-        	}
         },
-		"no-new-wrappers": {
-		    description: ProblemMessages['no-new-wrappers-description'],
-		    url: 'http://eslint.org/docs/rules/no-new-wrappers', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-new-wrappers": function(context) {
         		var wrappers = ["String", "Number", "Math", "Boolean", "JSON"]; //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-5$
 				return {
         			'NewExpression': function(node) {
@@ -759,21 +689,14 @@ define([
 	    				}
         			}
         		};
-        	}
         },
-        "no-with": {
-        	description: ProblemMessages['no-with-description'],
-        	url: 'http://eslint.org/docs/rules/no-with', //$NON-NLS-1$
-        	rule: function(context) {
+        "no-with": function(context) {
         		return {'WithStatement': function(node) {
 	        			context.report(node, ProblemMessages['no-with'], null, context.getFirstToken(node));
 	        		}
         		};
-        	}
         },
-		"missing-nls": {
-        	description: ProblemMessages['missing-nls-description'],
-        	rule: function(context){
+		"missing-nls": function(context){
         		function reportMissingNLS(node, index){
         			var data = Object.create(null);
         			data.indexOnLine = index;
@@ -798,17 +721,32 @@ define([
                     	context._isMissingNLSActive = false;
                     	// Read each line in the map and check if there are non-nls statements
                     	if (context._linesWithStringLiterals){
-                    		for (var lineNumber in context._linesWithStringLiterals) {
+                    		
+                    		var comments = node.comments;
+	                    	var linesWithComments = {};
+	                    	if (Array.isArray(comments)){
+	                    		for (var f=0; f<comments.length; f++) {
+	                    			var comment = comments[f];
+	                    			if (comment.type.toLowerCase() === 'line'){
+	                    				var lineNumber = comment.loc.end.line;
+								        linesWithComments[lineNumber] = "//" + comment.value; // Add in leading // to simply regex //$NON-NLS-1$
+	                    			}
+	                    		}
+	                    	}
+                    		
+                    		for (lineNumber in context._linesWithStringLiterals) {
                     			var nodes = context._linesWithStringLiterals[lineNumber];
 							    if (nodes) {
 							    	
 							    	// 0 based line count
-							        var line = context.getSourceLines()[lineNumber-1];
+									comment = linesWithComments[lineNumber];
 							        var nonNlsRegExp = /\/\/\$NON-NLS-([0-9])+\$/g;
 							        var match;
-							        var comments = [];
-							        while ((match = nonNlsRegExp.exec(line)) != null){
-							        	comments.push(match[1]);
+							        comments = [];
+							    	if (comment){
+								        while ((match = nonNlsRegExp.exec(comment)) !== null){
+								        	comments.push(match[1]);
+								        }
 							        }
 
 							        for (var i=0; i<nodes.length; i++) {
@@ -837,11 +775,8 @@ define([
                     	}
                     }
 				};
-        	}
         },
-        "unnecessary-nls": {
-        	description: ProblemMessages['unnecessary-nls-description'],
-        	rule: function(context){
+        "unnecessary-nls": function(context){
         		function reportUnusedNLS(range, value, nlsCommentValue){
 					context.report({range: range, loc: {start: range[0], end: range[1]}, value: value}, ProblemMessages['unnecessary-nls'], {data: {nlsComment: nlsCommentValue}});
         		}
@@ -856,7 +791,9 @@ define([
                      * @callback
                      */
                     'Program': function(node){
-                    	context._linesWithStringLiterals = Object.create(null);
+                    	if (!context._isMissingNLSActive){
+                    		context._linesWithStringLiterals = Object.create(null);
+                		}
                     },
                     /**
                      * @callback
@@ -887,13 +824,10 @@ define([
 							    	delete linesWithComments[lineNumber];
 								    nlsComments = [];
 							        if (comment) {
-								        while ((match = nonNlsRegExp.exec(comment.value)) != null){
+								        while ((match = nonNlsRegExp.exec(comment.value)) !== null){
 								        	nlsComments.push(match);
 								        }
 						        	}
-						        	
-						        	// TODO Disallow duplicate comments "//$NON-NLS-0$ //$NON-NLS-1$" and "//$NON-NLS-1$ //$NON-NLS-1$""
-
 									for (var j=0; j<nlsComments.length; j++) {
 										match = nlsComments[j];
 							        	var hasMatch = false;
@@ -926,7 +860,24 @@ define([
                     	for (lineNumber in linesWithComments){
                     		comment = linesWithComments[lineNumber];
                     		if (comment){
-                    			while ((match = nonNlsRegExp.exec(comment.value)) != null){
+                    			// See if there is any code on the line before the comment
+                    			var index = comment.range[0]-1;
+                    			var text = node.sourceFile.text;
+                    			var isBlank = index < 0;  //If we happen to be at the start of the file treat as newline
+                    			var prevChar;
+                    			if (text){
+	                    			while (index >= 0 && (prevChar = text.charAt(index)).match(/\s/)){
+	                    				if (prevChar === '\n' || index === 0){
+	                    					isBlank = true;
+	                    					break;
+	                    				}
+	                    				index--;
+	                    			}
+                				}
+                    			while ((match = nonNlsRegExp.exec(comment.value)) !== null){
+                    				if (isBlank && match.index > 0){
+                    					break; // We are on a commented out line of code, skip marking non-nls messages
+                    				}
                     				value = match[1] ? match[0] : '//' + match[0]; //$NON-NLS-1$
 									start = comment.range[0] + match.index;
 									if (match[1]){
@@ -938,12 +889,8 @@ define([
                     	}
                     }
 				};
-        	}
         },
-		"no-redeclare": {
-		    description: ProblemMessages['no-redeclare-description'],
-		    url: 'http://eslint.org/docs/rules/no-redeclare', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-redeclare": function(context) {
                 function reportRedeclaration(node, name) {
                     context.report(node, ProblemMessages['no-redeclare'], {0:name});
                 }
@@ -964,22 +911,18 @@ define([
                 }
 
                 return {
-                    "Program": checkScope,  //$NON-NLS-0$
-                    "FunctionDeclaration": checkScope,  //$NON-NLS-0$
-                    "FunctionExpression": checkScope,  //$NON-NLS-0$
-                    "ArrowFunctionExpression": checkScope //$NON-NLS-0$
+                    "Program": checkScope,
+                    "FunctionDeclaration": checkScope,
+                    "FunctionExpression": checkScope,
+                    "ArrowFunctionExpression": checkScope
                 };
-        	}
         },
-        "no-regex-spaces": {
-            description: ProblemMessages['no-regex-spaces-description'],
-            url: 'http://eslint.org/docs/rules/no-regex-spaces', //$NON-NLS-1$
-            rule: function(context) {
+        "no-regex-spaces": function(context) {
 
                 function reportSpaces(node) {
                     var regex = /( {2,})/g;
                     var val = null;
-                    while((val = regex.exec(node.raw)) != null) {
+                    while((val = regex.exec(node.raw)) !== null) {
                         var start = node.range[0]+val.index;
                         var len = val[0].length;
                         context.report({type: 'Literal', range:[start, start+len], loc: node.loc},  //$NON-NLS-1$
@@ -1000,12 +943,8 @@ define([
                         }
                     }
                 };
-            }
         },
-        "no-reserved-keys": {
-            description: ProblemMessages['no-reserved-keys-description'],
-            url: 'http://eslint.org/docs/rules/no-reserved-keys', //$NON-NLS-1$
-            rule: function(context) {
+        "no-reserved-keys": function(context) {
                 return {
                     'ObjectExpression': function(node) {
                         if(node.properties) {
@@ -1018,12 +957,8 @@ define([
                         }
                     }
                 };
-            }
         },
-        "no-shadow": {
-            description: ProblemMessages['no-shadow-description'],
-            url: 'http://eslint.org/docs/rules/no-shadow', //$NON-NLS-1$
-            rule: function(context) {
+        "no-shadow": function(context) {
                 function addVariables(map, scope) {
                     scope.variables.forEach(function(variable) {
                         var name = variable.name;
@@ -1062,7 +997,7 @@ define([
 
                 function isParameter(variable) {
                     return variable.defs.some(function(def) {
-                        return def.type === "Parameter";  //$NON-NLS-0$
+                        return def.type === "Parameter";
                     });
                 }
 
@@ -1072,7 +1007,7 @@ define([
                         var scope = context.getScope();
                         if (node.type === "FunctionExpression" && node.id && node.id.name) {
                             scope  = scope.upper;
-                            if (scope.type === "global") {//$NON-NLS-0$
+                            if (scope.type === "global") {
 	                            return; // No shadowing can occur in the global (Program) scope
 	                        }
                         }
@@ -1084,7 +1019,7 @@ define([
                             // If variable's name was first bound in an upper scope, and the variable is not a parameter,
                             // flag it.
                             var bindingSource;
-                            if ((bindingSource = symbolMap[variable.name]) && bindingSource !== scope && !isParameter(variable)) { //$NON-NLS-0$
+                            if ((bindingSource = symbolMap[variable.name]) && bindingSource !== scope && !isParameter(variable)) {
                                 reportShadow(variable.defs[0].name, variable.name);
                             }
                         });
@@ -1093,16 +1028,13 @@ define([
                     }
                 }
                 return {
-                    "Program": checkScope, //$NON-NLS-0$
-                    "FunctionDeclaration": checkScope, //$NON-NLS-0$
-                    "FunctionExpression": checkScope, //$NON-NLS-0$
-                    "ArrowFunctionExpression": checkScope //$NON-NLS-0$
+                    "Program": checkScope,
+                    "FunctionDeclaration": checkScope,
+                    "FunctionExpression": checkScope,
+                    "ArrowFunctionExpression": checkScope
                 };
-            }
         },
-        "no-shadow-global": {
-            description: ProblemMessages['no-shadow-global-description'],
-            rule: function(context) {
+        "no-shadow-global": function(context) {
 
                 function checkShadow(node) {
                     var env = context.env ? context.env : {};
@@ -1133,12 +1065,8 @@ define([
                     'ArrowFunctionExpression': checkShadow,
                     'VariableDeclarator': checkShadow
                 };
-            }
         },
-		'no-sparse-arrays': {
-		    description: ProblemMessages['no-sparse-arrays-description'],
-		    url: 'http://eslint.org/docs/rules/no-sparse-arrays', //$NON-NLS-1$
-		    rule: function(context) {
+		'no-sparse-arrays': function(context) {
         		return {
         			'ArrayExpression' : function(node){
         			    if(node.elements.indexOf(null) > -1) {
@@ -1146,12 +1074,8 @@ define([
         			    }
         			}
         		};
-        	}
         },
-        "no-throw-literal": {
-            description: ProblemMessages['no-throw-literal-description'],
-            url: 'http://eslint.org/docs/rules/no-throw-literal', //$NON-NLS-1$
-            rule: function(context) {
+        "no-throw-literal": function(context) {
                 return {
                     "ThrowStatement": function(node) {
                         try {
@@ -1174,15 +1098,11 @@ define([
                         }
                     }
                 };
-           }
         },
-		"no-undef": {
-		    description: ProblemMessages['no-undef-description'],
-		    url: 'http://eslint.org/docs/rules/no-undef', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-undef": function(context) {
                 function isImplicitGlobal(variable) {
                     return variable.defs.every(function(def) {
-                        return def.type === "ImplicitGlobalVariable";  //$NON-NLS-0$
+                        return def.type === "ImplicitGlobalVariable";
                     });
                 }
 
@@ -1202,7 +1122,7 @@ define([
                 }
 
                 return {
-                    "Program": function(/*node*/) {  //$NON-NLS-0$
+                    "Program": function(/*node*/) {
             			try {
             	            var globalScope = context.getScope();
 
@@ -1224,13 +1144,8 @@ define([
                     	}
                     }
                 };
-
-            }
         },
-        'no-undef-init': {
-        	description: ProblemMessages['no-undef-init-description'],
-        	url: 'http://eslint.org/docs/rules/no-undef-init.html', //$NON-NLS-1$
-        	rule: function(context) {
+        'no-undef-init': function(context) {
         		return {
         			'VariableDeclarator': function(node) {
         				if(node.init && node.init.type === 'Identifier' && node.init.name === 'undefined') {
@@ -1238,12 +1153,8 @@ define([
         				}
         			}
         		};
-        	}
         },
-		'no-unreachable' : {
-		    description: ProblemMessages['no-unreachable-description'],
-		    url: 'http://eslint.org/docs/rules/no-unreachable', //$NON-NLS-1$
-		    rule: function(context) {
+		'no-unreachable': function(context) {
                 /**
                  * @description Returns if the statement is 'hoisted'
                  * @param {Object} node The AST node to check
@@ -1294,17 +1205,14 @@ define([
                         checkUnreachable(node.consequent);
                     }
                 };
-        	}
         },
-		"no-unused-params" : {
-		    description: ProblemMessages['no-unused-params-description'],
-		    rule: function(context) {
+		"no-unused-params" : function(context) {
                 function hasCallbackComment(node) {
                     if(node && node.leadingComments) {
                         var len = node.leadingComments.length;
                         for(var i = 0; i < len; i++) {
                             var comment = node.leadingComments[i];
-                            if(comment.type === 'Block' && /\s*(?:@callback)\s+/.test(comment.value)) {
+                            if (comment.type === 'Block' && /\s*(?:@(callback|public))\s+/.test(comment.value)) {
                                 return true;
                             }
                         }
@@ -1320,7 +1228,7 @@ define([
         					scope = kids[0];
         				}
         				scope.variables.forEach(function(variable) {
-        					if (!variable.defs.length || variable.defs[0].type !== "Parameter") { // only care about parameters  //$NON-NLS-0$
+        					if (!variable.defs.length || variable.defs[0].type !== "Parameter") { // only care about parameters
         						return;
         					}
         					var defnode = variable.defs[0].name;
@@ -1393,19 +1301,15 @@ define([
         			"FunctionExpression": check,
         			"ArrowFunctionExpression": check
         		};
-        	}
         },
-		"no-unused-vars": {
-		    description: ProblemMessages['no-unused-vars-description'],
-		    url: 'http://eslint.org/docs/rules/no-unused-vars', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-unused-vars": function(context) {
         		function isRead(ref) {
         			return ref.isRead();
         		}
 
         		function getReferences(scope, variable) {
         			var refs = variable.references;
-        			if (scope.type === "global") {  //$NON-NLS-0$
+        			if (scope.type === "global") {
         				// For whatever reason, a reference to some variable 'x' defined in global scope does not cause an entry
         				// in x.references or globalScope.references. So we append any refs in globalScope.through that mention x.
         				refs = refs.concat(scope.through.filter(function(ref) {
@@ -1419,7 +1323,7 @@ define([
         			try {
         				var scope = context.getScope();
         				scope.variables.forEach(function(variable) {
-        					if (!variable.defs.length || variable.defs[0].type === "Parameter") { // Don't care about parameters  //$NON-NLS-0$
+        					if (!variable.defs.length || variable.defs[0].type === "Parameter") { // Don't care about parameters
         						return;
         					}
         					var node = variable.defs[0].node;
@@ -1446,14 +1350,10 @@ define([
         			"FunctionExpression": check,
         			"ArrowFunctonExpression": check
         		};
-        	}
         },
-		"no-use-before-define": {
-		    description: ProblemMessages['no-use-before-define-description'],
-		    url: 'http://eslint.org/docs/rules/no-use-before-define', //$NON-NLS-1$
-		    rule: function(context) {
+		"no-use-before-define": function(context) {
                 function booleanOption(b, defaultValue) {
-            		return typeof b === "boolean" ? b : defaultValue;  //$NON-NLS-0$
+            		return typeof b === "boolean" ? b : defaultValue;
             	}
 
         		var options = context.options,
@@ -1467,7 +1367,7 @@ define([
         					var decl = util.getDeclaration(ref, scope), identifier = ref.identifier, name = identifier.name, defs;
         					if (decl && (defs = decl.defs).length && identifier.range[0] < defs[0].node.range[0]) {
         						var defType = defs[0].type;
-        						if ((!flag_funcs && defType === "FunctionName") || (!flag_vars && defType === "Variable")) {  //$NON-NLS-0$  //$NON-NLS-1$
+        						if ((!flag_funcs && defType === "FunctionName") || (!flag_vars && defType === "Variable")) {
         							return;
         						}
         						context.report(identifier, ProblemMessages['no-use-before-define'], {0:name});
@@ -1480,25 +1380,21 @@ define([
         		}
 
         		return {
-        			"Program": check,  //$NON-NLS-0$
-        			"FunctionExpression": check,  //$NON-NLS-0$
-        			"FunctionDeclaration": check  //$NON-NLS-0$
+        			"Program": check,
+        			"FunctionExpression": check,
+        			"FunctionDeclaration": check
         		};
-        	}
         },
-        "radix": {
-            description: ProblemMessages['radix-description'],
-            url: 'http://eslint.org/docs/rules/radix', //$NON-NLS-1$
-            rule: function(context) {
+        "radix": function(context) {
                 function checkParseInt(call) {
                     var callee = call.callee;
-                    if (callee.name === "parseInt" && callee.type === "Identifier" && call.arguments.length < 2) { //$NON-NLS-1$ //$NON-NLS-0$
+                    if (callee.name === "parseInt" && callee.type === "Identifier" && call.arguments.length < 2) {
                         // Ensure callee actually resolves to the global `parseInt`
                         var shadowed = false;
-                        for (var scope = context.getScope(); scope; scope = scope.upper) { //$NON-NLS-0$
+                        for (var scope = context.getScope(); scope; scope = scope.upper) {
                             shadowed = scope.variables.some(function(variable) {
                                 // Found a `parseInt` that is not the builtin
-                                return variable.name === "parseInt" && variable.defs.length; //$NON-NLS-0$
+                                return variable.name === "parseInt" && variable.defs.length;
                             });
                             if (shadowed) {
                                 break;
@@ -1512,12 +1408,8 @@ define([
                 return {
                     "CallExpression": checkParseInt
                 };
-            }
         },
-		"no-mixed-spaces-and-tabs": {
-			description: ProblemMessages['no-mixed-spaces-and-tabs-description'],
-			url: 'http://eslint.org/docs/rules/no-mixed-spaces-and-tabs', //$NON-NLS-1$
-			rule: function(context) {
+		"no-mixed-spaces-and-tabs": function(context) {
 				var ignoredLocations = [];
 				// we define a regular expression that matches any line that starts with spaces after tabs before any other character
 				// any space after a tab \            (not a problem with smart-tabs)
@@ -1619,20 +1511,16 @@ define([
 				}
 
 				return {
-					"Program:exit": checkProgram, //$NON-NLS-1$
+					"Program:exit": checkProgram
 				};
-			}
 		},
-		"semi": {
-		    description: ProblemMessages['semi-description'],
-		    url: 'http://eslint.org/docs/rules/semi', //$NON-NLS-1$
-		    rule: function(context) {
+		"semi": function(context) {
         		function checkForSemicolon(node) {
         			try {
         				var tokens = context.getTokens(node);
         				var len = tokens.length;
         				var t = tokens[len - 1];
-        				if (t && t.type === "Punctuator" && t.value === ";") {  //$NON-NLS-0$  //$NON-NLS-1$
+        				if (t && t.type === "Punctuator" && t.value === ";") {
         					return;
         				}
         				context.report(node, ProblemMessages['semi'], null, t /* expose the bad token */);
@@ -1647,7 +1535,7 @@ define([
         				var ancestors = context.getAncestors(node),
         				    parent = ancestors[ancestors.length - 1],
         				    parentType = parent.type;
-        				if ((parentType === "ForStatement" && parent.init === node) || (parentType === "ForInStatement" && parent.left === node)){  //$NON-NLS-0$  //$NON-NLS-1$
+        				if ((parentType === "ForStatement" && parent.init === node) || (parentType === "ForInStatement" && parent.left === node)){
         					// One of these cases, no semicolon token is required after the VariableDeclaration:
         					// for(var x;;)
         					// for(var x in y)
@@ -1661,19 +1549,15 @@ define([
         		}
 
         		return {
-        			"VariableDeclaration": checkVariableDeclaration,  //$NON-NLS-0$
-        			"ExpressionStatement": checkForSemicolon,  //$NON-NLS-0$
-        			"ReturnStatement": checkForSemicolon,  //$NON-NLS-0$
-        			"ThrowStatement": checkForSemicolon,  //$NON-NLS-0$
-        			"BreakStatement": checkForSemicolon,  //$NON-NLS-0$
-        			"ContinueStatement": checkForSemicolon  //$NON-NLS-0$
+        			"VariableDeclaration": checkVariableDeclaration,
+        			"ExpressionStatement": checkForSemicolon,
+        			"ReturnStatement": checkForSemicolon,
+        			"ThrowStatement": checkForSemicolon,
+        			"BreakStatement": checkForSemicolon,
+        			"ContinueStatement": checkForSemicolon
         		};
-        	}
         },
-		"use-isnan" : {
-		    description: ProblemMessages['use-isnan-description'],
-		    url: 'http://eslint.org/docs/rules/use-isnan', //$NON-NLS-1$
-		    rule: function(context) {
+		"use-isnan": function(context) {
         		return {
         			'BinaryExpression' : function(node) {
         				try {
@@ -1688,12 +1572,8 @@ define([
         				}
         			}
         		};
-        	}
         },
-		'valid-typeof' : {
-		    description: ProblemMessages['valid-typeof-description'],
-		    url: 'http://eslint.org/docs/rules/valid-typeof', //$NON-NLS-1$
-		    rule: function(context) {
+		'valid-typeof': function(context) {
         		//https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof
         		var symbols = ['undefined', 'object', 'function', 'boolean', 'number', 'string', 'symbol']; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$ //$NON-NLS-7$
         		var ops = ['==', '===', '!=', '!=='];
@@ -1712,11 +1592,176 @@ define([
         			    }
         			}
         		};
+        },
+        
+        // Rules consumed from ESLint 3rd party library
+		'accessor-pairs': accessorPairs,
+		'no-control-regex': noControlRegex,
+		'no-duplicate-case': noDuplicateCase,
+		'no-empty-character-class': noEmptyCharClasses,
+		'no-extra-boolean-cast': noExtraBoolCast,
+		'no-extra-parens': noExtraParens,
+		'no-invalid-regexp': noInvalidRegExp,
+		'no-negated-in-lhs': noNegatedInLhs,
+		'no-obj-calls': noObjCalls,
+		'no-eq-null' : noEqNull,
+		'no-else-return': noElseReturn,
+		'no-empty-label': noEmptyLabel,
+		'no-self-compare': noSelfCompare,
+		'no-irregular-whitespace': noIrregularWhitespace,
+		'no-self-assign': function(context) {
+				function checkVariableDeclarator(variableDeclarator) {
+					var init = variableDeclarator.init;
+					var id = variableDeclarator.id;
+					if (init
+							&& init.type === 'Identifier'
+							&& id.type === 'Identifier'
+							&& id.name === init.name) {
+						context.report(variableDeclarator, ProblemMessages['no-self-assign']);
+					}
+				}
+				function checkAssignmentExpression(assignment) {
+					var left = assignment.left;
+					var right = assignment.right;
+					if (left.type === 'Identifier'
+							&& right.type === 'Identifier'
+							&& left.name === right.name) {
+						context.report(assignment, ProblemMessages['no-self-assign']);
+					}
+				}
+				return {
+					"AssignmentExpression" : checkAssignmentExpression,
+					"VariableDeclarator" : checkVariableDeclarator
+				};
+			},
+		'type-checked-consistent-return' : function(context) {
+				var functions = [];
+			
+				//--------------------------------------------------------------------------
+				// Helpers
+				//--------------------------------------------------------------------------
+			
+				/**
+				 * Marks entrance into a function by pushing a new object onto the functions
+				 * stack.
+				 * @returns {void}
+				 * @private
+				 */
+				function enterFunction() {
+					functions.push({});
+				}
+			
+				/**
+				 * Marks exit of a function by popping off the functions stack.
+				 * @returns {void}
+				 * @private
+				 */
+				function exitFunction() {
+					functions.pop();
+				}
+			
+				function getValue(node) {
+					if (node.argument) {
+						var type = node.argument.type;
+						switch(type) {
+							case "Literal" :
+								if (node.argument.value === null) {
+									return "null";
+								}
+								return typeof node.argument.value;
+							case "BinaryExpression" :
+								// walk the node to find out if one of the operand is a string
+								var foundType = null;
+								Estraverse.traverse(node.argument, {
+									enter: /** @callback */function(n, parent) {
+										if (n.type === "Literal") {
+											if (n.value !== null) {
+												if (foundType === null) {
+													// get the type of the current Literal
+													foundType = typeof n.value;
+												} else {
+													switch(foundType) {
+														case "object" :
+															return Estraverse.VisitorOption.Break;
+														case "string" :
+															return Estraverse.VisitorOption.Break;
+														case "number" :
+															var nodeType = typeof n.value;
+															if (nodeType !== "number") {
+																foundType = nodeType;
+															}
+													}
+												}
+											}
+										}
+									}
+								});
+								if(foundType !== null) {
+									return foundType;
+								}
+								return "object";
+							default:
+								return "object";
+						}
+					}
+					return "undefined";
+				}
+			
+				//--------------------------------------------------------------------------
+				// Public
+				//--------------------------------------------------------------------------
+			
+				return {
+			
+					"Program": enterFunction,
+					"FunctionDeclaration": enterFunction,
+					"FunctionExpression": enterFunction,
+					"ArrowFunctionExpression": enterFunction,
+			
+					"Program:exit": exitFunction,
+					"FunctionDeclaration:exit": exitFunction,
+					"FunctionExpression:exit": exitFunction,
+					"ArrowFunctionExpression:exit": exitFunction,
+			
+					"ReturnStatement": function(node) {
+			
+						var returnInfo = functions[functions.length - 1];
+						var returnTypeDefined = "type" in returnInfo;
+			
+						if (returnTypeDefined) {
+							var typeOfReturnStatement = getValue(node);
+							var storeType = returnInfo.type;
+							if (storeType !== typeOfReturnStatement) {
+								// "null" and "object" or "string" are compatible
+								switch(storeType) {
+									case "null" :
+										if (typeOfReturnStatement !== "object" && typeOfReturnStatement !== "string") {
+											context.report(node, ProblemMessages['inconsistent-return'], {type1: storeType, type2: typeOfReturnStatement});
+										}
+										break;
+									case "string" :
+										if (typeOfReturnStatement !== "null") {
+											context.report(node, ProblemMessages['inconsistent-return'], {type1: storeType, type2: typeOfReturnStatement});
+										}
+										break;
+									case "object" :
+										if (typeOfReturnStatement !== "null") {
+											context.report(node, ProblemMessages['inconsistent-return'], {type1: storeType, type2: typeOfReturnStatement});
+										}
+										break;
+									default:
+										context.report(node, ProblemMessages['inconsistent-return'], {type1: storeType, type2: typeOfReturnStatement});
+								}
+							}
+						} else {
+							returnInfo.type = getValue(node);
+						}
+					}
+				};
 			}
-        }
-    };
-    
-    function _mapCallees(arr, obj) {
+	};
+
+	function _mapCallees(arr, obj) {
 		for(var i = 0; i < arr.length; i++) {
 			obj[arr[i]] = true;
 		}
@@ -1790,33 +1835,7 @@ define([
     	}
     }
 
-    /**
-     * @name getRules
-     * @description The raw rule object
-     * @returns {Object} The raw rule object
-     */
-    function getRules() {
-        return rules;
-    }
-
-    /**
-     * @name getESLintRules
-     * @description Returns the rule object for ESLint
-     * @returns {Object} The rule object
-     * @since 7.0
-     */
-    function getESLintRules() {
-        var ruleobj = Object.create(null);
-        var keys = Object.keys(rules);
-        for (var i=0; i<keys.length; i++) {
-            var rule = keys[i];
-            ruleobj[rule] = rules[rule].rule;
-        }
-        return ruleobj;
-    }
-
 	return {
-	    getRules: getRules,
-	    getESLintRules: getESLintRules
+		rules: rules
 	};
 });

@@ -45,6 +45,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 		this.commandRegistry = params.commandRegistry;
 		this.contentTypeRegistry = params.contentTypeRegistry;
 		this.fileClient = params.fileClient;
+		this.searcher = params.searcher;
 		this.editorInputManager = params.editorInputManager;
 		this.outlineService = params.outlineService;
 		this.parentNode = lib.node(params.parent);
@@ -318,7 +319,9 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				serviceRegistry: this.serviceRegistry,
 				commandRegistry: this.commandRegistry,
 				fileClient: this.fileClient,
-				preferences: this.preferences
+				searcher: this.searcher,
+				preferences: this.preferences,
+				inputManager: this.editorInputManager
 			});
 			
 			this._lastSearchRoot = null;

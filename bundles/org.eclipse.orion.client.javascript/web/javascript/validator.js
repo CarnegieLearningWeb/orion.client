@@ -12,15 +12,14 @@
 /*eslint-env amd*/
 define([
 	"orion/objects",
-	"json!javascript/rules.json",
+	"javascript/ruleData",
 	"orion/i18nUtil",
 	"i18n!javascript/nls/problems",
-	'orion/Deferred',
-	"javascript/finder"
-], function(Objects, Rules, i18nUtil, messages, Deferred, Finder) {
+	'orion/Deferred'
+], function(Objects, Rules, i18nUtil, messages, Deferred) {
 	var config = {
 		// 0:off, 1:warning, 2:error
-		defaults: Rules.rules,
+		defaults: Rules.defaults,
 		
 		/**
 		 * @description Sets the given rule to the given enabled value
@@ -62,12 +61,10 @@ define([
 	 * @constructor
 	 * @public
 	 * @param {javascript.ASTManager} astManager The AST manager backing this validator
-	 * @param {javascript.CUProvider} cuProvider
 	 * @returns {ESLintValidator} Returns a new validator
 	 */
-	function ESLintValidator(ternWorker, cuProvider) {
+	function ESLintValidator(ternWorker) {
 		this.ternWorker = ternWorker;
-		this.cuprovider = cuProvider;
 		config.setDefaults();
 	}
 	
@@ -90,7 +87,8 @@ define([
 			}
 		}
 		else {
-			val = ruleConfig;
+			// TODO why we are overriding the severity computed by eslint based on the global config
+			val = prob.severity;
 		}
 		switch (val) {
 			case 1: return "warning"; //$NON-NLS-0$
@@ -146,17 +144,23 @@ define([
 			description: description,
 			severity: getSeverity(e)
 		};
-		if (e.node && e.nodeType === "Program" && typeof(e.line) !== 'undefined') {
+		if (e.nodeType) {
+			prob.nodeType = e.nodeType;
+		}
+		if (e.node && e.nodeType === "Program" && typeof e.line !== 'undefined') {
 			prob.line = e.line;
 			prob.start = e.column;
-		} else if(typeof(start) !== 'undefined') {
+		} else if(typeof start !== 'undefined') {
 			prob.start = start;
 			prob.end = end;
-		} else if(typeof(e.index) === 'number') {
+		} else if(typeof e.index === 'number') {
 			prob.start = end;
 			prob.end = e.index;
-		} else if(typeof(e.lineNumber) !== 'undefined') {
+		} else if(typeof e.lineNumber !== 'undefined') {
 			prob.line = e.lineNumber;
+			prob.start = e.column;
+		} else if (typeof e.line === 'number' && typeof e.column === 'number') {
+			prob.line = e.line;
 			prob.start = e.column;
 		} else {
 			prob.start = 0;
@@ -177,30 +181,23 @@ define([
 		 * @param {orion.edit.EditorContext} editorContext The editor context
 		 * @param {Object} context The in-editor context (selection, offset, etc)
 		 * @returns {orion.Promise} A promise to compute some problems
+		 * @callback
 		 */
-		computeProblems: function(editorContext /*, context*/) {
+		computeProblems: function(editorContext , context, config) {
 			var _self = this;
 			var deferred = new Deferred();
 			editorContext.getFileMetadata().then(function(meta) {
-				if(meta.contentType.id === 'text/html') {
-					editorContext.getText().then(function(text) {
+				editorContext.getText().then(function(text) {
+					var env = null;
+					var isHtml = meta.contentType.id === 'text/html';
+					if(isHtml) {
 						//auto-assume browser env - https://bugs.eclipse.org/bugs/show_bug.cgi?id=458676
-						var env = Object.create(null);
+						env = Object.create(null);
 						env.browser = true;
-						// need to extract all scripts from the html text
-						var cu = _self.cuprovider.getCompilationUnit(function(){
-							return Finder.findScriptBlocks(text);
-						}, meta);
-						var cuText = cu.getEditorContext().getText();
-						cuText.then(function(cuSource) {
-							_self._validate(meta, cuSource, env, true, deferred);
-						});
-					});
-				} else {
-					editorContext.getText().then(function(text) {
-						_self._validate(meta, text, null, false, deferred);
-					});
-				}
+					}
+					// need to extract all scripts from the html text
+					_self._validate(meta, text, env, isHtml, deferred, config);
+				});
 			});
 			return deferred;
 		},
@@ -215,28 +212,31 @@ define([
 		 * @returns {Array|Object} The array of problem objects
 		 * @since 6.0
 		 */
-		_validate: function(meta, text, env, htmlMode, deferred) {
+		_validate: function(meta, text, env, htmlMode, deferred, configuration) {
 			// When validating snippets in an html file ignore undefined rule because other scripts may add to the window object
 			var undefRuleValue;
+			if (configuration) {
+				config.rules = configuration.rules;
+			}
 			if (htmlMode) {
 				undefRuleValue = config.rules['no-undef'];
 				config.rules['no-undef'] = 0;
 			}
 			
-			config.env = env;
 			var files = [{type: 'full', name: meta.location, text: text}]; //$NON-NLS-1$
 			var request = {request: 'lint', args: {meta: {location: meta.location}, files: files, rules: config.rules}}; //$NON-NLS-1$
 			if(env) {
+				config.env = env;
 				request.env = config.env;
 			}
 			this.ternWorker.postMessage(
 				request, 
 				/* @callback */ function(type, err) {
-						var eslintErrors = []; 
+						var eslintErrors = [];
 						if(err) {
 							eslintErrors.push({
 								start: 0,
-								args: {0: err.error, nls: "eslintValidationFailure" }, //$NON-NLS-0$
+								args: {0: type.error, nls: "eslintValidationFailure" }, //$NON-NLS-0$
 								severity: "error" //$NON-NLS-0$
 							});
 						} else if (type.problems) {
@@ -245,10 +245,10 @@ define([
 							});
 						}
 						deferred.resolve({ problems: eslintErrors.map(toProblem) });
+						if (htmlMode) {
+							config.rules['no-undef'] = undefRuleValue;
+						}
 				});
-			if (htmlMode) {
-				config.rules['no-undef'] = undefRuleValue;
-			}
 		},
 
 		/**
@@ -272,7 +272,7 @@ define([
 		            continue;
 			    }
 			    var legacy = this._legacy[ruleId];
-			    if(typeof(legacy) === 'string') {
+			    if(typeof legacy === 'string') {
 			        ruleId = legacy;
 			        if(seen[ruleId]) {
 			            //don't overwrite a new pref name with a legacy one

@@ -174,6 +174,7 @@ define([
 			this._createShowTooltipCommand();
 			this._createUndoStackCommands();
 			this._createClipboardCommands();
+			this._createDelimiterCommands();
 			this._createEncodingCommand();
 			this._createSaveCommand();
 			return this._createEditCommands();
@@ -243,6 +244,13 @@ define([
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.showTooltip", 1, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding(113), null, this);//$NON-NLS-1$ //$NON-NLS-2$ 
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.blame", 2, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding('b', true, true), new mCommandRegistry.URLBinding("blame", "blame"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.diff", 3, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding('d', true, true), new mCommandRegistry.URLBinding("diff", "diff"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
+
+			// 'Delimiters' cascade
+			var index = 0;
+			commandRegistry.addCommandGroup(this.toolbarId, "orion.editorMenuBarMenuDelimitersGroup", 999, messages["Convert Line Delimiters"], "orion.menuBarToolsGroup"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(this.toolbarId, "orion.edit.convert.crlf", index++, "orion.menuBarToolsGroup/orion.editorMenuBarMenuDelimitersGroup", false, null, null, this); //$NON-NLS-1$ //$NON-NLS-2$
+			commandRegistry.registerCommandContribution(this.toolbarId, "orion.edit.convert.lf", index++, "orion.menuBarToolsGroup/orion.editorMenuBarMenuDelimitersGroup", false, null, null, this); //$NON-NLS-1$ //$NON-NLS-2$
+
 			commandRegistry.registerCommandContribution(this.toolbarId, "orion.edit.reloadWithEncoding", 1000, "orion.menuBarToolsGroup"); //$NON-NLS-1$ //$NON-NLS-2$
 			
 			this._registerCommandGroups(this.toolbarId, "orion.menuBarToolsGroup"); //$NON-NLS-1$
@@ -293,6 +301,11 @@ define([
 			commandRegistry.registerCommandContribution(this.editorContextMenuId , "orion.edit.blame", 1, "orion.editorContextMenuGroup/orion.editorContextMenuToolsGroup", false); //$NON-NLS-1$ //$NON-NLS-2$
 			commandRegistry.registerCommandContribution(this.editorContextMenuId , "orion.edit.diff", 2, "orion.editorContextMenuGroup/orion.editorContextMenuToolsGroup", false); //$NON-NLS-1$ //$NON-NLS-2$
 
+			// 'Delimiters' cascade
+			commandRegistry.addCommandGroup(this.editorContextMenuId, "orion.editorContextMenuDelimitersGroup", 999, messages["Convert Line Delimiters"], "orion.editorContextMenuGroup/orion.editorContextMenuToolsGroup"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(this.editorContextMenuId, "orion.edit.convert.crlf", index++, "orion.editorContextMenuGroup/orion.editorContextMenuToolsGroup/orion.editorContextMenuDelimitersGroup"); //$NON-NLS-1$ //$NON-NLS-2$
+			commandRegistry.registerCommandContribution(this.editorContextMenuId, "orion.edit.convert.lf", index++, "orion.editorContextMenuGroup/orion.editorContextMenuToolsGroup/orion.editorContextMenuDelimitersGroup"); //$NON-NLS-1$ //$NON-NLS-2$
+
 			this._registerCommandGroups(this.editorContextMenuId, "orion.editorContextMenuGroup/orion.editorContextMenuToolsGroup"); //$NON-NLS-1$
 
 			// Register extra tools commands
@@ -333,9 +346,7 @@ define([
 							that.textSearcher.show(data);
 							return true;
 						}
-						that.commandService.runCommand("orion.edit.find", null, null, new mCommandRegistry.ParametersDescription( //$NON-NLS-0$
-							[new mCommandRegistry.CommandParameter('useEditorSelection', 'text', '', "true")], //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
-							{clientCollect: true}));
+						that.commandService.runCommand("orion.edit.find"); //$NON-NLS-0$
 						return true;
 					}, that.commandService.findCommand("orion.edit.find")); //$NON-NLS-0$
 				}
@@ -448,6 +459,51 @@ define([
 			});
 			this.commandService.addCommand(settingsCommand);
 		},
+		
+		_createDelimiterCommands: function() {
+			
+			var that = this;
+			var convert = function (delimiter) {
+				var editor = that.editor;
+				if (editor && editor.getModel()) {
+					var textModel = editor.getModel();
+					textModel.setLineDelimiter(delimiter, true);
+					var progress = that.serviceRegistry.getService("orion.page.progress"); //$NON-NLS-0$
+					if (progress) {
+						var message = messages [delimiter === "\r\n" ? "ConversionCompleteCRLF" : "ConversionCompleteLF"];
+						progress.setProgressResult( {Message: message});
+					}
+					editor.focus();
+				}
+			};
+			
+			var convertToCrLfCommand = new mCommands.Command({
+				name: messages["Windows (CR/LF)"],
+				id: "orion.edit.convert.crlf", //$NON-NLS-1$
+				visibleWhen: /** @callback */ function(items, data) {
+					var editor = data.handler.editor || that.editor;
+					return editor && editor.installed;
+				},
+				callback: function() {
+					convert ("\r\n"); //$NON-NLS-1$
+				}
+			});
+			this.commandService.addCommand(convertToCrLfCommand);
+			
+			var convertToLfCommand = new mCommands.Command({
+				name: messages["Unix (LF)"],
+				id: "orion.edit.convert.lf", //$NON-NLS-1$
+				visibleWhen: /** @callback */ function(items, data) {
+					var editor = data.handler.editor || that.editor;
+					return editor && editor.installed;
+				},
+				callback: function() {
+					convert ("\n"); //$NON-NLS-1$
+				}
+			});
+			this.commandService.addCommand(convertToLfCommand);
+		},
+		
 		_createClipboardCommands: function() {
 			
 			//TODO - test to see whether copy/cut/paste is supported instead of IE
@@ -697,17 +753,15 @@ define([
 					var searchString = "";
 					var parsedParam = null;
 					var selection = editor.getSelection();
-					if (selection.end > selection.start) {//$NON-NLS-0$ If there is selection from editor, we want to use it as the default keyword
+					if (data.parameters && data.parameters.valueFor('find')) { //$NON-NLS-0$
+						searchString = data.parameters.valueFor('find'); //$NON-NLS-0$
+						parsedParam = mPageUtil.matchResourceParameters();
+						mSearchUtils.convertFindURLBinding(parsedParam);
+					} else if (selection.end > selection.start) {//$NON-NLS-0$ If there is selection from editor, we want to use it as the default keyword
 						var model = editor.getModel();
 						searchString = model.getText(selection.start, selection.end);
 						if (textSearcher.getOptions().regex) {
 							searchString = regex.escape(searchString);
-						}
-					} else {//If there is no selection from editor, we want to parse the parameter from URL binding
-						if (data.parameters && data.parameters.valueFor('find')) { //$NON-NLS-0$
-							searchString = data.parameters.valueFor('find'); //$NON-NLS-0$
-							parsedParam = mPageUtil.matchResourceParameters();
-							mSearchUtils.convertFindURLBinding(parsedParam);
 						}
 					}
 					if(parsedParam){
@@ -823,9 +877,6 @@ define([
 			if (serviceReference.getProperty("objectClass").indexOf("orion.edit.command") !== -1) { //$NON-NLS-1$ //$NON-NLS-2$
 				this._recreateEditCommands = true;
 			}
-			if (serviceReference.getProperty("objectClass").indexOf("orion.core.contenttype") !== -1) { //$NON-NLS-1$ //$NON-NLS-2$
-				contentTypesCache = null;
-			}
 		},
 		_onServiceAdded: function(serviceReference) {
 			if (serviceReference.getProperty("objectClass").indexOf("orion.edit.command") !== -1) { //$NON-NLS-1$ //$NON-NLS-2$
@@ -923,8 +974,8 @@ define([
 							offset: editor.getCaretOffset()
 						};
 						
-						// TODO: Make this more generic
-						if (info.scopeId === "orion.edit.quickfix") { //$NON-NLS-0$
+						// Provide the quick fix command with the selected annotation
+						if (info.scopeId === "orion.edit.quickfix") {
 							context.annotation = {
 								start: data.userData.start,
 								end: data.userData.end,
@@ -932,6 +983,27 @@ define([
 								id: data.userData.id,
 								data: data.userData.data
 							};
+							// Also include other annotations with the same id
+							// TODO: We are using the internals of the annotation model here
+							// TODO We also check the model existence in commands.js
+							if (data.userData.doFixAll && data.userData._annotationModel){
+								context.doFixAll = true;
+								context.annotations = [];
+								var allAnnotations = data.userData._annotationModel._annotations;
+								for (var i=0; i<allAnnotations.length; i++) {
+									if (allAnnotations[i].id === data.userData.id){
+										context.annotations.push(
+											{
+												start: allAnnotations[i].start,
+												end: allAnnotations[i].end,
+												title: allAnnotations[i].title,
+												id: allAnnotations[i].id,
+												data: allAnnotations[i].data
+											}
+										);
+									}
+								}
+							}
 						}
 						var editorContext = editor.getEditorContext();
 						// Hook up delegated UI and Status handling

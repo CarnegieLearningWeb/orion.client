@@ -588,7 +588,7 @@ define([
 		}, {});
 		mMetrics.initFromRegistry(serviceRegistry);
 		prefsService.addChangeListener(function(name, value) {
-			if (value.length < METRICS_MAXLENGTH && name.indexOf("/git/credentials/")) { //$NON-NLS-0$
+			if (value.length < METRICS_MAXLENGTH && name.indexOf("/git/credentials/") !== 0) { //$NON-NLS-0$
 				mMetrics.logEvent("preferenceChange", name, value); //$NON-NLS-0$
 			}
 		});
@@ -778,11 +778,11 @@ define([
 		};
 
 
-		var noTrim = window.orionNoTrim || false;
+		var noTrim = window.orionNoTrim || localStorage.orionNoTrim || false;
 		if (noTrim) {
 			toggleBannerFunc();
 			noBanner = true;
-			this.sideMenu.hide();
+			if (noTrim !== "bannerOnly") this.sideMenu.hide();
 		} else {
 			// Toggle trim command
 			var toggleBanner = new mCommands.Command({

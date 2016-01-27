@@ -50,13 +50,14 @@ define([
 	'orion/webui/tooltip',
 	'globaloria/htmlEditor',
 	'globaloria/javascriptEditor',
-	'orion/bidiUtils'
+	'orion/bidiUtils',
+	'orion/customGlobalCommands'
 ], function(
 	messages, Sidebar, mInputManager, mCommands, mGlobalCommands,
 	mTextModel, mUndoStack,
 	mFolderView, mEditorView, mPluginEditorView , mMarkdownView, mMarkdownEditor,
 	mCommandRegistry, mContentTypes, mFileClient, mFileCommands, mEditorCommands, mSelection, mStatus, mProgress, mOperationsClient, mOutliner, mDialogs, mExtensionCommands, ProjectCommands, mSearchClient,
-	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor, mJSEditor, bidiUtils
+	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor, mJSEditor, bidiUtils, mCustomGlobalCommands
 ) {
 
 var exports = {};
@@ -611,6 +612,26 @@ objects.mixin(EditorSetup.prototype, {
 		return menuBar.createCommands();
 	},
 	
+	createRunBar: function () {
+		var menuBar = this.menuBar;
+		var runBarParent = menuBar.runBarNode;
+		return mCustomGlobalCommands.createRunBar({
+			parentNode: runBarParent,
+			serviceRegistry: this.serviceRegistry,
+			commandRegistry: this.commandRegistry,
+			fileClient: this.fileClient,
+			projectCommands: ProjectCommands,
+			projectClient: this.serviceRegistry.getService("orion.project.client"),
+			progressService: this.progressService,
+			preferences: this.preferences,
+			editorInputManager: this.editorInputManager
+		}).then(function(runBar){
+			if (runBar) {
+				this.runBar = runBar;
+			}
+		}.bind(this));
+	},
+	
 	createSideBar: function() {
 		var commandRegistry = this.commandRegistry;
 		// Create input manager wrapper to handle multiple editors
@@ -656,6 +677,7 @@ objects.mixin(EditorSetup.prototype, {
 			outlineService: this.outlineService,
 			parent: this.sidebarDomNode,
 			progressService: this.progressService,
+			searcher: this.searcher,
 			selection: this.selection,
 			serviceRegistry: this.serviceRegistry,
 			sidebarNavInputManager: this.sidebarNavInputManager,
@@ -1083,14 +1105,16 @@ exports.setUpEditor = function(serviceRegistry, pluginRegistry, preferences, rea
 	Deferred.when(setup.createBanner(), function() {
 		setup.createMenuBar().then(function() {
 			setup.createSideBar();
-			setup.editorViewers.push(setup.createEditorViewer());
-			setup.setActiveEditorViewer(setup.editorViewers[0]);
-			if (enableSplitEditor) {
-				// Hide the split menu in the header menu
-				// setup.createSplitMenu();
-				setup.setSplitterMode(MODE_SINGLE);
-			}
-			setup.load();
+			setup.createRunBar().then(function() {
+				setup.editorViewers.push(setup.createEditorViewer());
+				setup.setActiveEditorViewer(setup.editorViewers[0]);
+				if (enableSplitEditor) {
+					// Billy - Hide the split menu in the header menu
+					// setup.createSplitMenu();
+					setup.setSplitterMode(MODE_SINGLE);
+				}
+				setup.load();
+			});
 		});
 	});
 };

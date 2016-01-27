@@ -11,8 +11,9 @@
  ******************************************************************************/
 /*eslint-env amd*/
 define([
-'orion/editor/templates'
-], function(mTemplates) {
+'orion/editor/templates',
+"i18n!javascript/nls/messages"
+], function(mTemplates, Messages) {
 
 	var typeofValues = {
 		type: "link", //$NON-NLS-0$
@@ -25,7 +26,7 @@ define([
 			"symbol", //$NON-NLS-1$
 			"undefined" //$NON-NLS-0$
 		],
-		title: 'Typeof Options',
+		title: Messages['typeofOptions'],
 		style: 'emphasis' //$NON-NLS-1$
 	};
 
@@ -102,29 +103,37 @@ define([
 		    prefix: "eslint", //$NON-NLS-0$
 			name: "eslint", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false, doc:false, jsdoc:false},
-			description: " - ESLint rule enable / disable directive", //$NON-NLS-0$
-			template: "/* eslint ${rule-id}:${0/1}*/" //$NON-NLS-0$
+			description: "",
+			template: "/* eslint ${rule-id}:${0/1}*/", //$NON-NLS-0$
+			url: "http://eslint.org/docs/user-guide/configuring.html#configuring-rules", //$NON-NLS-1$
+			doc: Messages['eslintRuleEnableDisable']
 		},
 		{
 		    prefix: "eslint-env", //$NON-NLS-0$
 			name: "eslint-env", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false, doc:false, jsdoc:false},
-			description: " - ESLint environment directive", //$NON-NLS-0$
-			template: "/* eslint-env ${library}*/" //$NON-NLS-0$
+			description: "",
+			template: "/* eslint-env ${library}*/", //$NON-NLS-0$
+			url: "http://eslint.org/docs/user-guide/configuring.html#specifying-environments", //$NON-NLS-1$
+			doc: Messages['eslintEnvDirective']
 		},
 		{
 		    prefix: "eslint-enable", //$NON-NLS-0$
 			name: "eslint-enable", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false, doc:false, jsdoc:false},
-			description: " - ESLint rule enablement directive", //$NON-NLS-0$
-			template: "/* eslint-enable ${rule-id} */" //$NON-NLS-0$
+			description: "",
+			template: "/* eslint-enable ${rule-id} */", //$NON-NLS-0$
+			url: "http://eslint.org/docs/user-guide/configuring.html#configuring-rule", //$NON-NLS-1$
+			doc: Messages['eslintRuleEnable']
 		},
 		{
 		    prefix: "eslint-disable", //$NON-NLS-0$
 			name: "eslint-disable", //$NON-NLS-0$
 			nodes: {top:true, member:false, prop:false, doc:false, jsdoc:false},
-			description: " - ESLint rule disablement directive", //$NON-NLS-0$
-			template: "/* eslint-disable ${rule-id} */" //$NON-NLS-0$
+			description: "",
+			template: "/* eslint-disable ${rule-id} */", //$NON-NLS-0$
+			url: "http://eslint.org/docs/user-guide/configuring.html#configuring-rules", //$NON-NLS-1$
+			doc: Messages['eslintRuleDisable']
 		},
 		{
 			prefix: "switch", //$NON-NLS-0$
@@ -253,6 +262,12 @@ define([
 			return meta.t;
 		}
 		var t = new mTemplates.Template(meta.prefix, meta.description, meta.template, meta.name);
+		if(meta.doc) {
+			t.doc = meta.doc;
+		}
+		if(meta.url) {
+			t.url = meta.url;
+		}
 		meta.t = t;
 		return t;
 	}
