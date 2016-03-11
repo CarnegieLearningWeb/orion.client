@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2015 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -40,6 +40,7 @@ define([
 		noEmptyLabel, noEqNull, noExtraBoolCast, noExtraParens, noInvalidRegExp, noNegatedInLhs, noObjCalls, noSelfCompare, noIrregularWhitespace) {
 
     var rules = {
+    	/** @callback */
         "curly": function(context) {
 	        		/**
 	        		 * Checks the following AST element for a BlockStatement
@@ -87,6 +88,7 @@ define([
 	        			'DoWhileStatement': checkBlock
 	        		};
         },
+        /** @callback */
 		"eqeqeq": function(context) {
 			        function getOperatorToken(context, node) {
 	            		var tokens = context.getTokens(node), len = tokens.length, operator = node.operator;
@@ -126,6 +128,7 @@ define([
 	        			}
 	        		};
         },
+        /** @callback */
 		"missing-doc": function(context) {
                 function validComment(comments) {
                     if(comments && comments.leading) {
@@ -172,10 +175,10 @@ define([
         					case 'ExpressionStatement':
         						if(node.expression && node.expression.type === 'AssignmentExpression') {
         							var anode = node.expression;
-        							if(anode.right && (anode.right.type === 'FunctionExpression') && anode.left && (anode.left.type === 'MemberExpression')) {
+        							if(anode.right && anode.right.type === 'FunctionExpression' && anode.left && anode.left.type === 'MemberExpression') {
         								//comments are attached to the enclosing expression statement
         								comments = context.getComments(node);
-        								if(comments.leading.length < 1 && comments.trailing.length < 1) {
+        								if(!comments || comments.leading.length < 1) {
             							    //TODO see https://github.com/jquery/esprima/issues/1071
         							        comments = context.getComments(anode.left);
             							}
@@ -199,6 +202,7 @@ define([
         			"ExpressionStatement": checkDoc
         		};
         },
+        /** @callback */
 		"new-parens": function(context) {
         		return {
         			'NewExpression' : function(node) {
@@ -220,6 +224,7 @@ define([
         			}
         		};
         },
+        /** @callback */
         "no-caller": function(context) {
                 return {
                     "MemberExpression": function(node) {
@@ -238,6 +243,7 @@ define([
                     }
                 };
         },
+        /** @callback */
         "no-comma-dangle": function(context) {
                 return {
                     'ObjectExpression': function(node) {
@@ -320,6 +326,7 @@ define([
                   'DoWhileStatement': checkForAssignment
                 };
         },
+        /** @callback */
         "no-console": function(context) {
                 return {
                     'MemberExpression': function(node) {
@@ -332,6 +339,7 @@ define([
                     }
                 };
         },
+        /** @callback */
         "no-constant-condition": function(context) {
                 /**
                  * @param {Object} node The AST node
@@ -369,6 +377,7 @@ define([
                     'ConditionalExpression': checkCondition
                 };
         },
+        /** @callback */
 		"no-debugger": function(context) {
         		return {
         			"DebuggerStatement": function(node) {
@@ -381,6 +390,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		"no-dupe-keys": function(context) {
         		return {
         			"ObjectExpression": function(node) {
@@ -412,6 +422,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		'no-empty-block': function(context) {
         		var comments;
 
@@ -438,6 +449,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		"no-eval": function(context) {
         		return {
         			"CallExpression": function(node) {
@@ -456,6 +468,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		"no-extra-semi": function(context) {
         		return {
         			"EmptyStatement": function(node) {
@@ -472,6 +485,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		'no-fallthrough': function(context) {
         		function fallsthrough(node) {
         		    // cases with no statements or only a single case are implicitly fall-through
@@ -546,6 +560,7 @@ define([
         			 }
         		};
         },
+        /** @callback */
         "no-implied-eval": function(context) {
         		return {
         			"CallExpression": function(node) {
@@ -582,6 +597,7 @@ define([
         			}
         		};
         },
+        /** @callback */
         "no-iterator": function(context) {
                 return {
                     'MemberExpression': function(node) {
@@ -597,6 +613,7 @@ define([
                     }
                 };
         },
+        /** @callback */
         "no-proto": function(context) {
                 return {
                     'MemberExpression': function(node) {
@@ -612,6 +629,7 @@ define([
                     }
                 };
         },
+        /** @callback */
 		'no-jslint': function(context) {
         		return {
         			'Program' : function(node) {
@@ -642,6 +660,7 @@ define([
         			 }
         		};
         },
+        /** @callback */
 		"no-new-array": function(context) {
 		    	function checkNode(node) {
 		    		var callee = node.callee;
@@ -659,6 +678,7 @@ define([
         			'CallExpression': checkNode
         		};
         },
+        /** @callback */
 		"no-new-func": function(context) {
         		return {
         			'NewExpression': function(node) {
@@ -669,6 +689,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		"no-new-object": function(context) {
 		   		return {
         			'NewExpression': function(node) {
@@ -679,6 +700,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		"no-new-wrappers": function(context) {
         		var wrappers = ["String", "Number", "Math", "Boolean", "JSON"]; //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-5$
 				return {
@@ -690,12 +712,14 @@ define([
         			}
         		};
         },
+        /** @callback */
         "no-with": function(context) {
         		return {'WithStatement': function(node) {
 	        			context.report(node, ProblemMessages['no-with'], null, context.getFirstToken(node));
 	        		}
         		};
         },
+        /** @callback */
 		"missing-nls": function(context){
         		function reportMissingNLS(node, index){
         			var data = Object.create(null);
@@ -776,9 +800,17 @@ define([
                     }
 				};
         },
+        /** @callback */
         "unnecessary-nls": function(context){
-        		function reportUnusedNLS(range, value, nlsCommentValue){
-					context.report({range: range, loc: {start: range[0], end: range[1]}, value: value}, ProblemMessages['unnecessary-nls'], {data: {nlsComment: nlsCommentValue}});
+        		/**
+		         * @name reportUnusedNLS
+		         * @description Reports unnecessary NLS problem, you must set both the range (index array) and the loc {start/end line/col} on the location argument
+		         * @param location
+		         * @param value
+		         * @param nlsCommentValue
+		         */
+		        function reportUnusedNLS(location, value, nlsCommentValue){
+					context.report({range: location.range, loc: location.loc, value: value}, ProblemMessages['unnecessary-nls'], {data: {nlsComment: nlsCommentValue}});
         		}
 
         		return {
@@ -849,7 +881,7 @@ define([
 											if (match[1]){
 												start += 2; // Comment range doesn't include line comment prefix
 											}
-                    						reportUnusedNLS([start, start+value.length], value, match[0]);	        		
+                    						reportUnusedNLS({range: [start, start+value.length], loc: comment.loc}, value, match[0]);	        		
 							        	}
 							        }
 							    }
@@ -883,13 +915,14 @@ define([
 									if (match[1]){
 										start += 2; // Comment range doesn't include line comment prefix
 									}
-            						reportUnusedNLS([start, start+value.length], value, match[0]);	
+            						reportUnusedNLS({range: [start, start+value.length], loc: comment.loc}, value, match[0]);	
             					}
                 			}
                     	}
                     }
 				};
         },
+        /** @callback */
 		"no-redeclare": function(context) {
                 function reportRedeclaration(node, name) {
                     context.report(node, ProblemMessages['no-redeclare'], {0:name});
@@ -917,6 +950,7 @@ define([
                     "ArrowFunctionExpression": checkScope
                 };
         },
+        /** @callback */
         "no-regex-spaces": function(context) {
 
                 function reportSpaces(node) {
@@ -944,6 +978,7 @@ define([
                     }
                 };
         },
+        /** @callback */
         "no-reserved-keys": function(context) {
                 return {
                     'ObjectExpression': function(node) {
@@ -958,6 +993,7 @@ define([
                     }
                 };
         },
+        /** @callback */
         "no-shadow": function(context) {
                 function addVariables(map, scope) {
                     scope.variables.forEach(function(variable) {
@@ -1034,6 +1070,7 @@ define([
                     "ArrowFunctionExpression": checkScope
                 };
         },
+        /** @callback */
         "no-shadow-global": function(context) {
 
                 function checkShadow(node) {
@@ -1066,6 +1103,7 @@ define([
                     'VariableDeclarator': checkShadow
                 };
         },
+        /** @callback */
 		'no-sparse-arrays': function(context) {
         		return {
         			'ArrayExpression' : function(node){
@@ -1075,6 +1113,7 @@ define([
         			}
         		};
         },
+        /** @callback */
         "no-throw-literal": function(context) {
                 return {
                     "ThrowStatement": function(node) {
@@ -1099,6 +1138,7 @@ define([
                     }
                 };
         },
+        /** @callback */
 		"no-undef": function(context) {
                 function isImplicitGlobal(variable) {
                     return variable.defs.every(function(def) {
@@ -1130,10 +1170,28 @@ define([
             	                var variable = getDeclaredGlobalVariable(globalScope, ref),
             	                    name = ref.identifier.name;
             	                if (!variable) {
-            	                    var env = Finder.findESLintEnvForMember(name);
-            	                    var inenv = env ? '-inenv' : ''; //$NON-NLS-1$
-            	                    var nls = 'no-undef-defined'; //$NON-NLS-1$
-            	                    context.report(ref.identifier, ProblemMessages['no-undef-defined'], {0:name, nls: nls, pid: nls+inenv});
+            	                	// Check if Tern knows about a definition in another file
+            	                	var env = Finder.findESLintEnvForMember(name);
+            	                    var tern = context.getTern();
+									var query = tern.query;
+									query.end = ref.identifier.start;
+									var foundType = null;
+									try {
+										var expr = tern.findExpr(tern.file, query);
+										var type = tern.findExprType(tern.server, query, tern.file, expr);
+										// The origin could be a primitive in the same file (a=1;) which we still want to mark
+										// The origin could be an environment, which we still want to mark (eslint-env directive is handled separately)
+										if (type && type.origin && type.origin !== tern.file.name && type.origin !== env){
+											foundType = type;
+										}
+									} catch(e) {
+										//ignore
+									}
+	            	                if (!foundType){
+	            	                    var inenv = env ? '-inenv' : ''; //$NON-NLS-1$
+	            	                    var nls = 'no-undef-defined'; //$NON-NLS-1$
+	            	                    context.report(ref.identifier, ProblemMessages['no-undef-defined'], {0:name, nls: nls, pid: nls+inenv});
+            	                    }
             	                } else if (ref.isWrite() && variable.writeable === false) {
             	                    context.report(ref.identifier, ProblemMessages['no-undef-readonly'], {0:name, nls: 'no-undef-readonly'}); //$NON-NLS-1$
             	                }
@@ -1145,6 +1203,60 @@ define([
                     }
                 };
         },
+        /** @callback */
+        'no-undef-expression': function(context){
+        	return {
+        		'MemberExpression': function(node){
+                	try {
+                    	if (node.property && node.object && node.object.type !== 'ThisExpression'){
+                    		if (node.parent && node.parent.type === 'CallExpression' && node.parent.callee && node.parent.callee === node){
+                    			 var tern = context.getTern();
+								var query = tern.query;
+								query.end = node.property.start;
+								var foundType = false;
+								try {
+									var expr = tern.findExpr(tern.file, query);
+									var type = tern.findExprType(tern.server, query, tern.file, expr);
+									if (type && type.origin){
+										foundType = true;
+									}
+								} catch(e) {
+									//ignore
+								}
+            	                if (!foundType){
+            	                	// If the object cannot be found, there is no way the property could be known
+            	                	query.end = node.object.end;
+            	                	try {
+            	                		expr = tern.findExpr(tern.file, query);
+            	                		type = tern.findExprType(tern.server, query, tern.file, expr);
+										if (type && type.types){
+            	                			// If the type has no known properties assume Tern doens't know enough about it to find the declaration
+            	                			foundType = true;
+            	                			for (var i=0; i<type.types.length; i++) {
+            	                				var currentProps = type.types[i].props;
+            	                				if (currentProps && Object.keys(currentProps).length > 0){
+            	                					foundType = false;
+            	                					break;
+            	                				}
+            	                			}
+            	                		}
+            	                	} catch (e) {
+            	                		//ignore
+            	                	}
+            	                	if (!foundType){
+										context.report(node.property, ProblemMessages['no-undef-defined'], {0:node.property.name, nls: 'no-undef-defined'}); //$NON-NLS-1$
+									}
+
+								}
+                    		}
+                    	}
+                	} catch (ex) {
+                		Logger.log(ex);
+                	}
+
+            	}
+        	};
+        },
         'no-undef-init': function(context) {
         		return {
         			'VariableDeclarator': function(node) {
@@ -1154,6 +1266,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		'no-unreachable': function(context) {
                 /**
                  * @description Returns if the statement is 'hoisted'
@@ -1206,6 +1319,7 @@ define([
                     }
                 };
         },
+        /** @callback */
 		"no-unused-params" : function(context) {
                 function hasCallbackComment(node) {
                     if(node && node.leadingComments) {
@@ -1302,6 +1416,7 @@ define([
         			"ArrowFunctionExpression": check
         		};
         },
+        /** @callback */
 		"no-unused-vars": function(context) {
         		function isRead(ref) {
         			return ref.isRead();
@@ -1330,7 +1445,29 @@ define([
         					var references = getReferences(scope, variable), id = node.id;
         					if (!references.length) {
         					    if(node.type === 'FunctionDeclaration') {
-        					       context.report(id, ProblemMessages['no-unused-vars-unused-funcdecl'], {0:id.name, nls: 'no-unused-vars-unused-funcdecl'}); //$NON-NLS-1$
+        					    	   var tern = context.getTern();
+        					    	   var refQuery = tern.query;
+							   refQuery.end = node.id.end;
+        					    	   var refs = null;
+        					    	   var filename = tern.file.name;
+        					    	   try {
+        					    	       refs = tern.findRefs(tern.server, refQuery, tern.file);
+        					    	   } catch(e) {
+        					    	      //ignore
+        					    	   }
+        					    	   var result = [];
+        					    	   if (refs && Array.isArray(refs.refs)) {
+        					    	   		// filtering the refs from the current file - remove the one that matches the current node
+        					    	   		refs.refs.forEach(function(match) {
+        					    	   			if (match.file !== filename) {
+        					    	   				// any match in a different file is a good match
+        					    	   				result.push(match);
+        					    	   			}
+        					    	   		});
+        					    	   }
+        					    	   if (result === null || result.length === 0) {
+        					           context.report(id, ProblemMessages['no-unused-vars-unused-funcdecl'], {0:id.name, nls: 'no-unused-vars-unused-funcdecl'}); //$NON-NLS-1$
+        					       }
         					    } else {
         						   context.report(id, ProblemMessages['no-unused-vars-unused'], {0:id.name, nls: 'no-unused-vars-unused'}); //$NON-NLS-1$
         						}
@@ -1348,9 +1485,10 @@ define([
         			"Program": check,
         			"FunctionDeclaration": check,
         			"FunctionExpression": check,
-        			"ArrowFunctonExpression": check
+        			"ArrowFunctionExpression": check
         		};
         },
+        /** @callback */
 		"no-use-before-define": function(context) {
                 function booleanOption(b, defaultValue) {
             		return typeof b === "boolean" ? b : defaultValue;
@@ -1385,6 +1523,7 @@ define([
         			"FunctionDeclaration": check
         		};
         },
+        /** @callback */
         "radix": function(context) {
                 function checkParseInt(call) {
                     var callee = call.callee;
@@ -1409,6 +1548,7 @@ define([
                     "CallExpression": checkParseInt
                 };
         },
+        /** @callback */
 		"no-mixed-spaces-and-tabs": function(context) {
 				var ignoredLocations = [];
 				// we define a regular expression that matches any line that starts with spaces after tabs before any other character
@@ -1514,6 +1654,7 @@ define([
 					"Program:exit": checkProgram
 				};
 		},
+		/** @callback */
 		"semi": function(context) {
         		function checkForSemicolon(node) {
         			try {
@@ -1557,6 +1698,7 @@ define([
         			"ContinueStatement": checkForSemicolon
         		};
         },
+        /** @callback */
 		"use-isnan": function(context) {
         		return {
         			'BinaryExpression' : function(node) {
@@ -1573,6 +1715,7 @@ define([
         			}
         		};
         },
+        /** @callback */
 		'valid-typeof': function(context) {
         		//https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/typeof
         		var symbols = ['undefined', 'object', 'function', 'boolean', 'number', 'string', 'symbol']; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$ //$NON-NLS-7$
@@ -1609,6 +1752,7 @@ define([
 		'no-empty-label': noEmptyLabel,
 		'no-self-compare': noSelfCompare,
 		'no-irregular-whitespace': noIrregularWhitespace,
+		/** @callback */
 		'no-self-assign': function(context) {
 				function checkVariableDeclarator(variableDeclarator) {
 					var init = variableDeclarator.init;
@@ -1634,6 +1778,7 @@ define([
 					"VariableDeclarator" : checkVariableDeclarator
 				};
 			},
+		/** @callback */
 		'type-checked-consistent-return' : function(context) {
 				var functions = [];
 			
@@ -1662,47 +1807,33 @@ define([
 			
 				function getValue(node) {
 					if (node.argument) {
-						var type = node.argument.type;
-						switch(type) {
-							case "Literal" :
-								if (node.argument.value === null) {
-									return "null";
-								}
-								return typeof node.argument.value;
-							case "BinaryExpression" :
-								// walk the node to find out if one of the operand is a string
-								var foundType = null;
-								Estraverse.traverse(node.argument, {
-									enter: /** @callback */function(n, parent) {
-										if (n.type === "Literal") {
-											if (n.value !== null) {
-												if (foundType === null) {
-													// get the type of the current Literal
-													foundType = typeof n.value;
-												} else {
-													switch(foundType) {
-														case "object" :
-															return Estraverse.VisitorOption.Break;
-														case "string" :
-															return Estraverse.VisitorOption.Break;
-														case "number" :
-															var nodeType = typeof n.value;
-															if (nodeType !== "number") {
-																foundType = nodeType;
-															}
-													}
-												}
-											}
-										}
-									}
-								});
-								if(foundType !== null) {
-									return foundType;
-								}
-								return "object";
-							default:
-								return "object";
+						var tern = context.getTern();
+						var query = tern.query;
+						query.end = node.argument.start;
+						var foundType = null;
+						try {
+							var expr = tern.findExpr(tern.file, query);
+							var type = tern.findExprType(tern.server, query, tern.file, expr);
+							if (type) {
+								foundType = type;
+							}
+						} catch(e) {
+							//ignore
 						}
+						if (foundType) {
+							var typeString = foundType.toString();
+							switch(typeString) {
+								case "bool" :
+									return "boolean";
+								case "{}" :
+									return "object";
+								case "?" :
+									return "null";
+								default :
+									return typeString;
+							}
+						}
+						return "object";
 					}
 					return "undefined";
 				}
@@ -1724,7 +1855,6 @@ define([
 					"ArrowFunctionExpression:exit": exitFunction,
 			
 					"ReturnStatement": function(node) {
-			
 						var returnInfo = functions[functions.length - 1];
 						var returnTypeDefined = "type" in returnInfo;
 			
@@ -1758,7 +1888,24 @@ define([
 						}
 					}
 				};
-			}
+			},
+		/** @callback */
+		"check-tern-project" : function(context) {
+				function checkProject(node) {
+					var env = node.environments;
+					if (env) {
+						if (typeof env === "object" && Object.keys(env).length !== 0) {
+							return;
+						}
+					}
+					// get the .tern-project file for the corresponding project
+					context.report(node, ProblemMessages['check-tern-project']);
+				}
+
+				return {
+					"Program": checkProject
+				};
+		}
 	};
 
 	function _mapCallees(arr, obj) {
@@ -1770,6 +1917,8 @@ define([
 	var _callees = Object.create(null);
 	_mapCallees(['require', 'requirejs', 'importScripts', 'define', 'Worker', 'SharedWorker', 'addEventListener', 'RegExp', //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$ //$NON-NLS-7$ //$NON-NLS-8$
 	'removeEventListener'], _callees);  //$NON-NLS-1$
+    var _documentCallees = Object.create(null);
+    _mapCallees(['createElement'], _documentCallees); //$NON-NLS-1$
     
     function _collectLinesWithStringLiterals(node, lineMap){
     	
@@ -1810,8 +1959,12 @@ define([
     				case 'CallExpression': {
     					var callee = node.parent.callee;
     					if(callee) {
-    						if(callee.type === 'MemberExpression' && callee.property && _callees[callee.property.name]) {
-    							return;
+    						if(callee.type === 'MemberExpression' && callee.property) {
+    							if(callee.object && callee.object.type === "Identifier" && callee.object.name === "document" && _documentCallees[callee.property.name]) {
+    								return;
+    							} else if(_callees[callee.property.name]) {
+	    							return;
+								}
     						} else if(_callees[callee.name]) {
     							return;
     						}

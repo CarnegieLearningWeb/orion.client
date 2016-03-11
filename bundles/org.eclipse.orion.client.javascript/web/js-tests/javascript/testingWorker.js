@@ -53,7 +53,7 @@ define([
 	 * @param {Function} f The callback function to call when the Tern server responds
 	 */
 	WrappedWorker.prototype.postMessage = function(msg, f) {
-		if(msg != null && typeof(msg) === 'object') {
+		if(msg !== null && typeof(msg) === 'object') {
 			if(typeof(msg.messageID) !== 'number') {
 				//don't overwrite an id from a tern-side request
 				msg.messageID = messageID++;
@@ -79,7 +79,9 @@ define([
 	 * @since 11.0
 	 */
 	WrappedWorker.prototype.start = function(callback) {
-		_state.callback = callback;
+		if (callback){
+			_state.callback = callback;
+		}
 		worker.postMessage({request: 'start_server', args: {}});
 	};
 	
@@ -154,8 +156,7 @@ define([
 				} else {
 					this.postMessage({request: 'read', ternID: _d.ternID, args: {contents: _state.buffer, file: _state.file}});
 				}
-			} else if(_d.request === 'delFile') {
-				//don't process the ack
+			} else if(_d.request === 'delFile' || _d.request === 'addFile') {
 				return;
 			} else if(typeof(_d.request) === 'string') {
 				//don't process requests other than the ones we want

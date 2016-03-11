@@ -146,6 +146,7 @@ define([
 		this._ended = false;
 		this._xmlMode = !!(options && options.xmlMode);
 		this._decodeEntities = !!(options && options.decodeEntities);
+		this._quoteStart = 0;
 	}
 	
 	Tokenizer.prototype._stateText = function(c){
@@ -269,6 +270,7 @@ define([
 	Tokenizer.prototype._stateAfterAttributeName = function(c){
 		if(c === "="){
 			this._state = BEFORE_ATTRIBUTE_VALUE;
+			this._quoteStart = this._index + 1;//position after the '='
 		} else if(c === "/" || c === ">"){
 			this._cbs.onattribend();
 			this._state = BEFORE_ATTRIBUTE_NAME;
@@ -296,34 +298,49 @@ define([
 	
 	Tokenizer.prototype._stateInAttributeValueDoubleQuotes = function(c){
 		if(c === "\""){
+			var valueStart = this._quoteStart;
 			this._emitToken("onattribdata");
-			this._cbs.onattribend(true);
+			this._cbs.onattribend(true, valueStart);
 			this._state = BEFORE_ATTRIBUTE_NAME;
 		} else if(this._decodeEntities && c === "&"){
 			this._emitToken("onattribdata");
 			this._baseState = this._state;
 			this._state = BEFORE_ENTITY;
 			this._sectionStart = this._index;
+		} else if (c === '<') {
+			valueStart = this._quoteStart;
+			this._emitToken("onattribdata");
+			this._cbs.onattribend(false, valueStart);
+			this._state = BEFORE_ATTRIBUTE_NAME;
+			this._index--;
 		}
 	};
 	
 	Tokenizer.prototype._stateInAttributeValueSingleQuotes = function(c){
 		if(c === "'"){
+			var valueStart = this._quoteStart;
 			this._emitToken("onattribdata");
-			this._cbs.onattribend(true);
+			this._cbs.onattribend(true, valueStart);
 			this._state = BEFORE_ATTRIBUTE_NAME;
 		} else if(this._decodeEntities && c === "&"){
 			this._emitToken("onattribdata");
 			this._baseState = this._state;
 			this._state = BEFORE_ENTITY;
 			this._sectionStart = this._index;
+		} else if (c === '<') {
+			valueStart = this._quoteStart;
+			this._emitToken("onattribdata");
+			this._cbs.onattribend(false, valueStart);
+			this._state = BEFORE_ATTRIBUTE_NAME;
+			this._index--;
 		}
 	};
 	
 	Tokenizer.prototype._stateInAttributeValueNoQuotes = function(c){
 		if(whitespace(c) || c === ">"){
+			var valueStart = this._quoteStart;
 			this._emitToken("onattribdata");
-			this._cbs.onattribend(false);
+			this._cbs.onattribend(false, valueStart);
 			this._state = BEFORE_ATTRIBUTE_NAME;
 			this._index--;
 		} else if(this._decodeEntities && c === "&"){
@@ -903,6 +920,7 @@ define([
 	Tokenizer.prototype._emitToken = function(name){
 		this._cbs[name](this._getSection());
 		this._sectionStart = -1;
+		this._quoteStart = -1;
 	};
 	
 	Tokenizer.prototype._emitPartial = function(value){

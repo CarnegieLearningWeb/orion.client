@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2015 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -46,6 +46,10 @@ define([
 			}
 		},
 		
+		/**
+		 * @description Resets the rules to their default values
+		 * @function
+		 */
 		setDefaults: function setDefaults() {
 		    this.rules = Object.create(null);
 		    var keys = Object.keys(this.defaults);
@@ -63,8 +67,9 @@ define([
 	 * @param {javascript.ASTManager} astManager The AST manager backing this validator
 	 * @returns {ESLintValidator} Returns a new validator
 	 */
-	function ESLintValidator(ternWorker) {
+	function ESLintValidator(ternWorker, ternProjectManager) {
 		this.ternWorker = ternWorker;
+		this.projectManager = ternProjectManager;
 		config.setDefaults();
 	}
 	
@@ -87,7 +92,6 @@ define([
 			}
 		}
 		else {
-			// TODO why we are overriding the severity computed by eslint based on the global config
 			val = prob.severity;
 		}
 		switch (val) {
@@ -196,7 +200,7 @@ define([
 						env.browser = true;
 					}
 					// need to extract all scripts from the html text
-					_self._validate(meta, text, env, isHtml, deferred, config);
+					_self._validate(meta, text, env, deferred, config);
 				});
 			});
 			return deferred;
@@ -212,23 +216,18 @@ define([
 		 * @returns {Array|Object} The array of problem objects
 		 * @since 6.0
 		 */
-		_validate: function(meta, text, env, htmlMode, deferred, configuration) {
+		_validate: function(meta, text, env, deferred, configuration) {
 			// When validating snippets in an html file ignore undefined rule because other scripts may add to the window object
-			var undefRuleValue;
 			if (configuration) {
 				config.rules = configuration.rules;
 			}
-			if (htmlMode) {
-				undefRuleValue = config.rules['no-undef'];
-				config.rules['no-undef'] = 0;
-			}
-			
 			var files = [{type: 'full', name: meta.location, text: text}]; //$NON-NLS-1$
 			var request = {request: 'lint', args: {meta: {location: meta.location}, files: files, rules: config.rules}}; //$NON-NLS-1$
 			if(env) {
 				config.env = env;
 				request.env = config.env;
 			}
+			var ternProjectManager = this.projectManager;
 			this.ternWorker.postMessage(
 				request, 
 				/* @callback */ function(type, err) {
@@ -240,14 +239,39 @@ define([
 								severity: "error" //$NON-NLS-0$
 							});
 						} else if (type.problems) {
-							type.problems.forEach(function(element) {
-								eslintErrors.push(element);
-							});
+							var json = ternProjectManager.getJSON();
+							if(json) {
+								type.problems.forEach(function(element) {
+									// check the .tern-project file
+									if (element.ruleId === "check-tern-project") {
+										// check the .tern-project file
+										var loadEagerly = json.loadEagerly;
+										if(Array.isArray(loadEagerly) && loadEagerly.length > 0) {
+											var found = false;
+											loop: for (var j = 0, max2 = loadEagerly.length; j < max2;  j++) {
+												if (loadEagerly[j] === meta.location) {
+													found = true;
+													break loop;
+												}
+											}
+											if (!found) {
+												eslintErrors = eslintErrors.concat(element);
+											}
+										} else {
+											// in case of an empty loadEagerly file property
+											eslintErrors.push(element);
+										}
+									} else {
+										eslintErrors.push(element);
+									}
+								});
+							} else {
+								type.problems.forEach(function(element) {
+									eslintErrors.push(element);
+								});
+							}
 						}
 						deferred.resolve({ problems: eslintErrors.map(toProblem) });
-						if (htmlMode) {
-							config.rules['no-undef'] = undefRuleValue;
-						}
 				});
 		},
 

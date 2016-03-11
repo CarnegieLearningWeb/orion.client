@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2015 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -79,10 +79,24 @@ define([
 	    onattribute: function(name, value, range) {
 	    	this.trailingAttrib = null;
 	    	var node = Object.create(null);
-	    	node.range = Array.isArray(range) ? [range[0], range[1]] : [0, 0];
+	    	node.value = value;
+	    	if (Array.isArray(range)) {
+			if (range.length === 3) {
+				node.range = [range[0], range[2]];
+				if ((range[2] - range[1]) <= 1) {
+					// no actual value was specified
+					node.value = null;
+				} else {
+					node.valueRange = [range[1], range[2]];
+				}
+			} else {
+				node.range = [range[0], range[1]];
+			}
+		} else {
+			node.range = [0, 0];
+		}
 	    	node.name = name;
 	    	node.type = 'attr'; //$NON-NLS-1$
-	    	node.value = value;
 	    	this.attribstack.push(node);
 	    },
 	    onprocessinginstruction: function(name, data, range) {
@@ -249,6 +263,20 @@ define([
 		 */
 		onInputChanged: function(event) {
 		    this.inputChanged = event;
+		},
+		/**
+		 * Callback from the FileClient
+		 * @param {Object} event a <tt>fileChanged</tt> event
+		 */
+		onFileChanged: function(event) {
+			if(event && event.type === 'FileContentChanged' && Array.isArray(event.files)) {
+				//event = {type, files: [{name, location, metadata: {contentType}}]}
+				event.files.forEach(function(file) {
+					if(file.metadata && file.metadata.contentType === 'text/html') {
+						this.cache.remove(this._getKey(file));
+					}
+				}.bind(this));
+			}
 		}
 	});
 	return {

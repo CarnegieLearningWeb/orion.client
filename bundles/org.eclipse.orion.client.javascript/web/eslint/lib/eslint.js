@@ -400,7 +400,8 @@ function prepareConfig(config) {
         globals: util.mergeConfigs({}, config.globals),
         env: util.mergeConfigs({}, config.env || {}),
         settings: util.mergeConfigs({}, config.settings || {}),
-        ecmaFeatures: util.mergeConfigs(ecmaFeatures, config.ecmaFeatures || {})
+        ecmaFeatures: util.mergeConfigs(ecmaFeatures, config.ecmaFeatures || {}),
+        tern: config.tern
     };
 
     // can't have global return inside of modules
@@ -433,9 +434,8 @@ function createStubRule(message) {
 
     if (message) {
         return createRuleModule;
-    } else {
-        throw new Error("No message passed to stub rule");
     }
+    throw new Error("No message passed to stub rule");
 }
 
 /**
@@ -562,9 +562,8 @@ module.exports = (function() {
             return ruleConfig;
         } else if (Array.isArray(ruleConfig)) {
             return ruleConfig[0];
-        } else {
-            return 0;
         }
+        return 0;
     }
 
     /**
@@ -575,9 +574,8 @@ module.exports = (function() {
     function getRuleOptions(ruleConfig) {
         if (Array.isArray(ruleConfig)) {
             return ruleConfig.slice(1);
-        } else {
-            return [];
         }
+        return [];
     }
 
     // set unlimited listeners (see https://github.com/eslint/eslint/issues/524)
@@ -615,7 +613,7 @@ module.exports = (function() {
             shebang,
             ecmaFeatures,
             ecmaVersion,
-            text = (typeof textOrSourceCode === "string") ? textOrSourceCode : null;
+            text = typeof textOrSourceCode === "string" ? textOrSourceCode : null;
 
         // set the current parsed filename
         currentFilename = filename;
@@ -643,11 +641,11 @@ module.exports = (function() {
 
             // there's no input, just exit here
             if (text.trim().length === 0) {
-                sourceCode = new SourceCode(text, require("../conf/blank-script.json")); // ORION this code is never used as we always get an ast from tern
+                //sourceCode = new SourceCode(text, require("../conf/blank-script.json")); // ORION this code is never used as we always get an ast from tern
                 return messages;
             }
 
-            ast = parse(text.replace(/^#!([^\r\n]+)/, function(match, captured) {
+            ast = parse(text.replace(/^#!([^\r\n]+)/, /* @callback */ function(match, captured) {
                 shebang = captured;
                 return "//" + captured;
             }), config);
@@ -689,11 +687,17 @@ module.exports = (function() {
 
                 severity = getRuleSeverity(config.rules[key]);
                 options = getRuleOptions(config.rules[key]);
+                
+                var settings = config.settings;
+                if (!settings) {
+                		settings = Object.create(null);
+                	}
+                	settings.tern = config.tern;
 
                 try {
                     rule = ruleCreator(new RuleContext(
                         key, api, severity, options,
-                        config.settings, config.ecmaFeatures, config.env // ORION
+                        settings, config.ecmaFeatures, config.env // ORION
                     ));
 
                     // add all the node types as listeners
@@ -711,9 +715,9 @@ module.exports = (function() {
             controller = new estraverse.Controller();
 
             ecmaFeatures = currentConfig.ecmaFeatures;
-            ecmaVersion = (ecmaFeatures.blockBindings || ecmaFeatures.classes ||
+            ecmaVersion = ecmaFeatures.blockBindings || ecmaFeatures.classes ||
                     ecmaFeatures.modules || ecmaFeatures.defaultParams ||
-                    ecmaFeatures.destructuring) ? 6 : 5;
+                    ecmaFeatures.destructuring ? 6 : 5;
 
 
             // gather data that may be needed by the rules
@@ -778,9 +782,8 @@ module.exports = (function() {
 
             if (lineDiff === 0) {
                 return a.column - b.column;
-            } else {
-                return lineDiff;
             }
+            return lineDiff;
         });
 
         return messages;
@@ -839,7 +842,7 @@ module.exports = (function() {
         };
 
         // ensure there's range and text properties, otherwise it's not a valid fix
-        if (fix && Array.isArray(fix.range) && (typeof fix.text === "string")) {
+        if (fix && Array.isArray(fix.range) && typeof fix.text === "string") {
             problem.fix = fix;
         }
 
@@ -921,9 +924,8 @@ module.exports = (function() {
                 if (scope) {
                     if (scope.type === "function-expression-name") {
                         return scope.childScopes[0];
-                    } else {
-                        return scope;
                     }
+                    return scope;
                 }
 
             }
@@ -972,9 +974,8 @@ module.exports = (function() {
     api.getFilename = function() {
         if (typeof currentFilename === "string") {
             return currentFilename;
-        } else {
-            return "<input>";
         }
+        return "<input>";
     };
 
     /**

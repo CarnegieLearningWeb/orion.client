@@ -18,8 +18,9 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 		'orion/search/InlineSearchPane',
 		'orion/keyBinding',
 		'orion/problems/problemsView',
+		'orion/keyBinding',
 		'orion/webui/Slideout'],
-		function(objects, mCommands, mOutliner, lib, MiniNavViewMode, ProjectNavViewMode, mGlobalCommands, messages, InlineSearchPane, mKeyBinding, mProblemsView, mSlideout) {
+		function(objects, mCommands, mOutliner, lib, MiniNavViewMode, ProjectNavViewMode, mGlobalCommands, messages, InlineSearchPane, mKeyBinding, mProblemsView, KeyBinding, mSlideout) {
 
 	/**
 	 * @name orion.sidebar.Sidebar
@@ -57,6 +58,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 		this.activeViewMode = null;
 		this.switcherScope = params.switcherScope;
 		this.editScope = params.editScope;
+		this.toolsScope = params.toolsScope;
 		this.switcherNode = null;
 		this.progressService = params.progressService;
 	}
@@ -269,6 +271,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				null, 
 				"dropdownSelection"); //$NON-NLS-0$
 		},
+		
 		_createProblemsPane: function() {
 			this._problemsPane = new mProblemsView.ProblemsView({serviceRegistry: this.serviceRegistry, 
 				commandRegistry: this.commandRegistry, 
@@ -280,22 +283,34 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				id: "orion.problemsInFolder", //$NON-NLS-0$
 				visibleWhen: function(item) {
 					if (Array.isArray(item)) {
-						if(item.length === 1 && item[0].Directory){
+						if(item.length === 1 && item[0].Location && item[0].Parents){
 							return true;
 						}
+					} else if (item && item.Location && item.Parents) {
+						return true;
 					}
 					return false;
 				},
 				callback: function (data) {
-					var item = data.items[0];
 					this._problemsPane.show();
-					//var problemsView = new mProblemsView.ProblemsView({serviceRegistry: this.serviceRegistry, commandRegistry: this.commandRegistry, contentTypeRegistry: this.contentTypeRegistry, fileClient: this.fileClient});
-					this._problemsPane.validate(item.Location);
+					var item;
+					if (Array.isArray(data.items)) {
+						item = data.items[0];
+					} else {
+						item = data.items;
+					}
+					var loc;
+					if(item.Directory) {
+						loc = item.Location;
+					} else {
+						loc = item.Parents[0] ? item.Parents[0].Location : item.Location;
+					}
+					this._problemsPane.validate(loc);
 				}.bind(this)
 			});
 			
 			this.commandRegistry.addCommand(problemsInFolderCommand);
-			this.commandRegistry.registerCommandContribution(this.editScope, "orion.problemsInFolder", 101, "orion.menuBarEditGroup/orion.findGroup");  //$NON-NLS-1$ //$NON-NLS-0$
+			this.commandRegistry.registerCommandContribution(this.toolsScope, "orion.problemsInFolder", 2, "orion.menuBarToolsGroup", false, new KeyBinding.KeyBinding('p', true, false, true));  //$NON-NLS-1$ //$NON-NLS-0$
  		},
  		fillSearchPane: function(searchText, searchScope, searchResult) {
  			var mainSplitter = mGlobalCommands.getMainSplitter();
@@ -344,6 +359,21 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				return "";
 			}.bind(this);
 			
+			var recordDefaultSearchResource = function (data) {
+			  //Similar mechanism to the setLocationByMetaData method in searchClient.js with meta = data.items[0]
+			  //and useParentLocation = {index: "last"} to retrieve project scope info.
+			  var searchLoc = null;
+			  if(data.items[0] && data.items[0].Parents && data.items[0].Parents.length){
+			    searchLoc = data.items[0].Parents[data.items[0].Parents.length - 1];
+			  } else if(data.items[0]) {
+			    searchLoc = data.items[0];
+			  } else {
+			  	searchLoc = data.items;
+			  }
+			  this._inlineSearchPane._defaultSearchResource = searchLoc;
+			  return searchLoc;
+			}.bind(this);
+			
 			var searchInFolderCommand = new mCommands.Command({
 				name: messages["searchInFolder"], //$NON-NLS-0$
 				id: "orion.searchInFolder", //$NON-NLS-0$
@@ -357,6 +387,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				},
 				callback: function (data) {
 					var item = data.items[0];
+					recordDefaultSearchResource(data);
 					this._inlineSearchPane.setSearchText(getSearchText());
 					this._inlineSearchPane.setSearchScope(item);
 					this._inlineSearchPane.show();
@@ -370,7 +401,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				visibleWhen: function() {
 					return true;
 				},
-				callback: function () {
+				callback: function (data) {
 					if (this._inlineSearchPane.isVisible()) {
 						this._inlineSearchPane.hide();
 					} else {
@@ -378,6 +409,7 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 						if (mainSplitter.splitter.isClosed()) {
 							mainSplitter.splitter.toggleSidePanel();
 						}
+						recordDefaultSearchResource(data);
 						this._inlineSearchPane.setSearchText(getSearchText());
 						this._inlineSearchPane.setSearchScope(this._lastSearchRoot); //reset search scope
 						this._inlineSearchPane.show();
@@ -393,8 +425,8 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				visibleWhen: /** @callback */ function(items, data) {
 					return true;
 				},
-				callback: function() {
-					this.fillSearchPane(getSearchText(), this._lastSearchRoot);
+				callback: function(data) {
+					this.fillSearchPane(getSearchText(), recordDefaultSearchResource(data));
 				}.bind(this)
 			});
 			

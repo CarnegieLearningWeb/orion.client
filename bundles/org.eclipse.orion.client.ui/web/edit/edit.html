@@ -13,7 +13,10 @@
 			/*eslint-env browser, amd*/
 			require(["../orion/require-config.js"], function(config){
 				var deps = ["edit/edit"];
-				if (localStorage.showSplash) deps.splice(0, 0, "orion/splash");
+				if (!sessionStorage.editSplashShown) {
+					sessionStorage.editSplashShown = true;
+					deps.splice(0, 0, "orion/splash");
+				}
 				require(deps, null, config.errback);
 			});
 		</script>
@@ -26,11 +29,11 @@
 		<div id="pageContent" class="content-fixedHeight">
 			<div id="sideMenuToggle" class="sideMenuToggle"></div>
 			<div id="pageToolbar" class="mainToolbar toolComposite toolbarLayout"></div>
-			<div id="innerPanels" class="innerPanels editorTheme">
+			<div id="innerPanels" class="innerPanels">
 				<div id="auxpane" class="auxpane sidePanelLayout hasSplit">
 					<div class="fixedToolbarHolder sidebarWrapper">
 						<span id="sidebarToolbar" class="sidebarToolbar mainToolbar toolComposite toolbarLayout"></span>
-						<div id="sidebar" class="dropdownTrigger toolbarTarget sidebar"></div>
+						<div id="pageSidebar" class="dropdownTrigger toolbarTarget sidebar"></div>
 					</div>
 				</div>
 				<div class="split splitLayout" style="left: 25%;"></div>
@@ -47,7 +50,7 @@
 		</div>
 		<div id="contentassist" class="contentassist" role="listbox" tabindex="-1"></div>
 		<script>
-			if (localStorage.showSplash) {
+			if (!sessionStorage.editSplashShown) {
 				var splash = document.createElement("div");
 				splash.id = splash.className = "splash";
 				document.body.appendChild(splash);

@@ -95,6 +95,10 @@ define([
 		},
 		
 		hide: function() {
+			if(this._defaultSearchResource){
+  				this.setSearchScope(this._defaultSearchResource);//reset search scope when the InlineSearchPane is hide
+			}
+
 			if(window.document.title === this.newDocumentTitle){
 				window.document.title = this.previousDocumentTitle;
 			}
@@ -409,6 +413,7 @@ define([
 		},
 		
 		setSearchScope: function(targetFolder) {
+			this._targetFolder = targetFolder;
 			if (targetFolder && targetFolder.fileMetadata) {
 				targetFolder = targetFolder.fileMetadata;
 			}
@@ -444,7 +449,8 @@ define([
 				var searchScopeDialog = new DirectoryPrompterDialog.DirectoryPrompterDialog({
 					title: messages["Choose a Folder"], //$NON-NLS-0$
 					serviceRegistry: this._serviceRegistry,
-					fileClient: this._fileClient,				
+					fileClient: this._fileClient,
+					targetFolder: this._targetFolder,
 					func: this.setSearchScope.bind(this)
 				});
 				searchScopeDialog.show();

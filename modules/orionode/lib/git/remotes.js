@@ -6,7 +6,7 @@
  * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
  *
  * Contributors:
- *     IBM Corporation - initial API and implementation
+ *	 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
 var api = require('../api'), writeError = api.writeError;
@@ -14,120 +14,168 @@ var async = require('async');
 var git = require('nodegit');
 var url = require('url');
 var tasks = require('../tasks');
+var clone = require('./clone');
+var express = require('express');
+var bodyParser = require('body-parser');
 
-function getRemotes(workspaceDir, fileRoot, req, res, next, rest) {
-	var repoPath = rest.replace("remote/file/", "");
-	var fileDir = repoPath;
-	repoPath = api.join(workspaceDir, repoPath);
-	var repo;
+module.exports = {};
 
-	git.Repository.open(repoPath)
-	.then(function(r) {
-		repo = r;
-		return git.Remote.list(r);
-	})
-	.then(function(remotes){
-		var r = [];
-		async.each(remotes, function(remote, cb) {
-			git.Remote.lookup(repo, remote)
-			.then(function(remote){
-				var name = remote.name();
-				r.push({
-					"CloneLocation": "/gitapi/clone/file/" + fileDir,
-					"IsGerrit": false, // should check 
-					"GitUrl": remote.url(),
-					"Name": name,
-					"Location": "/gitapi/remote/" + name + "/file/" + fileDir,
-					"Type": "Remote"
-				});
-				cb();
-			});
-		}, function(err) {
-			var resp = JSON.stringify({
-				"Children": r,
-				"Type": "Remote"
-			});
-			res.statusCode = 200;
-			res.setHeader('Content-Type', 'application/json');
-			res.setHeader('Content-Length', resp.length);
-			res.end(resp);
-		});
-	});
+module.exports.router = function(options) {
+	var fileRoot = options.fileRoot;
+	if (!fileRoot) { throw new Error('options.root is required'); }
+	
+	module.exports.remoteBranchJSON = remoteBranchJSON;
+	module.exports.remoteJSON = remoteJSON;
+
+	return express.Router()
+	.use(bodyParser.json())
+	.get('/file*', getRemotes)
+	.get('/:remoteName/file*', getRemotes)
+	.get('/:remoteName/:branchName/file*', getRemotes)
+	.delete('/:remoteName*', deleteRemote)
+	.post('/file*', addRemote)
+	.post('/:remoteName/file*', postRemote)
+	.post('/:remoteName/:branchName/file*', postRemote);
+	
+function remoteBranchJSON(remoteBranch, commit, remote, fileDir, branch){
+	var fullName, shortName, remoteURL;
+	if (remoteBranch) {
+		fullName = remoteBranch.name();
+		shortName = remoteBranch.shorthand();
+		var branchName = shortName.replace(remote.name() + "/", "");
+		remoteURL = api.join(encodeURIComponent(remote.name()), encodeURIComponent(branchName));
+	} else {// remote branch does not exists
+		shortName = api.join(remote.name(), branch.Name);
+		fullName = "refs/remotes/" + shortName;
+		remoteURL = api.join(encodeURIComponent(remote.name()), encodeURIComponent(branch.Name));
+	}
+	return {
+		"CloneLocation": "/gitapi/clone" + fileDir,
+		"CommitLocation": "/gitapi/commit/" + encodeURIComponent(fullName) + fileDir,
+		"DiffLocation": "/gitapi/diff/" + encodeURIComponent(shortName) + fileDir,
+		"FullName": fullName,
+		"GitUrl": remote.url(),
+		"HeadLocation": "/gitapi/commit/HEAD" + fileDir,
+		"Id": remoteBranch && commit ? commit.sha() : undefined,
+		"IndexLocation": "/gitapi/index" + fileDir,
+		"Location": "/gitapi/remote/" + remoteURL + fileDir,
+		"Name": shortName,
+		"TreeLocation": "/gitapi/tree" + fileDir + "/" + encodeURIComponent(shortName),
+		"Type": "RemoteTrackingBranch"
+	};
 }
 
-function getRemotesBranches(workspaceDir, fileRoot, req, res, next, rest) {
-	var remoteName = rest.replace("remote/", "").substring(0, rest.lastIndexOf("/file/")-"/file/".length-1);
-	var repoPath = rest.substring(rest.lastIndexOf("/file/")).replace("/file/","");
-	var fileDir = repoPath;
-	repoPath = api.join(workspaceDir, repoPath);
-	git.Repository.open(repoPath)
-	.then(function(repo) {
-		repo.getReferences(git.Reference.TYPE.OID)
+function remoteJSON(remote, fileDir, branches) {
+	var name = remote.name();
+	return {
+		"CloneLocation": "/gitapi/clone" + fileDir,
+		"IsGerrit": false, // should check 
+		"GitUrl": remote.url(),
+		"Name": name,
+		"Location": "/gitapi/remote/" + encodeURIComponent(name) + fileDir,
+		"Type": "Remote",
+		"Children": branches
+	};
+}
+
+function getRemotes(req, res) {
+	var remoteName = decodeURIComponent(req.params.remoteName || "");
+	var branchName = decodeURIComponent(req.params.branchName || "");
+	var filter = req.query.filter;
+
+	var fileDir, theRepo, theRemote;
+	if (!remoteName && !branchName) {
+		var repo;
+
+		return clone.getRepo(req)
+		.then(function(r) {
+			repo = r;
+			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			return git.Remote.list(r);
+		})
+		.then(function(remotes){
+			var r = [];
+			async.each(remotes, function(remote, cb) {
+				git.Remote.lookup(repo, remote)
+				.then(function(remote){
+					r.push(remoteJSON(remote, fileDir));
+					cb();
+				});
+			}, function() {
+				res.status(200).json({
+					"Children": r,
+					"Type": "Remote"
+				});
+			});
+		});
+	}
+
+	if (remoteName && !branchName) {
+		return clone.getRepo(req)
+		.then(function(repo) {
+			theRepo = repo;
+			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			return repo.getRemote(remoteName);
+		})
+		.then(function(remote) {
+			theRemote = remote;
+			return theRepo.getReferences(git.Reference.TYPE.OID);
+		})
 		.then(function(referenceList) {
 			var branches = [];
-			async.each(referenceList, iterator, function(err) {
-				if (err) {
-					return writeError(403, res);
-				}
-				var resp = JSON.stringify({
-					"Children": branches,
-					"Location": "/gitapi/remote/" + remoteName + "/file/" + fileDir,
-					"Name": remoteName
-				});
-				res.statusCode = 200;
-				res.setHeader('Content-Type', 'application/json');
-				res.setHeader('Content-Length', resp.length);
-				res.end(resp);
-			});
-
-			function iterator(ref, callback) {
+			async.each(referenceList, function(ref,callback) {
 				if (ref.isRemote()) {
-					var rName = ref.name().replace("refs/remotes/", "");
-					if (rName.indexOf(remoteName) === 0) {
-						repo.getBranchCommit(ref)
+					var rName = ref.shorthand();
+					if (rName.indexOf(remoteName) === 0 && (!filter || rName.indexOf(filter) !== -1)) {
+						theRepo.getBranchCommit(ref)
 						.then(function(commit) {
-							branches.push({
-								"CommitLocation": "/gitapi/commit/" + commit.sha() + "/file/" + fileDir,
-								"Id": commit.sha(),
-								"Location": "/gitapi/remote/" + remoteName + "/file/" + fileDir,
-								"Name": rName
-							});
+							branches.push(remoteBranchJSON(ref, commit, theRemote, fileDir));
 							callback();
 						});
 					} else {
-						callback();
-					}					
+						callback(); 
+					}
 				} else {
 					callback();
 				}
-			}
+
+			}, function(err) {
+				if (err) {
+					return writeError(403, res);
+				}
+				res.status(200).json(remoteJSON(theRemote, fileDir, branches));
+			});
 		});
-	});
+	} 
+
+	if (remoteName && branchName) {
+		var theBranch;
+		return clone.getRepo(req)
+		.then(function(repo) {
+			theRepo = repo;
+			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			return repo.getRemote(remoteName);
+		})
+		.then(function(remote) {
+			theRemote = remote;
+			return theRepo.getReference("refs/remotes/" + remoteName + "/" + branchName);
+		})
+		.then(function(branch) {
+			theBranch = branch;
+			return theRepo.getBranchCommit(branch);
+		})
+		.then(function(commit) {
+			res.status(200).json(remoteBranchJSON(theBranch, commit, theRemote, fileDir));
+		})
+		.catch(function() {
+			return writeError(403, res);
+		});
+	}
+	return writeError(404, res);
 }
 
-function getRemotesBranchDetail(workspaceDir, fileRoot, req, res, next, rest) {
-// 	rest = rest.replace("remote/", "");
-// 	var split = rest.split("/file/");
-// 	var repoPath = api.join(workspaceDir, split[1]);
-// 	var remote = split[0];
-
-// 	var resp = JSON.stringify({
-// 		"CommitLocation": "/gitapi/commit/" + bbbcc34fe10c2d731e7f97618f4f469c2f763a31 + "/file/" + repoPath,
-// 		"HeadLocation": "/gitapi/commit/" + remote + "/file/" + repoPath,
-// 		"Id": "bbbcc34fe10c2d731e7f97618f4f469c2f763a31",
-// 		"Location": "/gitapi/remote/" + remote + "/file/" + repoPath
-// 	});
-
-// 	res.statusCode = 200;
-// 	res.setHeader('Content-Type', 'application/json');
-// 	res.setHeader('Content-Length', resp.length);
-// 	res.end(resp);
-}
-
-function addRemote(workspaceDir, fileRoot, req, res, next, rest) {
-	var repoPath = rest.replace("remote/file/", "");
-	var fileDir = repoPath;
-	repoPath = api.join(workspaceDir, repoPath);
+function addRemote(req, res) {
+	var fileDir;
 	
 	if (!req.body.Remote || !req.body.RemoteURI) {
 		return writeError(500, res);
@@ -141,111 +189,99 @@ function addRemote(workspaceDir, fileRoot, req, res, next, rest) {
 		writeError(403, res);
 	}
 
-	git.Repository.open(repoPath)
+	return clone.getRepo(req)
 	.then(function(repo) {
+		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
 		return git.Remote.create(repo, req.body.Remote, req.body.RemoteURI);
 	})
 	.then(function(remote) {
-		var resp = JSON.stringify({
-			"Location": "/gitapi/remote/" + remote.name() + "/file/" + fileDir
+		res.status(201).json({
+			"Location": "/gitapi/remote/" + encodeURIComponent(remote.name()) + fileDir
 		});
-		res.statusCode = 201;
-		res.setHeader('Content-Type', 'application/json');
-		res.setHeader('Content-Length', resp.length);
-		res.end(resp);
 	})
 	.catch(function(err) {
-		console.log(err);
-		writeError(403, res);
+		writeError(403, res, err.message);
 	});
 }
 
-function postRemote(workspaceDir, fileRoot, req, res, next, rest) {
-	rest = rest.replace("remote/", "");
-	var split = rest.split("/file/"); //If the branch name is /file/, this is kind of a problem.
-	var repoPath = api.join(workspaceDir, split[1]);
-	var remote = split[0];
-
-	if (req.body.Fetch) {
-		fetchRemote(repoPath, res, remote)
+function postRemote(req, res) {
+	if (req.body.Fetch === "true") {
+		fetchRemote(req, res, decodeURIComponent(req.params.remoteName), decodeURIComponent(req.params.branchName || ""), req.body.Force);
+	} else if (req.body.PushSrcRef) {
+		pushRemote(req, res, decodeURIComponent(req.params.remoteName), decodeURIComponent(req.params.branchName || ""), req.body.PushSrcRef, req.body.PushTags, req.body.Force);
 	} else {
-		pushRemote(repoPath, req, res, remote)
+		writeError(400, res);
 	}
 }
 
-function fetchRemote(repoPath, res, remote) {
+function fetchRemote(req, res, remote, branch, force) {
+	var task = new tasks.Task(res);
 	var repo;
-	git.Repository.open(repoPath)
+	return clone.getRepo(req)
 	.then(function(r) {
 		repo = r;
 		return git.Remote.lookup(repo, remote);
 	})
 	.then(function(remote) {
-		remote.setCallbacks({
-			certificateCheck: function() {
-				return 1; // Continues connection even if SSL certificate check fails. 
+		var refSpec = null;
+		if (branch) {
+			var remoteBranch = branch;
+			if (branch.indexOf("for/") === 0) {
+				remoteBranch = branch.substr(4);
 			}
-		});
-
-		var refSpec = "+refs/heads/*:refs/remotes/" + remote.name() + "/*";
-
+			refSpec = "refs/heads/" + remoteBranch + ":refs/remotes/" + remote.name() + "/" + branch;
+			if (force) refSpec = "+" + refSpec;
+		}
+		
 		return remote.fetch(
-			[refSpec],
-			git.Signature.default(repo),
+			refSpec ? [refSpec] : null,
+			{callbacks:
+				{
+					certificateCheck: function() {
+						return 1;
+					}
+				}
+			},
 			"fetch"	
 		);
 	})
 	.then(function(err) {
 		if (!err) {
-			// This returns when the task completes, so just give it a fake task.
-			var resp = JSON.stringify({
-				"Id": "11111",
-				"Location": "/task/id/THISISAPLACEHOLDER",
-				"Message": "Fetching " + remote + "...",
-				"PercentComplete": 100,
-				"Running": false
+			task.done({
+				HttpCode: 200,
+				Code: 0,
+				DetailedMessage: "OK",
+				Message: "OK",
+				Severity: "Ok"
 			});
-
-			res.statusCode = 201;
-			res.setHeader('Content-Type', 'application/json');
-			res.setHeader('Content-Length', resp.length);
-			res.end(resp);
 		} else {
-			console.log("fetch failed")
-			writeError(403, res);
+			throw err;
 		}
 	})
 	.catch(function(err) {
-		console.log(err);
-		writeError(403, res);
-	})
+		task.done({
+			HttpCode: 403,
+			Code: 0,
+			Message: err.message,
+			Severity: "Error"
+		});
+	});
 }
 
-function pushRemote(repoPath, req, res, remote) {
-	var taskID = (new Date).getTime(); // Just use the current time
-	var split = remote.split("/"); // remote variable should be [remote]/[branch]
-	var remote = split[0];
-	var branch = split[1];
+function pushRemote(req, res, remote, branch, pushSrcRef, tags, force) {
 	var repo;
 	var remoteObj;
 
-	var task = tasks.addTask(taskID, "Pushing " + remote + "...", true, 0);
+	var task = new tasks.Task(res, false, false, 0);//TODO start task right away to work around bug in client code
 
-	var resp = JSON.stringify(task);
-
-	res.statusCode = 202;
-	res.setHeader('Content-Type', 'application/json');
-	res.setHeader('Content-Length', resp.length);
-	res.end(resp);
-
-	git.Repository.open(repoPath)
+	return clone.getRepo(req)
 	.then(function(r) {
 		repo = r;
 		return git.Remote.lookup(repo, remote);
 	})
 	.then(function(r) {
 		remoteObj = r;
-		return repo.getReference(req.body.PushSrcRef);
+		return repo.getReference(pushSrcRef);
 	})
 	.then(function(ref) {
 
@@ -253,113 +289,84 @@ function pushRemote(repoPath, req, res, remote) {
 			throw new Error(remoteObj.url() + ": not authorized");
 		}
 
-		remoteObj.setCallbacks({
-			certificateCheck: function() {
-				return 1; // Continues connection even if SSL certificate check fails. 
-			},
-			credentials: function() {
-				return git.Cred.userpassPlaintextNew(
-					req.body.GitSshUsername,
-					req.body.GitSshPassword
-				);
-			}
-		});
+		var pushToGerrit = branch.indexOf("for/") === 0;
+		var refSpec = ref.name() + ":" + (pushToGerrit ? "refs/" : "refs/heads/") + branch;
 
-		var refSpec = ref.name() + ":refs/heads/" + branch;
-
-		if (req.body.Force) refSpec = "+" + refSpec;
+		if (force) refSpec = "+" + refSpec;
 
 		return remoteObj.push(
-			[refSpec],
-			null,
-			repo.defaultSignature(),
-			"Push to " + branch
+			tags && false ? [refSpec, "refs/tags/*:refs/tags/*"] : [refSpec],
+			{callbacks: {
+				certificateCheck: function() {
+					return 1; // Continues connection even if SSL certificate check fails. 
+				},
+				credentials: function() {
+					return git.Cred.userpassPlaintextNew(
+						req.body.GitSshUsername,
+						req.body.GitSshPassword
+					);
+				}
+			}}
 		);
 	})
 	.then(function(err) {
-
 		if (!err) {
 			var parsedUrl = url.parse(remoteObj.url(), true);
-			tasks.updateTask(
-				taskID, 
-				100,
-				{
-					HttpCode: 200,
-					Code: 0,
-					DetailedMessage: "OK",
-					JsonData: {
-						"Host": parsedUrl.host,
-						"Scheme": parsedUrl.protocol.replace(":", ""),
-						"Url": remoteObj.url(),
-						"HumanishName": parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf("/") + 1).replace(".git", ""),
-						"Message": "",
-						"Severity": "Normal",
-						Updates: [{
-							LocalName: req.body.PushSrcRef,
-							RemoteName: remote + "/" + branch,
-							Result: "UP_TO_DATE"
-						}]
-					},
-					Message: "OK",
-					Severity: "OK"
+			task.done({
+				HttpCode: 200,
+				Code: 0,
+				DetailedMessage: "OK",
+				JsonData: {
+					"Host": parsedUrl.host,
+					"Scheme": parsedUrl.protocol.replace(":", ""),
+					"Url": remoteObj.url(),
+					"HumanishName": parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf("/") + 1).replace(".git", ""),
+					"Message": "",
+					"Severity": "Normal",
+					Updates: [{
+						LocalName: req.body.PushSrcRef,
+						RemoteName: remote + "/" + branch,
+						Result: "UP_TO_DATE"
+					}]
 				},
-				"loadend"
-			);
+				Message: "OK",
+				Severity: "Ok"
+			});
 		} else {
 			throw new Error("Push failed.");
 		}
 	})
 	.catch(function(err) {
-		console.log(err);
 		var parsedUrl = url.parse(remoteObj.url(), true);
-
-		tasks.updateTask(
-			taskID, 
-			100,
-			{
-				HttpCode: 401,
-				Code: 0,
-				DetailedMessage: err.message,
-				JsonData: {
-					"Host": parsedUrl.host,
-					"Scheme": parsedUrl.protocol.replace(":", ""),
-					"Url": remoteObj.url(),
-					"HumanishName": parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf("/") + 1).replace(".git", "")
-				},
-				Message: err.message,
-				Severity: "Error"
+		task.done({
+			HttpCode: 401,
+			Code: 0,
+			DetailedMessage: err.message,
+			JsonData: {
+				"Host": parsedUrl.host,
+				"Scheme": parsedUrl.protocol.replace(":", ""),
+				"Url": remoteObj.url(),
+				"HumanishName": parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf("/") + 1).replace(".git", "")
 			},
-			"error"
-		);
+			Message: err.message,
+			Severity: "Error"
+		});
 	});
 }
 
-function deleteRemote(workspaceDir, fileRoot, req, res, next, rest) {
-	rest = rest.replace("remote/", "");
-	var split = rest.split("/file/");
-	var repoPath = api.join(workspaceDir, split[1]);
-	var remoteName = split[0];
-	return git.Repository.open(repoPath)
+function deleteRemote(req, res) {
+	var remoteName = decodeURIComponent(req.params.remoteName);
+	return clone.getRepo(req)
 	.then(function(repo) {
 		return git.Remote.delete(repo, remoteName).then(function(resp) {
-			// Docs claim this resolves 0 on success, but in practice we get undefined
-			if (resp === 0 || typeof resp === "undefined") {
-		        res.statusCode = 200;
-		        res.end();
-		    } else {
-		        writeError(403, res);
-		    }
+			if (!resp) {
+				res.status(200).end();
+			} else {
+				writeError(403, res);
+			}
 		}).catch(function(error) {
 			writeError(500, error);
 		});
 	});
 }
-
-module.exports = {
-	getRemotes: getRemotes,
-	getRemotesBranches: getRemotesBranches,
-	getRemotesBranchDetail: getRemotesBranchDetail,
-	addRemote: addRemote,
-	postRemote: postRemote,
-	deleteRemote: deleteRemote
 };

@@ -556,7 +556,7 @@ function EditorSetup(serviceRegistry, pluginRegistry, preferences, readonly) {
 	this.modelPool = new TextModelPool({serviceRegistry: this.serviceRegistry});
 
 	this.editorDomNode = lib.node("editor"); //$NON-NLS-0$
-	this.sidebarDomNode = lib.node("sidebar"); //$NON-NLS-0$
+	this.sidebarDomNode = lib.node("pageSidebar"); //$NON-NLS-0$
 	this.sidebarToolbar = lib.node("sidebarToolbar"); //$NON-NLS-0$
 	this.pageToolbar = lib.node("pageToolbar"); //$NON-NLS-0$
 
@@ -683,6 +683,7 @@ objects.mixin(EditorSetup.prototype, {
 			sidebarNavInputManager: this.sidebarNavInputManager,
 			switcherScope: "viewActions", //$NON-NLS-0$
 			editScope: "editActions", //$NON-NLS-0$
+			toolsScope: "toolsActions", //$NON-NLS-0$
 			menuBar: this.menuBar,
 			toolbar: this.sidebarToolbar
 		});
@@ -1102,10 +1103,15 @@ exports.setUpEditor = function(serviceRegistry, pluginRegistry, preferences, rea
 	enableSplitEditor = localStorage.enableSplitEditor !== "false"; //$NON-NLS-0$
 	
 	setup = new EditorSetup(serviceRegistry, pluginRegistry, preferences, readonly);
-	Deferred.when(setup.createBanner(), function() {
+	Deferred.when(setup.createBanner(), function(result) {
+		if (result && result.navSelection) {
+			//TODO find a better way to give the selection to the navigator
+			sessionStorage.navSelection = JSON.stringify(result.navSelection);
+		}
 		setup.createMenuBar().then(function() {
 			setup.createSideBar();
-			setup.createRunBar().then(function() {
+			// Jon - Remove RunBar
+//			setup.createRunBar().then(function() {
 				setup.editorViewers.push(setup.createEditorViewer());
 				setup.setActiveEditorViewer(setup.editorViewers[0]);
 				if (enableSplitEditor) {
@@ -1114,7 +1120,7 @@ exports.setUpEditor = function(serviceRegistry, pluginRegistry, preferences, rea
 					setup.setSplitterMode(MODE_SINGLE);
 				}
 				setup.load();
-			});
+//			});
 		});
 	});
 };

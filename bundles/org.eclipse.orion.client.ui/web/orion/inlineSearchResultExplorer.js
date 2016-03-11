@@ -716,6 +716,21 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
             reporter.report();
             this._inlineSearchPane.hideReplacePreview();
             this.reportStatus("");
+            //reportList is the result after all files are writen to hte file service. Prepare a "FileContentChanged" event from here
+            var files = [];
+            reportList.forEach(function(fileItem){
+            	var contentType = this._contentTypeService.getFilenameContentType(fileItem.model.name);
+            	var fileObj = Object.create(null);
+            	var metadata = Object.create(null);
+            	metadata.contentType =  contentType ? contentType.id : "";
+            	fileObj.name = fileItem.model.name;
+            	fileObj.location = fileItem.model.location;
+            	fileObj.metadata = metadata;
+            	files.push(fileObj);
+            }.bind(this));
+            if(files.length > 0) {
+				this.fileClient.dispatchEvent({ type: "FileContentChanged", files: files}); //$NON-NLS-0$
+			}
         }.bind(this));
     };
 
@@ -1046,11 +1061,14 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
     };
 
     InlineSearchResultExplorer.prototype.onReplaceCursorChanged = function(currentModel) {
+    	if(currentModel && currentModel.type === "group") {
+    		return;
+    	}
     	this._inlineSearchPane.showReplacePreview();
         if (!_onSameFile(this._currentPreviewModel, currentModel)) {
             this.buildPreview();
         }
-        if (this.compareView && currentModel.type === "detail") {
+        if (this.compareView && ( currentModel.type === "detail" || currentModel.type === "orion.annotation.search.hit")) {
         	if(currentModel.checked) {//If the change is checked we highlight the pair of the diff
 	        	// Figure out change index. Unchecked elements are 
 	        	// removed from diffs and must therefore be skipped.

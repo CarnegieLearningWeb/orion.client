@@ -332,7 +332,6 @@ define([
 					authService.getUser().then(function(jsonData){
 
 						var b = userService.getUserInfo(jsonData.Location).then( function( accountData ){
-							console.log(accountData);
 							settingsWidget.UserName = accountData.UserName;
 							settingsWidget.accountFields[0].setValue( accountData.UserName );
 							if (accountData.FullName){

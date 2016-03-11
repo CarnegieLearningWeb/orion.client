@@ -226,12 +226,14 @@ define([
 		return checkbox;
 	}
 
-	function createQuickfixItem(parent, command, commandInvocation, callback) {
+	function createQuickfixItem(parentElement, command, commandInvocation, callback, prefService) {
 		var element;
 		var button;
 		var clickTarget;
 		var fixAllCheckbox;
 		var fixAllLabel;
+		
+		var quickfixSettings = '/languageTools/quickfix'; //$NON-NLS-1$
 		
 		element = document.createElement("div"); //$NON-NLS-1$
 		
@@ -247,8 +249,16 @@ define([
 		var onClick = callback || command.callback;
 		if (onClick) {
 			var done = function() {
-				if (fixAllCheckbox && fixAllCheckbox.checked){
-					commandInvocation.userData.doFixAll = true;
+				if (fixAllCheckbox){
+					if (fixAllCheckbox.checked){
+						commandInvocation.userData.doFixAll = true;
+					}
+					if (prefService){
+						prefService.get(quickfixSettings).then(function(prefs) {
+							prefs[command.id] = fixAllCheckbox.checked;
+							prefService.put(quickfixSettings, prefs);
+						});
+					}
 				}
 				onClick.call(commandInvocation.handler, commandInvocation);
 			};
@@ -269,21 +279,22 @@ define([
 				e.stopPropagation();
 			}, false);
 		}
-		if (parent.nodeName.toLowerCase() === "ul") {
+		if (parentElement.nodeName.toLowerCase() === "ul") {
 			var li = document.createElement("li"); //$NON-NLS-0$
-			parent.appendChild(li);
-			parent = li;
+			parentElement.appendChild(li);
+			parentElement = li;
 		} else {
 			button.classList.add("commandMargins"); //$NON-NLS-0$
 		}
 		element.appendChild(button);
 		
-		// TODO We check that the internal access to annotation model exists so if it breaks we don't show the checkbox at all
+		// We check that the internal access to annotation model exists so if it breaks we don't show the checkbox at all rather than throw an error later
 		if (command.fixAllEnabled && commandInvocation.userData._annotationModel){
-			var id = command.name + 'fixAll'; //$NON-NLS-1$
+			var id = command.id + 'fixAll'; //$NON-NLS-1$
 			fixAllCheckbox = document.createElement('input'); //$NON-NLS-1$
 			fixAllCheckbox.type = 'checkbox'; //$NON-NLS-1$
 			fixAllCheckbox.className = "quickfixAllParameter"; //$NON-NLS-1$
+			fixAllCheckbox.checked = true;
 			fixAllCheckbox.id = id;
 			
 			fixAllLabel = document.createElement('label'); //$NON-NLS-1$
@@ -291,11 +302,19 @@ define([
 			fixAllLabel.className = "quickfixAllParameter"; //$NON-NLS-1$
 			fixAllLabel.appendChild(document.createTextNode(messages['fixAll'])); 
 			
+			if (prefService){
+				prefService.get(quickfixSettings).then(function(prefs) {
+					if (typeof prefs[command.id] === 'boolean'){
+						fixAllCheckbox.checked = prefs[command.id];
+					}
+					
+				});
+			}
+			
 			element.appendChild(fixAllCheckbox);
 			element.appendChild(fixAllLabel);
 		}
-		
-		parent.appendChild(element);
+		parentElement.appendChild(element);
 		return element;
 	}
 	

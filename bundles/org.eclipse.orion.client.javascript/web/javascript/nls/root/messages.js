@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014, 2015 IBM Corporation and others.
+ * Copyright (c) 2014, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -42,6 +42,7 @@ define({
 	'noImpliedEval' : 'Discouraged implied \'eval()\' use:',
 	'noDupeKeys' : 'Duplicate object keys:',
 	'noDupeKeysFixName': 'Rename key',
+	'noDuplicateCaseFixName' : 'Rename case',
 	'noIterator': 'Discouraged __iterator__ property use:',
 	'noProto': 'Discouraged __proto__ property use:',
 	'noUndefInit': 'Explicitly initializing variables to undefined:',
@@ -69,6 +70,7 @@ define({
 	'varRedecl' : 'Variable re-declarations:',
 	'varShadow': 'Variable shadowing:',
 	'undefMember' : 'Undeclared global reference:',
+	'undefExpression' : 'Undeclared member expression reference:',
 	'unnecessarySemis' : 'Unnecessary semicolons:',
 	'unusedParams' : 'Unused parameters:',
 	'unsupportedJSLint' : 'Unsupported environment directive:',
@@ -99,6 +101,7 @@ define({
 	'noSparseArrays': 'Sparse array declarations:',
 	'javascriptValidation': 'Javascript Validation',
 	'jsHover': 'JavaScript Hover Provider',
+	'removeExtraParensFixName': 'Remove gratuitous parentheses',
 	'removeExtraSemiFixName': 'Remove extra semicolon',
 	'addFallthroughCommentFixName': 'Add $FALLTHROUGH$ comment',
 	'addEmptyCommentFixName': 'Comment empty block',
@@ -111,7 +114,9 @@ define({
 	'sparseArrayFixName': 'Convert to normal array',
 	'semiFixName': 'Add missing \';\'',
 	'radix': 'Missing radix parameter to parseInt():',
+	'radixFixName': 'Add default radix',
 	'unusedVarsUnusedFixName': 'Remove unused variable',
+	'unreadVarsFixName': 'Remove unread variable',
 	'unusedFuncDeclFixName': 'Remove unused function',
 	'noCommaDangleFixName': 'Remove extra \',\'',
 	'addBBreakFixName': 'Add break statement',
@@ -141,6 +146,7 @@ define({
 	'returnsHoverTitle': 'Returns:', // the in-line title for the returns section. The word is used alone in a sentence with no further punctuation
 	'throwsHoverTitle': 'Throws:', // the in-line title for the throws section. The word is used alone in a sentence with no further punctuation
 	'callbackHoverTitle': 'Callback:', // the in-line title for the callback section. The word is used alone in a sentence with no further punctuation
+	'callbackText': 'This function is used as a callback',
 	'sinceHoverTitle': 'Since:', // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
 	'seeAlsoHoverTitle': 'See Also:', // the in-line title for the since section. The word is used alone in a sentence with no further punctuation
 	'openFileForTitle': 'Open file for', // the in-line title for the 'open file hover'. The sentence is used as-is and is followed only by a OS file path
@@ -194,6 +200,8 @@ define({
 	'no-self-assign' : 'Disallow self assignment:',
 	'noShadowFixName' : 'Rename in scope',
 	'type-checked-consistent-return' : 'Discouraged inconsistent returns:',
+	'check-tern-project' : 'File should be added to .tern-project',
+	'checkTernProjectFixName' : 'Add to .tern-project file',
 	
 	//Tern Plugins
 	'ternDocPluginName': 'Doc Comments',

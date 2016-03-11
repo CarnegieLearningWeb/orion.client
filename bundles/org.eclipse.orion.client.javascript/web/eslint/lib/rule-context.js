@@ -158,6 +158,9 @@ function RuleContext(ruleId, eslint, severity, options, settings, ecmaFeatures, 
         return eslint.getSourceCode();
     };
 
+    this.getTern = function() {
+    	    return settings.tern;
+    	};
 }
 
 RuleContext.prototype = {

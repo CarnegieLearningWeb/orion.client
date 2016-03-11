@@ -332,7 +332,7 @@
                         var object = _objectReferences[message.objectId];
                         if (!object) {
                             _throwError(message.id, "object not found", target);
-                        } else if (!method in object) {
+                        } else if (method in object) {
                             _callMethod(message.id, object, object[method], params, target);
                         } else {
                             _throwError(message.id, "method not found", target);
@@ -535,6 +535,16 @@
                 addEventListener("message", _handleMessage, false);
                 _publish(message);
             }
+            if (typeof(window) !== "undefined") {
+            	var head = document.getElementsByTagName("head")[0] || document.documentElement;
+            	var title = head.getElementsByTagName("title")[0];
+            	if (!title) {
+	            	title = document.createElement("title");
+	            	title.textContent = _headers ? _headers.name : '';
+	            	head.appendChild(title);
+	        	}
+        	}
+
             _ports.forEach(function(port) {
                 _publish(message, port);
             });

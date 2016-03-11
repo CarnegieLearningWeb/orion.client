@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014, 2015 IBM Corporation and others.
+ * Copyright (c) 2014, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -17,8 +17,12 @@ define([
 	'orion/Deferred',
 	"orion/i18nUtil",
 	"i18n!javascript/nls/problems",
+	"javascript/ruleData",
+	'orion/serviceregistry',
+	'javascript/scriptResolver',
+	'javascript/ternProjectManager',
 	'mocha/mocha', //must stay at the end, not a module
-], function(Validator, chai, Deferred, i18nUtil, messages) {
+], function(Validator, chai, Deferred, i18nUtil, messages, Rules, mServiceRegistry, Resolver, Manager) {
 	var assert = chai.assert;
 
 	return function(worker) {
@@ -34,9 +38,12 @@ define([
 			 * @returns {Object} The object with the initialized values
 			 */
 			function setup(options) {
+				var serviceRegistry = new mServiceRegistry.ServiceRegistry();
+				var resolver = new Resolver.ScriptResolver(serviceRegistry);
+				var ternProjectManager = new Manager.TernProjectManager(worker, resolver, serviceRegistry);
 				var buffer = options.buffer;
 				var contentType = options.contentType ? options.contentType : 'application/javascript';
-				var validator = new Validator(worker);
+				var validator = new Validator(worker, ternProjectManager);
 				var state = Object.create(null);
 				assert(options.callback, "You must provide a callback for a worker-based test");
 				state.callback = options.callback;
@@ -46,7 +53,7 @@ define([
 					getText: function() {
 						return new Deferred().resolve(buffer);
 					},
-					
+					/*override*/
 					getFileMetadata: function() {
 						var o = Object.create(null);
 						o.contentType = Object.create(null);
@@ -138,7 +145,8 @@ define([
 			});
 			
 			it("Test EOF 2", function(callback) {
-				validate({buffer: "var foo = 10;\nfunction", callback: callback}).then(function (problems) {
+				var config = { rules: {} };
+				validate({buffer: "var foo = 10;\nfunction", callback: callback, config: config}).then(function (problems) {
 						assertProblems(problems, [
 							{start: 14,
 							 end: 22,
@@ -152,7 +160,8 @@ define([
 			});
 			
 			it("Test invalid regex 1", function(callback) {
-				validate({buffer: "/", callback: callback}).then(function (problems) {
+				var config = { rules: {} };
+				validate({buffer: "/", callback: callback, config: config}).then(function (problems) {
 						assertProblems(problems, [
 							{start: 0, 
 							 end: 1, 
@@ -183,7 +192,9 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Script Block - simple block unused var", function(callback) {
-					validate({buffer: '<html><head><script>var xx = 0; this.x;</script></head></html>', contentType: 'text/html', callback: callback}).then(function (problems) {
+					var config = { rules: {} };
+					config.rules['no-unused-vars'] = 1;
+					validate({buffer: '<html><head><script>var xx = 0; this.x;</script></head></html>', contentType: 'text/html', callback: callback, config: config}).then(function (problems) {
 						assertProblems(problems, [
 							{start: 24,
 							 end: 26,
@@ -201,7 +212,9 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Script Block - simple block missing semi", function(callback) {
-					validate({buffer: '<html><head><script>var xx = 0; xx++; this.x</script></head></html>', contentType: 'text/html', callback: callback}).then(function (problems) {
+					var config = { rules: {} };
+					config.rules['semi'] = 1;
+					validate({buffer: '<html><head><script>var xx = 0; xx++; this.x</script></head></html>', contentType: 'text/html', callback: callback, config: config}).then(function (problems) {
 						assertProblems(problems, [
 							{start: 43,
 							 end: 44,
@@ -219,7 +232,9 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Script Block - empty block", function(callback) {
-					validate({buffer: '<html><head><script></script></head></html>', contentType: 'text/html', callback: callback}).then(function (problems) {
+					var config = { rules: Rules.defaults };
+					config.rules['check-tern-project'] = 0;
+					validate({buffer: '<html><head><script></script></head></html>', contentType: 'text/html', callback: callback, config: config}).then(function (problems) {
 						assertProblems(problems, [
 						]);
 					}, function (error) {
@@ -232,8 +247,10 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Script Block - multi block used var 1", function(callback) {
+					var config = { rules: Rules.defaults };
+					config.rules['check-tern-project'] = 0;
 					validate(
-						{buffer: '<html><head><script>var xx;</script></head><body><a>test</a><script>xx++;</script></body></html>', contentType: 'text/html', callback: callback}).then(
+						{buffer: '<html><head><script>var xx;</script></head><body><a>test</a><script>xx++;</script></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, [
 							]);
@@ -248,8 +265,10 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Script Block - multi block used var 2", function(callback) {
+					var config = { rules: Rules.defaults };
+					config.rules['check-tern-project'] = 0;
 					validate(
-						{buffer: '<html><head><script>xx++;</script></head><body><a>test</a><script>var xx;</script></body></html>', contentType: 'text/html', callback: callback}).then(
+						{buffer: '<html><head><script>xx++;</script></head><body><a>test</a><script>var xx;</script></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, [
 								{start: 20,
@@ -269,8 +288,10 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Script Block - multi block unused var", function(callback) {
+					var config = { rules: Rules.defaults };
+					config.rules['check-tern-project'] = 0;
 					validate(
-						{buffer: '<html><head><script>var xx;</script></head><body><a>test</a><script>var yy;</script></body></html>', contentType: 'text/html', callback: callback}).then(
+						{buffer: '<html><head><script>var xx;</script></head><body><a>test</a><script>var yy;</script></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, [
 								{start: 24,
@@ -295,10 +316,17 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML Wrapped Function - multi block unused var", function(callback) {
+					var config = { rules: Rules.defaults };
+					config.rules['check-tern-project'] = 0;
 					validate(
-						{buffer: '<html><head><script></script></head><body><a onclick="xx;;"></a></body></html>', contentType: 'text/html', callback: callback}).then(
+						{buffer: '<html><head><script></script></head><body><a onclick="xx;;"></a></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, [
+								{start: 54,
+								 end: 56,
+								 severity: 'error',
+								 description: i18nUtil.formatMessage.call(null, messages['no-undef-defined'], {0: 'xx'})
+								},
 								{start: 57,
 								 end: 58,
 								 severity: 'warning',
@@ -316,8 +344,10 @@ define([
 				 * @since 10.0
 				 */
 				it("HTML - Empty array for empty blocks", function(callback) {
+					var config = { rules: Rules.defaults };
+					config.rules['check-tern-project'] = 0;
 					validate(
-						{buffer: '<html><head><script></script></head><body><a onclick=""></a></body></html>', contentType: 'text/html', callback: callback}).then(
+						{buffer: '<html><head><script></script></head><body><a onclick=""></a></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, [
 							]);
@@ -328,7 +358,7 @@ define([
 				});
 			});
 			
-			describe('ESLint Rule Tests', function(){
+			describe('ESLint Rule Tests', function() {
 				/**
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=481045
 				 */
@@ -386,6 +416,51 @@ define([
 						validate({buffer: '/*eslint-enable strict */ var foo \n var bar', callback: callback, config: config}).then(function (problems) {
 							try {
 								assert.equal(problems.problems.length, 2);
+								worker.getTestState().callback();
+							}
+							catch(err) {
+								worker.getTestState().callback(err);
+							}
+						}, function (error) {
+							worker.getTestState().callback(error);
+						});
+					});
+					it("comment based problem (no AST node) - eslint-disable 1", function(callback) {
+						var config = { rules: {} };
+						config.rules['unnecessary-nls'] = 1;
+						validate({buffer: '/*eslint-disable unnecessary-nls */ var a = 1; //$NON-NLS-1$', callback: callback, config: config}).then(function (problems) {
+							try {
+								assert.equal(problems.problems.length, 0);
+								worker.getTestState().callback();
+							}
+							catch(err) {
+								worker.getTestState().callback(err);
+							}
+						}, function (error) {
+							worker.getTestState().callback(error);
+						});
+					});
+					it("comment based problem (no AST node) - eslint-disable 2", function(callback) {
+						var config = { rules: {} };
+						config.rules['unnecessary-nls'] = 1;
+						validate({buffer: '/*eslint-disable unnecessary-nls */ var a = "1"; //$NON-NLS-2$', callback: callback, config: config}).then(function (problems) {
+							try {
+								assert.equal(problems.problems.length, 0);
+								worker.getTestState().callback();
+							}
+							catch(err) {
+								worker.getTestState().callback(err);
+							}
+						}, function (error) {
+							worker.getTestState().callback(error);
+						});
+					});
+					it("comment based problem (no AST node) - eslint-enable/disable 3", function(callback) {
+						var config = { rules: {} };
+						config.rules['unnecessary-nls'] = 1;
+						validate({buffer: '/*eslint-disable unnecessary-nls */ var a = 1; //$NON-NLS-1$\n/*eslint-enable unnecessary-nls */ var a = 1; //$NON-NLS-1$', callback: callback, config: config}).then(function (problems) {
+							try {
+								assert.equal(problems.problems.length, 1);
 								worker.getTestState().callback();
 							}
 							catch(err) {
@@ -942,7 +1017,60 @@ define([
 					var flagExpr = { rules: {} };
 					flagDecl.rules[RULE_ID] = [1, {decl: 1}];
 					flagExpr.rules[RULE_ID] = [1, {expr: 1}];
-	
+					
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=488261
+					 */
+					it("should not flag for function expression assignment 1", function(callback) {
+						var config = flagExpr;
+						validate({buffer: "/** */Foo.bar.baz = function() {};", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=488261
+					 */
+					it("should not flag for function expression assignment 2", function(callback) {
+						var config = flagExpr;
+						validate({buffer: "/** */Foo.bar.baz = function baz() {};", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=488261
+					 */
+					it("should not flag for function expression assignment 3", function(callback) {
+						var config = flagExpr;
+						validate({buffer: "/** */Foo.bar['baz'] = function() {};", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=488261
+					 */
+					it("should not flag for function expression assignment 3", function(callback) {
+						var config = flagExpr;
+						validate({buffer: "/** */Foo['bar']['baz'] = function() {};", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					
 					it("should not flag for object property function expression", function(callback) {
 						var config = flagExpr;
 						validate({buffer: "var foo = {/**foo*/f: function() {}};", callback: callback, config: config}).then(
@@ -3843,7 +3971,7 @@ define([
 				describe('no-proto', function() {
 					var RULE_ID = "no-proto";
 					it("should flag __proto__ 1", function(callback) {
-						var topic = "a.__proto__ = function() {};";
+						var topic = "myProto.__proto__ = function() {};";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -3860,7 +3988,7 @@ define([
 							});
 					});
 					it("should flag __proto__ 2", function(callback) {
-						var topic = "a.b.c.__proto__ = function() {};";
+						var topic = "myProto.b.c.__proto__ = function() {};";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -3877,7 +4005,7 @@ define([
 							});
 					});
 					it("should flag __proto__ 3", function(callback) {
-						var topic = "a['__proto__'] = function() {};";
+						var topic = "myProto['__proto__'] = function() {};";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -3894,7 +4022,7 @@ define([
 							});
 					});
 					it("should flag __proto__ 4", function(callback) {
-						var topic = "a.b[\"__proto__\"] = function() {};";
+						var topic = "myProto.b[\"__proto__\"] = function() {};";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -3924,7 +4052,7 @@ define([
 							});
 					});
 					it("should not flag __proto__ 2", function(callback) {
-						var topic = "var a = __proto__ = function() {};";
+						var topic = "var azzzzzz = __proto__ = function() {};";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -3936,7 +4064,7 @@ define([
 							});
 					});
 					it("should not flag __proto__ 3", function(callback) {
-						var topic = "var a = __proto__;";
+						var topic = "var myProto = __proto__;";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -4435,7 +4563,9 @@ define([
 				//NO-NEW-WRAPPERS --------------------------------------------------------
 				describe('no-new-wrappers', function() {
 					var RULE_ID = "no-new-wrappers";
-			
+					/**
+					 * Checks the Object constructor message
+					 */
 					function assertMessages(messages, size) {
 							try {
 								var temp = messages.problems;
@@ -4632,6 +4762,146 @@ define([
 						validate({buffer: topic, callback: callback, config: config}).then(
 							function (problems) {
 								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Ignore createElement 1", function(callback) {
+						var topic = "document.createElement('span');";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Ignore createElement 2", function(callback) {
+						var topic = "if(true) {document.createElement('span');}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, []);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Mark non-document createElement 1", function(callback) {
+						var topic = "if(true) {foo.document.createElement('span');}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Non-externalized string literal 'span'.",
+										nodeType: "Literal"
+									}
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Mark non-document createElement 2", function(callback) {
+						var topic = "if(true) {foo.createElement('span');}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Non-externalized string literal 'span'.",
+										nodeType: "Literal"
+									}
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Mark non-document createElement 3", function(callback) {
+						var topic = "if(true) {createElement('span');}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Non-externalized string literal 'span'.",
+										nodeType: "Literal"
+									}
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Mark non-document createElement 4", function(callback) {
+						var topic = "createElement('span');";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Non-externalized string literal 'span'.",
+										nodeType: "Literal"
+									}
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					/**
+					 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=487677
+					 */
+					it("Mark non-document createElement 5", function(callback) {
+						var topic = "document.delegate.createElement('span');";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Non-externalized string literal 'span'.",
+										nodeType: "Literal"
+									}
+								]);
 							},
 							function (error) {
 								worker.getTestState().callback(error);
@@ -7409,6 +7679,263 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
+						
+						//------------------------------------------------------------------------------
+						// Test references to globals in other files that Tern knows about
+						//------------------------------------------------------------------------------
+						it("no-undef cross file 1 - should not report undefined function when defined in a known file", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefTest1.js", source: "function noUndefTest1(){}"}}); 
+							var topic = "noUndefTest1();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+						it("no-undef cross file 2 - should not report undefined var when defined in a known file", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefTest2.js", source: "var noUndefTest2;"}}); 
+							var topic = "noUndefTest2++;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+						it("no-undef cross file 3 - should not report undefined property when defined in a known file", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefTest3.js", source: "this.noUndefTest3 = function(){};"}}); 
+							var topic = "noUndefTest3();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+					});
+                    //NO-UNDEF-EXPRESSION -----------------------------------------------------
+					describe('no-undef-expression', function() {
+						var RULE_ID = "no-undef-expression";
+						//------------------------------------------------------------------------------
+						// Test undeclared globals
+						//------------------------------------------------------------------------------
+						it("Single file undeclared member", function(callback) {
+							var topic = "var undefExpr = {a: function(){}}; undefExpr.b();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+                        it("Single file declared member", function(callback) {
+							var topic = "var undefExpr = {a: function(){}}; undefExpr.a();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []
+									);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						// Right now we assume a type with no properties means that Tern is missing the necessary information
+                        it("Single file undeclared member object has no properties", function(callback) {
+							var topic = "var undefExpr = {}; undefExpr.a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+                        it("Single file multiple undeclared members", function(callback) {
+							var topic = "var undefExpr = {a: function(){}}; undefExpr.b(); undefExpr.c()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined.",
+										nodeType: "Identifier"
+									},
+                                    {
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'c' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it.skip("Single file wrong  undeclared members", function(callback) {
+							var topic = "var undefExpr = {a: function(){}}; undefExpr.b(); undefExpr.c()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined.",
+										nodeType: "Identifier"
+									},
+                                    {
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'c' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+                        it("Single file multiple member expression", function(callback) {
+							var topic = "var undefExpr = {a: {b: {c: function(){}}}}; undefExpr.a.b.d(); undefExpr.b();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'d' is undefined.",
+										nodeType: "Identifier"
+									},
+                                    {
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						// TODO Tern only finds the property of v if you run open Decl on a()
+                        it.skip("Single file member declared inline", function(callback) {
+							var topic = "var undefExpr = {}; undefExpr.a = function(){}; undefExpr.a();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'a' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+                        // TODO We check that the property exists, not the actual property type
+                        it.skip("Single file declared property is wrong type", function(callback) {
+							var topic = "var undefExpr = {a: {}}; undefExpr.a();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'a' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+                        //------------------------------------------------------------------------------
+						// Test references to globals in other files that Tern knows about
+						//------------------------------------------------------------------------------
+						it("Multi file 1 - undeclared member", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest1.js", source: "var noUndefExpr1 = {a: function(){}};"}}); 
+							var topic = "noUndefExpr1.b();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+                        it("Multi file 2 - declared member", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest2.js", source: "var noUndefExpr2 = {a: function(){}};"}}); 
+							var topic = "noUndefExpr2.a();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+                        it("Multi file 3 - undeclared member no properties", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest3.js", source: "var noUndefExpr3 = {};"}}); 
+							var topic = "noUndefExpr3.a();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
 					});
 					//NO-UNDEF-INIT -------------------------------------------------
 					describe('no-unreachable', function() {
@@ -8911,6 +9438,38 @@ define([
 								function (error) {
 									worker.getTestState().callback(error);
 								});
+						});
+						it("no-unused var cross file 1 - should not report unused function when used in a known html file", function(callback) {
+							worker.postMessage(
+								{
+									request: 'addFile',
+									args: {
+										file: "noUndefTest1.html",
+										source:
+											"<html>\n" +
+											"<body onload=\"main()\">\n" +
+											"	<div>\n" +
+											"		Test page\n" +
+											"	</div>\n" +
+											"</body>\n" +
+											"</html>"
+									}
+								}); 
+							var topic = 
+								"/*eslint-env browser */\n" +
+								"function main() {\n" +
+								"	alert (\"Hello\");\n" +
+								"}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
 						});
 					});
 			
@@ -10552,8 +11111,8 @@ define([
 										id: RULE_ID,
 										severity: 'error',
 										description: "Duplicate case label.",
-										start: 82,
-										end: 104
+										start: 87,
+										end: 88
 									}]);
 								},
 								function (error) {
@@ -11749,6 +12308,50 @@ define([
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
 									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag return number and variable number type - this is using the tern object to resolve type", function(callback) {
+							// https://bugs.eclipse.org/bugs/show_bug.cgi?id=485693
+							var topic = 
+								"/**\n" +
+								" * @param {Number} one\n" +
+								" */\n" +
+								"function foo(one) {\n" +
+								"	if(one === 10) {\n" +
+								"		return 0;\n" +
+								"	}\n" +
+								"	var two = one;\n" +
+								"	return two;\n" +
+								"}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// check-tern-project --------------------------------------------
+					describe('check-tern-project', function() {
+						var RULE_ID = "check-tern-project";
+						it("flag lonely file", function(callback) {
+							var topic = 	"function foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "File should be added to the .tern-project file"
+									}]);
 								},
 								function (error) {
 									worker.getTestState().callback(error);

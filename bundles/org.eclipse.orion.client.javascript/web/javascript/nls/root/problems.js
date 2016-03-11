@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014, 2015 IBM Corporation and others.
+ * Copyright (c) 2014, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -125,6 +125,7 @@ define({
 	'no-self-assign' : 'Assigning to itself is pointless.',
 	'type-checked-consistent-return-description' : 'Detect inconsistent return values',
 	'inconsistent-return' : 'Inconsistent return types: \'{{type1}}\', \'{{type2}}\'',
+	'check-tern-project' : 'File should be added to the .tern-project file',
 
 	//.tern-project file validation messages
 	'notNum': "'${0}' must be a number",
@@ -133,11 +134,16 @@ define({
 	'onlyStrings': "'${0}' entries can only be strings",
 	'notObject': "'${0}' must be an object",
 	'pluginNotObject': "plugin '${0}' must be an object",
+	'noDupes': "Duplicate entries are not allowed",
 	'problemInFile': "There is a problem with your .tern-project-file.",
 	'openFile': "Open the .tern-project file",
 	'errorParsing': "There was an error parsing the JSON in your .tern-project file",
 	'multiAttrProblems': "Multiple problems were found with attributes in your .tern-project file.",
 	'attrProblem': "A problem with one of the attributes in your .tern-project file was found.",
-	'failedWrite': "There was a problem writing to your .tern-project file.",
-	'noDupes': "Duplicate entries are not allowed"
+	'multipleFileMatchesProblem': 'Multiple file matches found for: ${0}. Defaulting to: ${1}.',
+	'noFileMatchProblem': 'No file match found for: ${0}.',
+	'tooManyFileMatchProblems': '... (${0} more)',
+	'fileMatchProblems': 'Problems found in the loadEagerly attribute of your .tern-project file.',
+	'fileMatchProgress': 'Validating loadEagerly paths in your .tern-project file.',
+	'failedWrite': "There was a problem writing to your .tern-project file."
 });

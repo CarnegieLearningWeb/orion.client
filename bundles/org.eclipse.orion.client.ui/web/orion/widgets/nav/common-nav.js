@@ -122,15 +122,6 @@ define([
 			var folder = event.item;
 			navHandler.cursorOn(folder);
 			navHandler.setSelection(folder, false);
-			// now toggle its expand/collapse state
-			var curModel = navHandler._modelIterator.cursor();
-			if (navHandler.isExpandable(curModel)){
-				if (!navHandler.isExpanded(curModel)){
-					this.myTree.expand(curModel);
-				} else {
-					this.myTree.collapse(curModel);
-				}
-			}
 		},
 		onModelCreate: function(event) {
 			return FileExplorer.prototype.onModelCreate.call(this, event).then(function () {
@@ -283,7 +274,7 @@ define([
 			var pasteSelections = new KeyBinding('v', true); /* Ctrl+V */ //$NON-NLS-0$
 			var upFolder = new KeyBinding(38, false, false, true); /* Alt+UpArrow */
 			var downFolder = new KeyBinding(40, false, false, true); /* Alt+DownArrow */
-			downFolder.domScope = upFolder.domScope = pasteSelections.domScope = copySelections.domScope = cutBinding.domScope  = delBinding.domScope = renameBinding.domScope = "sidebar"; //$NON-NLS-0$
+			downFolder.domScope = upFolder.domScope = pasteSelections.domScope = copySelections.domScope = cutBinding.domScope  = delBinding.domScope = renameBinding.domScope = typeof this.parentId === "string" ? this.parentId : this.parentId.id; //$NON-NLS-0$
 			downFolder.scopeName = upFolder.scopeName = pasteSelections.scopeName = copySelections.scopeName = cutBinding.scopeName  = delBinding.scopeName = renameBinding.scopeName = messages.Navigator; //$NON-NLS-0$
 
 			// New actions

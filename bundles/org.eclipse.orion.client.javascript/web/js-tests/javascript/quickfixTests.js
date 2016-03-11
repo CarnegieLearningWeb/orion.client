@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014, 2015 IBM Corporation and others.
+ * Copyright (c) 2014, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -21,8 +21,11 @@ define([
 	'javascript/cuProvider',
 	'javascript/commands/renameCommand',
 	'javascript/commands/generateDocCommand',
+	'orion/serviceregistry',
+	'javascript/scriptResolver',
+	'javascript/ternProjectManager',
 	'mocha/mocha', //must stay at the end, not a module
-], function(QuickFixes, Validator, chai, Deferred, Esprima, ASTManager, CUProvider, RenameCommand, GenerateDocCommand) {
+], function(QuickFixes, Validator, chai, Deferred, Esprima, ASTManager, CUProvider, RenameCommand, GenerateDocCommand, mServiceRegistry, Resolver, Manager) {
 	var assert = chai.assert;
 	
 	return function(worker) {
@@ -49,7 +52,10 @@ define([
 				var buffer = options.buffer;
 				var contentType = options.contentType ? options.contentType : 'application/javascript';
 				var astManager = new ASTManager.ASTManager(Esprima);
-				var validator = new Validator(worker, CUProvider);
+				var serviceRegistry = new mServiceRegistry.ServiceRegistry();
+				var resolver = new Resolver.ScriptResolver(serviceRegistry);
+				var ternProjectManager = new Manager.TernProjectManager(worker, resolver, serviceRegistry);
+				var validator = new Validator(worker, ternProjectManager);
 				var state = Object.create(null);
 				var loc = contentType === 'text/html' ? 'quickfix_test_script.html' : 'quickfix_test_script.js';
 				assert(options.callback, "You must provide a callback for a worker-based test");
@@ -59,7 +65,7 @@ define([
 				validator._enableOnly(rule.id, rule.severity, rule.opts);
 				var renameCommand = new RenameCommand.RenameCommand(worker, {setSearchLocation: function(){}});
 				var generateDocCommand = new GenerateDocCommand.GenerateDocCommand(astManager, CUProvider);
-				var fixComputer = new QuickFixes.JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand);
+				var fixComputer = new QuickFixes.JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand, ternProjectManager);
 				var editorContext = {
 					/*override*/
 					getText: function(start, end) {
@@ -140,7 +146,6 @@ define([
 							assert.equal(p.length, pos.length, "The position lengths do not match");
 						});
 					});
-					worker.getTestState().callback();
 				}
 				catch(err) {
 					worker.getTestState().callback(err);
@@ -169,9 +174,8 @@ define([
 								assert(i !== pbs.length, "Did not find any problems for the expected id: "+ options.pid);
 							} else {
 								assert(pbs, "There should always be problems");
-								if (Array.isArray(options.expected)){
-									assert.equal(pbs.length, options.expected.length, 'Number of problems found (' + pbs.length + ') does not match expected');
-								} else {
+								// Some quick fixes may provide multiple expected text edits per problem
+								if (!Array.isArray(options.expected)){
 									assert.equal(pbs.length, 1, 'Expected only one problem per test');
 								}
 								assert(annot.id, "No problem id is reported");
@@ -188,10 +192,8 @@ define([
 									annotations[i].title = annotations[i].description;
 								}
 							}
-							return obj.fixComputer.execute(obj.editorContext, {annotation: annot, annotations: annotations, input: obj.loc}).then(function(result) {
-									if (result === null) {
-										worker.getTestState().callback();
-									}
+							return obj.fixComputer.execute(obj.editorContext, {annotation: annot, annotations: annotations, input: obj.loc}).then(function() {
+									worker.getTestState().callback();
 								},
 								function(err) {
 									if(err instanceof Error) {
@@ -226,16 +228,21 @@ define([
 						assert.equal(computed.text.length, expected.length, "Wrong number of quick fix text edits");
 						assert.equal(computed.selection.length, expected.length, "Wrong number of quick fix selections");						
 						for (var i=0; i<expected.length; i++) {
-							assert(computed.text[i].indexOf(expected[i].value) > -1, 'The fix: '+computed[i]+' does not match the expected fix of: '+expected[i].value);
+							assert(computed.text[i] === expected[i].value, 'The fix: \"'+computed.text[i]+'\" does not match the expected fix of: \"'+expected[i].value + '\"');
 							assert.equal(computed.selection[i].start, expected[i].start, 'The fix starts do not match');
 							assert.equal(computed.selection[i].end, expected[i].end, 'The fix ends do not match');
 						}
+					} else if (typeof computed === 'object' && Array.isArray(computed.text)){
+						assert.equal(computed.text.length, 1, 'Was expecting one quick fix text edit');
+						assert.equal(computed.selection.length, 1, 'Was expected one quick fix selection range');
+						assert(computed.text[0].indexOf(expected.value) > -1, 'The fix: \"'+computed.text[0]+'\"" does not match the expected fix of: '+expected.value);
+						assert.equal(computed.selection[0].start, expected.start, 'The fix starts do not match');
+						assert.equal(computed.selection[0].end, expected.end, 'The fix ends do not match');
 					} else {
 						assert(computed.indexOf(expected.value) > -1, 'The fix: '+computed+' does not match the expected fix of: '+expected.value);
 						assert.equal(start, expected.start, 'The fix starts do not match');
 						assert.equal(end, expected.end, 'The fix ends do not match');
 					}
-					worker.getTestState().callback();
 				}
 				catch(err) {
 					worker.getTestState().callback(err);
@@ -256,6 +263,23 @@ define([
 				rule.opts = opts;
 				return rule;
 			}
+		//RADIX
+		describe("radix", function() {
+			it("parseInt radix", function(done) {
+				var rule = createTestRule("radix");
+				var expected = {
+					value: ", 10",
+					start: 23,
+					end: 23
+				};
+				return getFixes({
+					buffer: "var four = parseInt('4');",
+					rule: rule,
+					expected: expected,
+					callback: done
+				});
+			});
+		});
 		//MISSING-DOC
 		describe("missing-doc", function() {
 			it("function declaration no params", function(done) {
@@ -2194,6 +2218,215 @@ define([
 								  contentType: 'text/html'});
 			});
 		});
+		//NO-EXTRA-PARENS
+		describe('no-extra-parens', function(){
+			it("no-extra-parens - if statement",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 10, 
+								end: 11},
+								{value: "",
+								start: 12, 
+								end: 13}
+								];
+				return getFixes({buffer: 'if (a === (b)){}', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			it("no-extra-parens - typeof",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: " ",
+								start: 10, 
+								end: 11},
+								{value: "",
+								start: 12, 
+								end: 13}
+								];
+				return getFixes({buffer: 'if (typeof(a) === "object"){}', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			it("no-extra-parens - typeof 2",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 10, 
+								end: 11},
+								{value: "",
+								start: 13, 
+								end: 14}
+								];
+				return getFixes({buffer: 'if (typeof( a) === "object"){}', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			it("no-extra-parens - typeof 3",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 11, 
+								end: 12},
+								{value: "",
+								start: 13, 
+								end: 14}
+								];
+				return getFixes({buffer: 'if (typeof (a) === "object"){}', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			it("no-extra-parens - fix all not nested",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 8, 
+								end: 9},
+								{value: "",
+								start: 12, 
+								end: 13},
+								{value: "",
+								start: 23, 
+								end: 24},
+								{value: "",
+								start: 27, 
+								end: 28}
+								];
+				return getFixes({buffer: 'var a = (1+1);\nvar b = (1-1);', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			it("no-extra-parens - fix all nested",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 8, 
+								end: 9},
+								{value: "",
+								start: 9, 
+								end: 10},
+								{value: "",
+								start: 11, 
+								end: 12},
+								{value: "",
+								start: 13, 
+								end: 14},
+								{value: "",
+								start: 15, 
+								end: 16},
+								{value: "",
+								start: 16, 
+								end: 17},
+								];
+				return getFixes({buffer: 'var a = ((1)+(1));', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			// The no-extra-parens rule will not create two annotations for duplicate parentheses ((a)) meaning the user has to run the quickfix all twice
+			it("no-extra-parens - fix all nested, hiding another extra paren",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 10, 
+								end: 11},
+								{value: "",
+								start: 12, 
+								end: 13},
+								];
+				return getFixes({buffer: 'var a = (((1)));', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback});
+			});
+			it("no-extra-parens - in HTML if statement",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 18, 
+								end: 19},
+								{value: "",
+								start: 20, 
+								end: 21}
+								];
+				return getFixes({buffer: '<script>if (a === (b)){}</script>', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  contentType: 'text/html'});
+			});
+			it("no-extra-parens - in HTML typeof",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: " ",
+								start: 18, 
+								end: 19},
+								{value: "",
+								start: 20, 
+								end: 21}
+								];
+				return getFixes({buffer: '<script>if (typeof(a) === "object"){}</script>', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  contentType: 'text/html'});
+			});
+			it("no-extra-parens - in HTML fix all not nested",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 16, 
+								end: 17},
+								{value: "",
+								start: 20, 
+								end: 21},
+								{value: "",
+								start: 31, 
+								end: 32},
+								{value: "",
+								start: 35, 
+								end: 36}
+								];
+				return getFixes({buffer: '<script>var a = (1+1);\nvar b = (1-1);</script>', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  contentType: 'text/html'});
+			});
+			it("no-extra-parens - in HTML fix all nested",function(callback) {
+				var rule = createTestRule('no-extra-parens');
+				 var expected = [
+				 				{value: "",
+								start: 16, 
+								end: 17},
+								{value: "",
+								start: 17, 
+								end: 18},
+								{value: "",
+								start: 19, 
+								end: 20},
+								{value: "",
+								start: 21, 
+								end: 22},
+								{value: "",
+								start: 23, 
+								end: 24},
+								{value: "",
+								start: 24, 
+								end: 25},
+								];
+				return getFixes({buffer: '<script>var a = ((1)+(1));</script>', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  contentType: 'text/html'});
+			});
+		});
 		//NO-EXTRA-SEMI
 		describe('no-extra-semi', function(){
 			it("Test no-extra-semi-1",function(callback) {
@@ -2363,8 +2596,25 @@ define([
 								  expected: expected,
 								  callback: callback});
 			});
-			
-			
+			it("Test no-extra-semi fix all inside html",function(callback) {
+				var rule = createTestRule('no-extra-semi');
+				var expected = [
+				 				{value: "",
+								start: 18, 
+								end: 19},
+								{value: "",
+								start: 19, 
+								end: 20},
+								{value: "",
+								start: 20, 
+								end: 21},
+								];
+				return getFixes({buffer: '<script>var a = 0;;;;</script>', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  contentType: 'text/html'});
+			});
 			it("Test no-extra-semi-2",function(callback) {
 				var rule = createTestRule('no-extra-semi');
 				var expected = {value: "",
@@ -3752,6 +4002,41 @@ define([
 								  contentType: 'text/html'});
 			});
 		});
+		describe("no-unused-vars-unread", function() {
+			it("Test no-unused-vars-unread-1",function(callback) {
+				var rule = createTestRule('no-unused-vars');
+				var expected = {value: "",
+								start: 0, 
+								end: 10};
+				return getFixes({buffer: 'var a = 4;', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  pid: 'no-unused-vars-unread'});
+			});
+			it("Test no-unused-vars-unread-2",function(callback) {
+				var rule = createTestRule('no-unused-vars');
+				var expected = {value: "",
+								start: 4, 
+								end: 12};
+				return getFixes({buffer: 'var a = 10, b;', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  pid: 'no-unused-vars-unread'});
+			});
+			it("Test no-unused-vars-unread-3",function(callback) {
+				var rule = createTestRule('no-unused-vars');
+				var expected = {value: "",
+								start: 5, 
+								end: 12};
+				return getFixes({buffer: 'var a, b = 4;', 
+								  rule: rule,
+								  expected: expected,
+								  callback: callback,
+								  pid: 'no-unused-vars-unread'});
+			});
+		});
 		//NO-MISSING-NLS
 		describe("no-missing-nls", function() {
 			it("Test missing-nls-1", function(callback) {
@@ -4046,11 +4331,38 @@ define([
 				var expected = {value: "isNaN(45 === (foo+23))",
 								start: 3, 
 								end: 28};
-				return getFixes({buffer: 'if(NaN === (45 === (foo+23)){}', 
+				return getFixes({buffer: 'if(NaN === (45 === (foo+23))){}', 
 								  rule: rule,
 								  expected: expected,
 								  callback: callback,
 								  pid: 'use-isnan'});
+			});
+		});
+		//NO-DUPLICATE-CASE
+		describe("no-duplicate-case", function() {
+			it("no-duplicate-case - rename 1", function(done) {
+				var rule = createTestRule("no-duplicate-case");
+				var expected = {
+					groups: [
+						{data: {}, positions: [{offset: 66, length: 1}]}
+					]
+				};
+				return getFixes({
+					buffer: "var a = 1;\n" +
+							"switch (a) {\n" +
+							"	case 1:\n" +
+							"		break;\n" +
+							"	case 2:\n" +
+							"		break;\n" +
+							"	case 1:\n" +
+							"		break;\n" +
+							"	default:\n" +
+							"		break;\n" +
+							"}",
+					rule: rule,
+					expected: expected,
+					callback: done
+				});
 			});
 		});
 		});

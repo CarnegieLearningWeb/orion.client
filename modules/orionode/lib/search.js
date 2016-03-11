@@ -9,31 +9,35 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var connect = require('connect');
+var apiPath = require('./middleware/api_path');
+var express = require('express');
+var bodyParser = require('body-parser');
+var Promise = require('bluebird');
 var url = require('url');
-var fs = require('fs');
 var fileUtil = require('./fileUtil');
-var resource = require('./resource');
+
+var fs = Promise.promisifyAll(require('fs'));
+
+var SUBDIR_SEARCH_CONCURRENCY = 10;
 
 module.exports = function(options) {
-	var workspaceRoot = options.root;
+	var root = options.root;
 	var fileRoot = options.fileRoot;
-	var workspaceDir = options.workspaceDir;
-	if (!workspaceRoot) { throw 'options.root path required'; }
+	if (!root) { throw new Error('options.root path required'); }
 	var workspaceId = 'orionode';
 	var workspaceName = 'Orionode Workspace';
 	var fieldList = "Name,NameLower,Length,Directory,LastModified,Location,Path,RegEx,CaseSensitive".split(",");
 
 	function originalFileRoot(req) {
-		return fileUtil.getContextPath(req) + fileRoot;
+		return req.contextPath + fileRoot;
 	}
 
 	function isSearchField(term) {
 		for (var i = 0; i < fieldList.length; i++) {
 			if (term.lastIndexOf(fieldList[i] + ":", 0) === 0) {
 				return true;
-			};
-		};
+			}
+		}
 		return false;
 	}
 
@@ -43,7 +47,7 @@ module.exports = function(options) {
 			var character = specialChars.substring(i,i+1);
 			var escaped = "\\" + character;
 			searchTerm = searchTerm.replace(new RegExp(escaped,"g"), character);
-		};
+		}
 		return searchTerm;
 	}
 
@@ -56,7 +60,7 @@ module.exports = function(options) {
 		this.regEx = false;
 		this.rows = 10000;
 		this.scopes = [];
-		this.searchTerm = null;
+		this.searchTerm = "*";
 		this.searchTermCaseSensitive = false;
 		this.username = null;
 
@@ -70,7 +74,7 @@ module.exports = function(options) {
 						this.filenamePatternCaseSensitive = false;
 						this.filenamePattern = term.substring(10);
 					} else if (term.lastIndexOf("Location:", 0) === 0) {
-						this.location = term.substring(9 + fileUtil.getContextPath(req).length);
+						this.location = term.substring(9 + req.contextPath.length);
 					} else if (term.lastIndexOf("Name:", 0) === 0) {
 						this.filenamePatternCaseSensitive = true;
 						this.filenamePattern = term.substring(5);
@@ -87,7 +91,7 @@ module.exports = function(options) {
 
 			this.defaultLocation = "/file/" + workspaceId;
 		};
-	};
+	}
 
 	function buildSearchPattern(searchOpts){
 		var searchTerm = searchOpts.searchTerm;
@@ -97,14 +101,14 @@ module.exports = function(options) {
 			}
 
 			searchTerm = undoLuceneEscape(searchTerm);
-			if (searchTerm.indexOf("?") != -1 || searchTerm.indexOf("*") != -1) {
+			if (searchTerm.indexOf("?") !== -1 || searchTerm.indexOf("*") !== -1) {
 				if (searchTerm.indexOf("*") === 0) {
 					searchTerm = searchTerm.substring(1);
 				}
-				if (searchTerm.indexOf("?") != -1) {
-					searchTerm = searchTerm.replace("?",".");
+				if (searchTerm.indexOf("?") !== -1) {
+					searchTerm = searchTerm.replace("?", ".");
 				}
-				if (searchTerm.indexOf("*") != -1) {
+				if (searchTerm.indexOf("*") !== -1) {
 					searchTerm = searchTerm.replace("*", ".*");
 				}
 			}
@@ -119,44 +123,72 @@ module.exports = function(options) {
 	}
 
 	function buildFilenamePattern(searchOpts){
-		var filenamePattern = searchOpts.filenamePattern;
-		if (filenamePattern.indexOf("?") != -1 || filenamePattern.indexOf("*") != -1) {
-			if (filenamePattern.indexOf("*") === 0) {
-				filenamePattern = filenamePattern.substring(1);
-			}
-			if (filenamePattern.indexOf("?") != -1) {
-				filenamePattern = filenamePattern.replace("?",".");
-			}
-			if (filenamePattern.indexOf("*") != -1) {
-				filenamePattern = filenamePattern.replace("*", ".*");
-			}
+		var filenamePatterns = searchOpts.filenamePattern;
+		//Default File Pattern
+		if(filenamePatterns === null){
+			filenamePatterns = ".*";
 		}
-
-		if (!searchOpts.filenamePatternCaseSensitive) {
-			return new RegExp(filenamePattern, "i");
-		} else {
-			return new RegExp(filenamePattern);
-		}
+		return filenamePatterns.split("/").map(function(filenamePattern) {
+			if (filenamePattern.indexOf("?") !== -1 || filenamePattern.indexOf("*") !== -1) {
+				if (filenamePattern.indexOf("*") === 0) {
+					filenamePattern = filenamePattern.substring(1);
+				}
+				if (filenamePattern.indexOf("?") !== -1) {
+					filenamePattern = filenamePattern.replace("?", ".");
+				}
+				if (filenamePattern.indexOf("*") !== -1) {
+					filenamePattern = filenamePattern.replace("*", ".*");
+				}
+			}
+	
+			if (!searchOpts.filenamePatternCaseSensitive) {
+				return new RegExp(filenamePattern, "i");
+			} else {
+				return new RegExp(filenamePattern);
+			}
+		});
 	}
 
-	function searchFile(dirLocation, filename, searchPattern, filenamePattern, results){
+	// @returns promise that resolves once all hits have been added to the `results` object.
+	// This is a basically a parallel reduce operation implemented by recursive calls to searchFile()
+	// that push the search hits into the `results` array.
+	//
+	// Note that while this function creates and returns many promises, they fulfill to undefined,
+	// and are used only for flow control.
+	// TODO clean up
+	function searchFile(workspaceDir, dirLocation, filename, searchPattern, filenamePatterns, results){
 		var filePath = dirLocation + filename;
-		var stats = fs.statSync(filePath);
+		return fs.statAsync(filePath)
+		.then(function(stats) {
+			/*eslint consistent-return:0*/
+			if (stats.isDirectory()) {
+				if (filename[0] === ".") {
+					// do not search hidden dirs like .git
+					return;
+				}
+				if (filePath.substring(filePath.length-1) !== "/") filePath = filePath + "/";
 
-		if (stats.isDirectory()) {
-			if (filePath.substring(filePath.length-1) != "/") filePath = filePath + "/";
-
-			var directoryFiles = fs.readdirSync(filePath);
-			directoryFiles.forEach(function (directoryFile) {
-				var fileResults = searchFile(filePath, directoryFile, searchPattern, filenamePattern, results);
-				if (fileResults) results.concat(fileResults);
-			});
-
-		} else {
-			var file = fs.readFileSync(filePath, 'utf8');
-			if (filename.match(filenamePattern) && file.match(searchPattern)){
+				return fs.readdirAsync(filePath)
+				.then(function(directoryFiles) {
+					return Promise.map(directoryFiles, function(entry) {
+						return searchFile(workspaceDir, filePath, entry, searchPattern, filenamePatterns, results);
+					}, { concurrency: SUBDIR_SEARCH_CONCURRENCY });
+				});
+			}
+			// File case
+			
+			if (!filenamePatterns.some(function(filenamePattern) {
+				return filename.match(filenamePattern);
+			})){
+				return;
+			}
+			return fs.readFileAsync(filePath, 'utf8')
+			.then(function(file) {
+				if (!file.match(searchPattern)) {
+					return;
+				}
+				// We found a hit
 				var filePathFromWorkspace = filePath.substring(workspaceDir.length);
-
 				results.push({
 					"Directory": stats.isDirectory(),
 					"LastModified": stats.mtime.getTime(),
@@ -165,62 +197,56 @@ module.exports = function(options) {
 					"Name": filename,
 					"Path": workspaceName + filePathFromWorkspace
 				});
-			}
-		}
-		return results;
+			});
+		});
 	}
 
-	return connect()
-	.use(connect.json())
-	.use(resource(workspaceRoot, {
-		GET: function(req, res, next, rest) {
-			var searchOpt = new SearchOptions(req, res);
-			searchOpt.buildSearchOptions();
+	return express.Router()
+	.use(bodyParser.json())
+	.use(apiPath(root))
+	.get('*', function(req, res, next) {
+		var searchOpt = new SearchOptions(req, res);
+		searchOpt.buildSearchOptions();
 
-			var searchPattern = buildSearchPattern(searchOpt);
-			var filenamePattern = buildFilenamePattern(searchOpt);
+		var searchPattern = buildSearchPattern(searchOpt);
+		var filenamePattern = buildFilenamePattern(searchOpt);
 
-			var parentFileLocation = originalFileRoot(req);
-			var endOfFileRootIndex = 5;
+		var parentFileLocation = originalFileRoot(req);
+		var endOfFileRootIndex = 5;
 
-			var searchScope = workspaceDir + searchOpt.location.substring(endOfFileRootIndex, searchOpt.location.length - 1);
-			if (searchScope.charAt(searchScope.length - 1) != "/") searchScope = searchScope + "/";
+		var searchScope = req.user.workspaceDir + searchOpt.location.substring(endOfFileRootIndex, searchOpt.location.length - 1);
+		if (searchScope.charAt(searchScope.length - 1) !== "/") searchScope = searchScope + "/";
 
-			fileUtil.getChildren(searchScope, parentFileLocation, function(children) {
-				var results = [];
-				for (var i = 0; i < children.length; i++){
-					var child = children[i];
-					var childName = child.Location.substring(endOfFileRootIndex + 1);
+		fileUtil.getChildren(searchScope, parentFileLocation, function(children) {
+			var results = [];
 
-					var matches = searchFile(searchScope, childName, searchPattern, filenamePattern, []);
-					if (matches) results = results.concat(matches);
-				};
-
-				var ws = JSON.stringify({
-				  "response": {
-				    "docs": results,
-				    "numFound": results.length,
-				    "start": 0
-				  },
-				  "responseHeader": {
-				    "params": {
-				      "fl": "Name,NameLower,Length,Directory,LastModified,Location,Path,RegEx,CaseSensitive",
-				      "fq": [
-				        "Location:"+searchOpt.location,
-				        "UserName:anonymous"
-				      ],
-				      "rows": "10000",
-				      "sort": "Path asc",
-				      "start": "0",
-				      "wt": "json"
-				    },
-				    "status": 0
-				  }
+			Promise.map(children, function(child) {
+				var childName = child.Location.substring(endOfFileRootIndex + 1);
+				return searchFile(req.user.workspaceDir, searchScope, childName, searchPattern, filenamePattern, results);
+			}, { concurrency: SUBDIR_SEARCH_CONCURRENCY })
+			.then(function() {
+				res.json({
+					"response": {
+						"docs": results,
+						"numFound": results.length,
+						"start": 0
+					},
+					"responseHeader": {
+						"params": {
+							"fl": "Name,NameLower,Length,Directory,LastModified,Location,Path,RegEx,CaseSensitive",
+							"fq": [
+								"Location:"+searchOpt.location,
+								"UserName:anonymous"
+							],
+							"rows": "10000",
+							"sort": "Path asc",
+							"start": "0",
+							"wt": "json"
+						},
+						"status": 0
+					}
 				});
-
-				res.setHeader('Content-Type', 'application/json');
-				res.end(ws);
 			});
-		}
-	}));
+		});
+	});
 };

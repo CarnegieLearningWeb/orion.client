@@ -8,20 +8,20 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-/*jslint node:true*/
 /*eslint-env node */
-var connect = require('connect'),
+var express = require('express'),
     path = require('path'),
-    AppContext = require('./lib/node_apps').AppContext,
     orionFile = require('./lib/file'),
-    orionLogin = require('./lib/login'),
-    orionNode = require('./lib/node'),
     orionWorkspace = require('./lib/workspace'),
     orionGit = require('./lib/git'),
     orionNodeStatic = require('./lib/orionode_static'),
+    orionPrefs = require('./lib/controllers/prefs'),
     orionStatic = require('./lib/orion_static'),
     orionTasks = require('./lib/tasks'),
     orionSearch = require('./lib/search'),
+    orionMetrics = require('./lib/metrics'),
+    orionUser = require('./lib/user'),
+   
     term = require('term.js');
 
 var LIBS = path.normalize(path.join(__dirname, 'lib/')),
@@ -34,49 +34,75 @@ function handleError(err) {
 function startServer(options) {
 	options = options || {};
 	options.maxAge = typeof options.maxAge === "number" ? options.maxAge : undefined;
-	var workspaceDir = options.workspaceDir, configParams = options.configParams;
+	var workspaceDir = options.workspaceDir;
+	
 	try {
-		var appContext = new AppContext({fileRoot: '/file', workspaceDir: workspaceDir, configParams: configParams});
+		var app = express();
 
-		// HTTP server
-		var app = connect()
-      .use(term.middleware())
-			// static code
-			.use(orionNodeStatic(path.normalize(path.join(LIBS, 'orionode.client/'))))
-			.use(orionStatic({
-				orionClientRoot: ORION_CLIENT,
-				maxAge: options.maxAge
-			}))
-			.use(orionLogin())
-            .use(orionTasks.orionTasksAPI({
-                root: '/task'
-            }))
-			// API handlers
-			.use(orionFile({
-				root: '/file',
-				workspaceDir: workspaceDir
-			}))
-			.use(orionWorkspace({
-				root: '/workspace',
-				fileRoot: '/file',
-				workspaceDir: workspaceDir
-			}))
-			.use(orionGit({ 
-				root: '/gitapi',
-				fileRoot: '/file',
-				workspaceDir: workspaceDir
-			}))
-			.use(orionSearch({
-				root: '/filesearch',
-				fileRoot: '/file',
-				workspaceDir: workspaceDir
-			}))
-			.use(orionNode({
-				appContext: appContext,
-				root: '/node'
-			}));
+		orionUser({app: app, options: options});
 
-		app.appContext = appContext;
+		app.use(term.middleware());
+		app.use(orionNodeStatic(path.normalize(path.join(LIBS, 'orionode.client/'))));
+		app.use(orionStatic({
+			orionClientRoot: ORION_CLIENT,
+			maxAge: options.maxAge
+		}));
+
+		function checkAuthenticated(req, res, next) {
+			if (!req.user) {
+				res.writeHead(401, "Not authenticated");
+				res.end();
+			} else {
+				req.user.workspaceDir = workspaceDir + (req.user.workspace ? "/" + req.user.workspace : "");
+				next();
+			}
+		}
+		
+		// API handlers
+		app.use('/task', checkAuthenticated, orionTasks.orionTasksAPI({
+			root: '/task'
+		}));
+		app.use('/file', checkAuthenticated, orionFile({
+			root: '/file'
+		}));
+		app.use('/workspace', checkAuthenticated, orionWorkspace({
+			root: '/workspace',
+			fileRoot: '/file'
+		}));
+		app.use('/gitapi', checkAuthenticated, orionGit({ 
+			root: '/gitapi',
+			fileRoot: '/file'
+		}));
+		app.use('/filesearch', checkAuthenticated, orionSearch({
+			root: '/filesearch',
+			fileRoot: '/file'
+		}));
+		app.use('/prefs', checkAuthenticated, orionPrefs({
+		}));
+		app.use('/metrics', orionMetrics.router({
+			configParams: options
+		}));
+
+		//error handling
+		app.use(function(req, res){
+			res.status(404);
+
+			// respond with html page
+			if (req.accepts('html')) {
+				//res.render('404', { url: req.url });
+				return;
+			}
+
+			// respond with json
+			if (req.accepts('json')) {
+				res.send({ error: 'Not found' });
+				return;
+			}
+
+			// default to plain-text. send()
+			res.type('txt').send('Not found');
+		});
+
 		return app;
 	} catch (e) {
 		handleError(e);

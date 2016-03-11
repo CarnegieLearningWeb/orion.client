@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2015 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -35,7 +35,6 @@ define([
 'javascript/ternProjectManager',
 'orion/util',
 'javascript/logger',
-'javascript/commands/addToTernCommand',
 'javascript/commands/generateDocCommand',
 'javascript/commands/openDeclaration',
 'javascript/commands/openImplementation',
@@ -49,7 +48,7 @@ define([
 'orion/i18nUtil',
 'orion/URL-shim'
 ], function(PluginProvider, mServiceRegistry, Deferred, Metrics, Esprima, Estraverse, ScriptResolver, ASTManager, QuickFixes, TernAssist, TernProjectAssist,
-			EslintValidator, TernProjectValidator, Occurrences, Hover, Outliner, CUProvider, TernProjectManager, Util, Logger, AddToTernCommand, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
+			EslintValidator, TernProjectValidator, Occurrences, Hover, Outliner, CUProvider, TernProjectManager, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
 			RenameCommand, RefsCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages, i18nUtil) {
 
 	var serviceRegistry = new mServiceRegistry.ServiceRegistry();
@@ -101,8 +100,10 @@ define([
 
 		var ternReady = false;
 		var workerReady = false;
+		var TRACE = localStorage.js_message_trace === "true";
 		var pendingStart = Object.create(null);
-		var messageQueue = [];
+		var messageQueue = []; // for all other requests
+		var modifyQueue = []; // for add and removes only
 
     	function WrappedWorker(script, onMessage, onError) {
  			var wUrl = new URL(script, window.location.href);
@@ -114,38 +115,62 @@ define([
     		this.messageId = 0;
     		this.callbacks = Object.create(null);
     	}
-    	
-    	WrappedWorker.prototype.postMessage = function(msg, f) {
-    		var starting = msg.request === "start_server";
-    		if(starting) {
-    			if(!workerReady) {
-	    			pendingStart.msg = msg;
-	    			pendingStart.f = f;
-	    			return; //don't queue start_server requests
-				}
-    			ternReady = false;
-    		}
-    		if(ternReady || starting || msg.request === 'read') { //configuration reads can happen while the server is starting
-				if(msg !== null && typeof msg === 'object') {
-					if(typeof msg.messageID !== 'number' && typeof msg.ternID !== 'number') {
-						//don't overwrite an id from a tern-side request
-						msg.messageID = this.messageId++;
-						this.callbacks[msg.messageID] = f;
-					}
-				}
-	    		this.worker.postMessage(msg);
-			} else {
-				messageQueue.push({msg: msg, f: f});
+	
+	/**
+	 * Use to reset the tern server when the .tern-project file is found and used.
+	 */
+	function setStarting() {
+		ternReady = false;
+	}
+
+
+	WrappedWorker.prototype.postMessage = function(msg, f) {
+		var starting = msg.request === "start_server";
+		if(starting) {
+			if(!workerReady) {
+				pendingStart.msg = msg;
+				pendingStart.f = f;
+				return; //don't queue start_server requests
 			}
-    	};
+			if(startCount > 0 && msg.args.initial) {
+				return;
+			}
+			startCount++;
+			ternReady = false;
+		}
+		if(ternReady || starting || msg.request === 'read') { //configuration reads can happen while the server is starting
+			if(msg !== null && typeof msg === 'object') {
+				if(typeof msg.messageID !== 'number' && typeof msg.ternID !== 'number') {
+					//don't overwrite an id from a tern-side request
+					msg.messageID = this.messageId++;
+					this.callbacks[msg.messageID] = f;
+				}
+			}
+			if(TRACE) {
+				console.log("postMessage ("+this.messageId+") - SENT "+JSON.stringify(msg));
+			}
+			this.worker.postMessage(msg);
+		} else if (msg.request === "addFile" || msg.request === "delFile") {
+			if(TRACE) {
+				console.log("postMessage ("+this.messageId+") - MODIFY QUEUED: "+JSON.stringify(msg));
+			}
+			modifyQueue.push({msg: msg, f: f});
+		} else {
+			if(TRACE) {
+				console.log("postMessage ("+this.messageId+") - MESSAGE QUEUED: "+JSON.stringify(msg));
+			}
+			messageQueue.push({msg: msg, f: f});
+		}
+	};
 
     	/**
     	 * Object of contributed environments
     	 *
     	 * TODO will need to listen to updated tern plugin settings once enabled to clear this cache
     	 */
-    	var contributedEnvs;
-		var ternWorker;
+    	var contributedEnvs,
+			ternWorker,
+			startCount = 0;
 		
 		var handlers ={
 			'read': doRead,
@@ -153,9 +178,12 @@ define([
 			 * @callback
 			 */
 			'worker_ready': function(response) {
+				if(TRACE) {
+					console.log("worker_ready ("+ternWorker.messageId+"): "+JSON.stringify(response));
+				}
 				workerReady = true;
 				if (!pendingStart.msg || !pendingStart.msg.request){
-					pendingStart.msg = {request: "start_server", args: {}}; //$NON-NLS-1$
+					pendingStart.msg = {request: "start_server", args: {initial: true}}; //$NON-NLS-1$
 				}
 				ternWorker.postMessage(pendingStart.msg, pendingStart.f);
 			},
@@ -163,6 +191,9 @@ define([
 			 * @callback
 			 */
 			'start_server': function(response) {
+				if(TRACE) {
+					console.log("server_ready ("+ternWorker.messageId+"): "+JSON.stringify(response));
+				}
 				serverReady();
 			}
 		};
@@ -212,10 +243,9 @@ define([
 								response.args.path = rel[0].path;
 								ternWorker.postMessage(response);
 							});
-						} else {
-							response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], _l);
-							ternWorker.postMessage(response);
 						}
+						response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], _l);
+						ternWorker.postMessage(response);
 					} else {
 						response.args.error = i18nUtil.formatMessage(javascriptMessages['failedToReadFile'], _l);
 						ternWorker.postMessage(response);
@@ -258,46 +288,28 @@ define([
 		 * @since 10.0
 		 */
 		function serverReady() {
-			ternReady = true;
-			for(var i = 0, len = messageQueue.length; i < len; i++) {
-				var item = messageQueue[i];
-				ternWorker.postMessage(item.msg, item.f);
-			}
-			messageQueue = [];
-			function cleanPrefs(prefs) {
-				var all = Object.keys(prefs);
-				for(i = 0, len = all.length; i < len; i++) {
-					var id = all[i];
-					if(/^tern.$/.test(id)) {
-						delete prefs[id];
+			startCount--;
+			if(startCount === 0) {
+				ternReady = true;
+				// process all add/remove first
+				for(var i = 0, len = modifyQueue.length; i < len; i++) {
+					var item = modifyQueue[i];
+					if(TRACE) {
+						console.log("clearing MODIFY queue: "+JSON.stringify(item.msg));
 					}
+					ternWorker.postMessage(item.msg, item.f);
 				}
+				modifyQueue = [];
+				// process remaining pending requests
+				for(i = 0, len = messageQueue.length; i < len; i++) {
+					item = messageQueue[i];
+					if(TRACE) {
+						console.log("clearing MESSAGE queue: "+JSON.stringify(item.msg));
+					}
+					ternWorker.postMessage(item.msg, item.f);
+				}
+				messageQueue = [];
 			}
-			ternWorker.postMessage({request: 'installed_plugins'}, function(response) { //$NON-NLS-1$
-				var plugins = response.plugins;
-				var preferences = serviceRegistry.getService("orion.core.preference"); //$NON-NLS-1$
- 				return preferences ? preferences.get("/cm/configurations").then(function(prefs){ // //$NON-NLS-1$
-					var props = prefs["tern"];
-					cleanPrefs(prefs);
-					if (!props) {
-						props = Object.create(null);
-					} else if(typeof props === 'string') {
-						props = JSON.parse(props);
-					}
-					var keys = Object.keys(plugins);
-					var plugs = props.plugins ? props.plugins : Object.create(null);
-					for(i = 0; i < keys.length; i++) {
-						var key = keys[i];
-						if(/^orion/.test(key)) {
-							delete plugs[key]; //make sure only the latest of Orion builtins are shown
-						}
-						plugs[key] = plugins[key];
-					}
-					props.plugins = plugs;
-					prefs["tern"] = JSON.stringify(props);
-					return preferences.put("/cm/configurations", prefs, {clear: true}); //$NON-NLS-1$
-				}) : new Deferred().resolve();
-			});
 		}
 
     	/**
@@ -374,17 +386,6 @@ define([
     		contentType: ["application/javascript", "text/html"]	//$NON-NLS-1$ //$NON-NLS-2$
     			});
 
-    	var validator = new EslintValidator(ternWorker);
-
-    	/**
-    	 * Register the ESLint validator
-    	 */
-    	provider.registerService("orion.edit.validator", validator,  //$NON-NLS-1$
-    			{
-    		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
-    		pid: 'eslint.config'  //$NON-NLS-1$
-    			});
-    			
     	provider.registerService("orion.edit.validator",  //$NON-NLS-1$
     		{
     			/**
@@ -417,7 +418,19 @@ define([
     		types: ["ModelChanging", 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$
     	});
     	
-    	var ternProjectManager = new TernProjectManager.TernProjectManager(ternWorker, scriptresolver, serviceRegistry);
+    	var ternProjectManager = new TernProjectManager.TernProjectManager(ternWorker, scriptresolver, serviceRegistry, setStarting);
+
+    	var validator = new EslintValidator(ternWorker, ternProjectManager);
+
+    	/**
+    	 * Register the ESLint validator
+    	 */
+    	provider.registerService("orion.edit.validator", validator,  //$NON-NLS-1$
+    			{
+    		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
+    		pid: 'eslint.config'  //$NON-NLS-1$
+    			});
+    			
     	/**
     	 * Register Tern project manager as input changed listener
     	 */
@@ -429,18 +442,6 @@ define([
     		types: ['onInputChanged']  //$NON-NLS-1$
     	});
 	    
-	    if ("true" === localStorage.getItem("darklaunch")) {
-	    	provider.registerServiceProvider("orion.navigate.command",  //$NON-NLS-1$
-	    			new AddToTernCommand.AddToTernCommand(ternProjectManager),
-	    			{
-			    		name: javascriptMessages["addToTernCommand"],
-			    		tooltip : javascriptMessages['addToTernCommandTooltip'],
-			    		contentType: ["application/javascript", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
-			    		id : "add.js.tern"  //$NON-NLS-1$
-	    			}
-	    	);
-    	}
-
     	/**
     	 * register the compilation unit provider as a listener
     	 */
@@ -542,7 +543,7 @@ define([
     			}
     	);
 
-    	var quickFixComputer = new QuickFixes.JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand);
+    	var quickFixComputer = new QuickFixes.JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand, ternProjectManager);
 
 		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			quickFixComputer,
@@ -553,6 +554,20 @@ define([
         			contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
         			validationProperties: [
                         {source: "annotation:id", match: "^(?:curly)$"} //$NON-NLS-1$ //$NON-NLS-2$
+                    ]
+    			}
+    	);
+    	
+    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+    			quickFixComputer,
+    			{
+        			name: javascriptMessages["removeExtraParensFixName"],
+        			fixAllEnabled: true,
+        			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+        			id : "rm.extra.parens.fix",  //$NON-NLS-1$
+        			contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+        			validationProperties: [
+                        {source: "annotation:id", match: "^(?:no-extra-parens)$"} //$NON-NLS-1$ //$NON-NLS-2$
                     ]
     			}
     	);
@@ -850,6 +865,19 @@ define([
     	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
     			quickFixComputer,
     			{
+        			name: javascriptMessages["unreadVarsFixName"],
+        			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+        			id : "unread.var.fix",  //$NON-NLS-1$
+        			contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+        			validationProperties: [
+                        {source: "annotation:id", match: "^(?:no-unused-vars-unread)$"} //$NON-NLS-1$ //$NON-NLS-2$
+                    ]
+    			}
+    	);
+
+    	provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+    			quickFixComputer,
+    			{
         			name: javascriptMessages["unusedFuncDeclFixName"],
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
         			id : "unused.func.decl.fix",  //$NON-NLS-1$
@@ -867,7 +895,7 @@ define([
         			fixAllEnabled: true,
         			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
         			id : "no.comma.dangle.fix",  //$NON-NLS-1$
-        			contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+        			contentType: ['application/javascript', 'text/html', "application/json"],  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
         			validationProperties: [
                         {source: "annotation:id", match: "^(?:no-comma-dangle)$"} //$NON-NLS-1$ //$NON-NLS-2$
                     ]
@@ -977,6 +1005,23 @@ define([
 		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
 				quickFixComputer,
 				{
+					name: javascriptMessages["radixFixName"],
+					fixAllEnabled: true,
+					scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+					id : "radix.base.ten.fix",  //$NON-NLS-1$
+					contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+					validationProperties: [
+						{
+							source: "annotation:id", //$NON-NLS-1$
+							match: "^(?:radix)$" //$NON-NLS-1$
+						} 
+					]
+				}
+		);
+		
+		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+				quickFixComputer,
+				{
 					name: javascriptMessages["noNewWrappersFixName"],
 					scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 					id : "no.new.wrappers.fix",  //$NON-NLS-1$
@@ -1028,6 +1073,37 @@ define([
 					]
 				}
 		);
+
+		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+				quickFixComputer,
+				{
+					name: javascriptMessages["noDuplicateCaseFixName"],
+					scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+					id : "no.duplicate.case.fix",  //$NON-NLS-1$
+					contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+					validationProperties: [
+						{
+							source: "annotation:id", //$NON-NLS-1$
+							match: "^(?:no-duplicate-case)$" //$NON-NLS-1$
+						} 
+					]
+				}
+		);
+		
+		provider.registerServiceProvider("orion.edit.command",  //$NON-NLS-1$
+			quickFixComputer,
+			{
+				name: javascriptMessages["checkTernProjectFixName"],
+				fixAllEnabled: false,
+				scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+				id : "check.tern.project.fix",  //$NON-NLS-1$
+				contentType: ['application/javascript', 'text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
+				validationProperties: [
+					{source: "annotation:id", match: "^(?:check-tern-project)$"} //$NON-NLS-1$ //$NON-NLS-2$
+				]
+			}
+	);
+
 
     	/**
     	 * legacy pref id
@@ -1100,27 +1176,6 @@ define([
 				 	        	                	options: severities
 			 	        	                	},
 			 	        	                	{
-    			 	        	                	id: "no-console",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noConsole"],
-    			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: ignore,
-    			 	        	                	options: severities
-    			 	        	                },
-												{
-     				 	        	            	id: "no-debugger",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["noDebugger"],
-				 	        	                	type: "number",  //$NON-NLS-1$
-				 	        	                	defaultValue: warning,
-				 	        	                	options: severities
-												},
-												{
-			 	        	                		id: "type-checked-consistent-return",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["type-checked-consistent-return"],
-				 	        	                	type: "number",  //$NON-NLS-1$
-				 	        	                	defaultValue: ignore,
-				 	        	                	options: severities
-			 	        	                	},
-			 	        	                	{
 			 	        	                		id: "no-extra-boolean-cast",  //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["no-extra-boolean-cast"],
 				 	        	                	type: "number",  //$NON-NLS-1$
@@ -1134,6 +1189,34 @@ define([
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
 			 	        	                	},
+												{
+     				 	        	            	id: "no-debugger",  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["noDebugger"],
+				 	        	                	type: "number",  //$NON-NLS-1$
+				 	        	                	defaultValue: warning,
+				 	        	                	options: severities
+												},		 	        	                	
+			 	        	                	{
+    			 	        	                	id: "no-console",  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noConsole"],
+    			 	        	                	type: "number", //$NON-NLS-1$
+    			 	        	                	defaultValue: ignore,
+    			 	        	                	options: severities
+    			 	        	                },
+												{
+			 	        	                		id: "type-checked-consistent-return",  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["type-checked-consistent-return"],
+				 	        	                	type: "number",  //$NON-NLS-1$
+				 	        	                	defaultValue: ignore,
+				 	        	                	options: severities
+			 	        	                	},
+				 	        	            	{
+				 	        	                	id: "no-duplicate-case",  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["no-duplicate-case"],
+				 	        	                	type: "number",  //$NON-NLS-1$
+				 	        	                	defaultValue: error,
+				 	        	                	options: severities
+				 	        	            	},
 				 	        	            	{
 				 	        	                	id: "no-dupe-keys",  //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["noDupeKeys"],
@@ -1142,8 +1225,8 @@ define([
 				 	        	                	options: severities
 				 	        	            	},
 				 	        	            	{
-				 	        	                	id: "no-duplicate-case",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["no-duplicate-case"],
+				 	        	            		id: "valid-typeof",  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["validTypeof"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
@@ -1155,13 +1238,6 @@ define([
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 			 	        	                	},
-				 	        	            	{
-				 	        	            		id: "valid-typeof",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["validTypeof"],
-				 	        	                	type: "number",  //$NON-NLS-1$
-				 	        	                	defaultValue: error,
-				 	        	                	options: severities
-				 	        	            	},
 				 	        	            	{
 				 	        	            		id: "no-regex-spaces",  //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["noRegexSpaces"],
@@ -1255,34 +1331,22 @@ define([
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 			 	        	                	},
-				 	        	   				{	id: "no-caller",  //$NON-NLS-1$
-				 	        	                	name: javascriptMessages["noCaller"],
-				 	        	                	type: "number", //$NON-NLS-1$
-				 	        	                	defaultValue: warning,
-				 	        	                	options: severities
-				 	        	                },
 				 	        	                {	id: "eqeqeq",  //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["noEqeqeq"],
  				 	        	                	type: "number",  //$NON-NLS-1$
  				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
+				 	        	   				{	id: "no-caller",  //$NON-NLS-1$
+				 	        	                	name: javascriptMessages["noCaller"],
+				 	        	                	type: "number", //$NON-NLS-1$
+				 	        	                	defaultValue: warning,
+				 	        	                	options: severities
+				 	        	                },
  				 	        	                {	id: "no-eval",  //$NON-NLS-1$
     			 	        	                	name: javascriptMessages["noEval"],
     			 	        	                	type: "number",  //$NON-NLS-1$
     			 	        	                	defaultValue: ignore,
-    			 	        	                	options: severities
-    			 	        	                },
-    			 	        	                {	id: "no-implied-eval",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noImpliedEval"],
-    			 	        	                	type: "number",  //$NON-NLS-1$
-    			 	        	                	defaultValue: ignore,
-    			 	        	                	options: severities
-    			 	        	                },
-    			 	        	                {	id: "no-iterator",  //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noIterator"],
-    			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: error,
     			 	        	                	options: severities
     			 	        	                },
  				 	        	                {
@@ -1306,17 +1370,29 @@ define([
     			 	        	                	defaultValue: warning,
     			 	        	                	options: severities
     			 	        	                },
+    			 	        	                {
+    			 	        	                	id: "no-with", //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noWith"],
+    			 	        	                	type: "number", //$NON-NLS-1$
+    			 	        	                	defaultValue: warning,
+    			 	        	                	options: severities
+    			 	        	                },
+    			 	        	                {	id: "no-iterator",  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noIterator"],
+    			 	        	                	type: "number", //$NON-NLS-1$
+    			 	        	                	defaultValue: error,
+    			 	        	                	options: severities
+    			 	        	                },
     			 	        	                {	id: "no-proto",  //$NON-NLS-1$
     			 	        	                	name: javascriptMessages["noProto"],
     			 	        	                	type: "number", //$NON-NLS-1$
     			 	        	                	defaultValue: error,
     			 	        	                	options: severities
     			 	        	                },
-    			 	        	                {
-    			 	        	                	id: "no-with", //$NON-NLS-1$
-    			 	        	                	name: javascriptMessages["noWith"],
-    			 	        	                	type: "number", //$NON-NLS-1$
-    			 	        	                	defaultValue: warning,
+    			 	        	                {	id: "no-implied-eval",  //$NON-NLS-1$
+    			 	        	                	name: javascriptMessages["noImpliedEval"],
+    			 	        	                	type: "number",  //$NON-NLS-1$
+    			 	        	                	defaultValue: ignore,
     			 	        	                	options: severities
     			 	        	                },
     			 	        	                {
@@ -1332,6 +1408,13 @@ define([
 				 	        	                	defaultValue: warning,
 				 	        	                	options: severities
 				 	        	                },
+										{
+											id: "check-tern-project",  //$NON-NLS-1$
+											name: javascriptMessages["check-tern-project"],
+											type: "number",  //$NON-NLS-1$
+											defaultValue: warning,
+											options: severities
+										},
 				 	        	                {
     			 	        	                	id: "accessor-pairs",  //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["accessor-pairs"],
@@ -1344,6 +1427,12 @@ define([
  				 	        	                	name: javascriptMessages["noShadowGlobals"],
  				 	        	                	defaultValue: warning,
  				 	        	                	type: "number",  //$NON-NLS-1$
+ 				 	        	                	options: severities
+ 				 	        	                },
+ 				 	        	                {	id: "no-throw-literal",  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["noThrowLiteral"],
+ 				 	        	                	type: "number",  //$NON-NLS-1$
+ 				 	        	                	defaultValue: warning,
  				 	        	                	options: severities
  				 	        	                },
  				 	        	                {	id: "no-use-before-define",  //$NON-NLS-1$
@@ -1365,12 +1454,6 @@ define([
 				 	        	                	defaultValue: error,
 				 	        	                	options: severities
 			 	        	                	},
- 				 	        	                {	id: "no-throw-literal",  //$NON-NLS-1$
- 				 	        	                	name: javascriptMessages["noThrowLiteral"],
- 				 	        	                	type: "number",  //$NON-NLS-1$
- 				 	        	                	defaultValue: warning,
- 				 	        	                	options: severities
- 				 	        	                },
  				 	        	                {	id: "curly",  //$NON-NLS-1$
     			 	        	                	name: javascriptMessages["missingCurly"],
     			 	        	                	type: "number",  //$NON-NLS-1$
@@ -1383,8 +1466,13 @@ define([
  				 	        	                	defaultValue: error,
  				 	        	                	options: severities
  				 	        	                },
- 				 	        	                {
-			 	        	                		id: "no-else-return",  //$NON-NLS-1$
+ 				 	        	                {	id: "no-undef-expression",  //$NON-NLS-1$
+ 				 	        	                	name: javascriptMessages["undefExpression"],
+ 				 	        	                	type: "number",  //$NON-NLS-1$
+ 				 	        	                	defaultValue: ignore,
+ 				 	        	                	options: severities
+ 				 	        	                },
+ 				 	        	                {	id: "no-else-return",  //$NON-NLS-1$
 				 	        	                	name: javascriptMessages["no-else-return"],
 				 	        	                	type: "number",  //$NON-NLS-1$
 				 	        	                	defaultValue: warning,
@@ -1415,7 +1503,7 @@ define([
     			 	        	                	defaultValue: warning,
     			 	        	                	options: severities
     			 	        	                }
- 				 	        	            ]
+										]
 				 	            },
 				 	        	{  pid: "eslint.config.codestyle",  //$NON-NLS-1$
 				 	        	   order: 3,
@@ -1496,6 +1584,10 @@ define([
 	    	 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=462878
 	    	 */
 	    	Metrics.initFromRegistry(serviceRegistry);
+	    	
+	    	var fc = serviceRegistry.getService("orion.core.file.client"); //$NON-NLS-1$
+	    	fc.addEventListener("FileContentChanged", astManager.onFileChanged.bind(astManager));
+	    	fc.addEventListener("FileContentChanged", CUProvider.onFileChanged.bind(CUProvider));
     	});
 });
 

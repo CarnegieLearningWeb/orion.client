@@ -10,8 +10,8 @@
  *******************************************************************************/
 /*eslint-env node, mocha*/
 var assert = require("assert");
-var mocha = require("mocha");
-var request = require("supertest");
+var express = require("express");
+var supertest = require("supertest");
 
 var path = require("path");
 var testData = require("./support/test_data");
@@ -21,9 +21,10 @@ var WORKSPACE = path.join(__dirname, ".test_workspace");
 var orion = require("../");
 
 describe("orion", function() {
-	var app;
+	var app, request;
 	beforeEach(function(done) {
-		app = testData.createApp();
+		app = express();
+		request = supertest.bind(null, app);
 		testData.setUp(WORKSPACE, done);
 	});
 
@@ -39,43 +40,47 @@ describe("orion", function() {
 			done();
 		});
 		it("accepts cache-max-age", function(done) {
-			app.use(orion({
-				workspaceDir: WORKSPACE,
+			app
+			.use(function() {
+				req.user = {workspace: WORKSPACE};
+			}).use(orion({
 				maxAge: 31337 * 1000 // ms
-			}))
-			.request()
+			}));
+			request()
 			.get("/index.html")
 			.expect("cache-control", /max-age=31337/, done); //seconds
 		});
-		// TODO test configParams once they are cleaned up/merged with options
 	});
 
 	describe("middleware", function() {
-		// Make sure that we can .use() the orion server as a connect module.
+		// Make sure that we can .use() the orion server as an Express middleware
 		it("exports #createServer", function(done) {
-			app.use(orion({
-				workspaceDir: WORKSPACE
-			}))
-			.request()
+			app.use(function() {
+				req.user = {workspace: WORKSPACE};
+			}).use(orion({
+			}));
+			request()
 			.get("/file/project/fizz.txt")
 			.expect(200, "hello world", done);
 		});
 
 		// Sanity check to ensure the orion client code is being mounted correctly
 		it("finds the orion.client code", function(done) {
-			app.use(orion({
-				workspaceDir: WORKSPACE
-			}))
-			.request()
+			app.use(function() {
+				req.user = {workspace: WORKSPACE};
+			}).use(orion({
+			}));
+			request()
 			.get("/index.html")
 			.expect(200, done);
 		});
 
 		it("works at a non-server-root route", function(done) {
-			app.use("/wow/such/orion", orion({
-				workspaceDir: WORKSPACE
-			}))
-			.request()
+			app.use(function() {
+				req.user = {workspace: WORKSPACE};
+			}).use("/wow/such/orion", orion({
+			}));
+			request()
 			.get("/wow/such/orion/index.html")
 			.expect(200, done);
 		});

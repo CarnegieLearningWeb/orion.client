@@ -9,64 +9,144 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api');
+var api = require('../api'), writeError = api.writeError;
 var git = require('nodegit');
+var mCommit = require('./commit');
+var clone = require('./clone');
+var express = require('express');
+var bodyParser = require('body-parser');
 
-/*
- * Stash for_each available after Nodegit commit f91c501
- * Merge pull request #495 from nodegit/enable-stash
- * Enable `git_stash_foreach`
- *
- */ 
-function getStash(workspaceDir, fileRoot, req, res, next, rest) {
+module.exports = {};
+
+module.exports.router = function(options) {
+	var fileRoot = options.fileRoot;
+	if (!fileRoot) { throw new Error('options.root is required'); }
 	
-	var url = JSON.stringify(req.url);
-	var repoName = rest.replace("stash/file/", "");
-	var repoPath = api.join(workspaceDir, repoName);
+	return express.Router()
+	.use(bodyParser.json())
+	.get('*', getStash)
+	.delete('/file*', deleteStash)
+	.delete('/:stashRev*', deleteStash)
+	.put('/file*', putStash)
+	.put('/:stashRev*', putStash)
+	.post('*', postStash);
 
-	var location = url.substring(0, url.indexOf('?'));
-	var cloneLocation = location.replace("/stash","/clone");
-//	var stashType = "StashCommit";
-
-	var stashesArray = [];
-        var stashCb = function(index, message, oid) {
-          stashesArray.push({
-			"ApplyLocation" : "/gitapi/stash/" + oid + "/" + repoName, 
-			"AuthorEmail" : "admin@orion.eclipse.org",
-			"AuthorName" : "admin",
-			"CloneLocation" : cloneLocation,
-			"CommitterEmail" : "admin@orion.eclipse.org",
-			"CommitterName" : "admin",
-			"DiffLocation" : "/gitapi/diff/" + oid + "/" + repoName,
-			"DropLocation" : "/gitapi/stash/" + oid + "/" + repoName,
-			"Location:" : location.replace("/stash","/commit"),
-			"Message" : message, 
-			"Name" : String(oid),
-			"Time" : 1424471958000, //hardcoded local variable
-			"TreeLocation" : "/gitapi/tree/file/" + repoName + "/" + oid,
-                        "Type" : "StashCommit" 
-			});
-	};
-
-	git.Repository.open(repoPath).then(function(repo) {
-
-		return git.Stash.foreach(repo, stashCb).then(function(){
-			var resp = JSON.stringify({
-                                "Children" : stashesArray,
-                                "Location" : location,
-				"CloneLocation" : cloneLocation,
-				"Type" : "StashCommit"
-                        });
-
-                        res.statusCode = 200;
-                        res.setHeader('Content-Type', 'application/json');
-                        res.setHeader('Content-Length', resp.length);
-                        res.end(resp);
-
-		}); 
+function getStash(req, res) {
+	var query = req.query;
+	var filter = query.filter;
+	var page = Number(query.page) || 1;
+	var pageSize = Number(query.pageSize) || Number.MAX_SAFE_INTEGER;
+	var fileDir;
+	var stashesPromises = [];
+	return clone.getRepo(req)
+	.then(function(repo) {
+		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+		return git.Stash.foreach(repo, function(index, message, oid) {
+			if (filter && message.indexOf(filter) === -1) return;
+			stashesPromises.push(repo.getCommit(oid)
+			.then(function(commit) {
+				return Promise.all([commit, mCommit.getDiff(repo, commit, fileDir), mCommit.getCommitParents(repo, commit, fileDir)]);
+			})
+			.then(function(commitAndDiffs) {
+				var commit = commitAndDiffs[0];
+				var diffs = commitAndDiffs[1];
+				var parents = commitAndDiffs[2];
+				var stashCommit = mCommit.commitJSON(commit, fileDir, diffs, parents);
+				stashCommit["ApplyLocation"] = "/gitapi/stash/" + oid + fileDir;
+				stashCommit["DropLocation"] = "/gitapi/stash/" + oid + fileDir;
+				stashCommit["Type"] = "StashCommit";
+				return stashCommit;
+			}));
+		});
+	})
+	.then(function() {
+		return Promise.all(stashesPromises);
+	})
+	.then(function(stashes) {
+		res.status(200).json({
+			"Children" : stashes,
+			"Location" : "/gitapi/stash" + fileDir,
+			"CloneLocation" : "/gitapi/clone" + fileDir,
+			"Type" : "StashCommit"
+		});
+	})
+	.catch(function(err) {
+		writeError(500, res, err.message);
 	});
 }
 
-module.exports = {
-        getStash: getStash
+function putStash(req, res) {
+	var stashRev = req.params.stashRev;
+	var repo;
+	return clone.getRepo(req)
+	.then(function(_repo) {
+		repo = _repo;
+		if (stashRev) {
+			var index;
+			return git.Stash.foreach(repo, /* @callback */ function(i, message, oid) {
+				if (oid.toString() === stashRev) {
+					index = i;
+				}
+			})
+			.then(function() {
+				return git.Stash.apply(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX);
+			});
+		}
+		return git.Stash.pop(repo, 0, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX);
+	})
+	.then(function() {
+		res.status(200).end();
+	})
+	.catch(function(err) {
+		writeError(404, res, err.message);
+	});
+}
+
+function deleteStash(req, res) {
+	var stashRev = req.params.stashRev;
+	var repo;
+	return clone.getRepo(req)
+	.then(function(_repo) {
+		repo = _repo;
+		var index, all = [];
+		return git.Stash.foreach(repo, /* @callback */ function(i, message, oid) {
+			if (stashRev) {
+				if (oid.toString() === stashRev) {
+					index = i;
+				}
+			} else {
+				all.push(git.Stash.drop(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX));				
+			} 
+		})
+		.then(function() {
+			if (all.length) return Promise.all(all);
+			return git.Stash.drop(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX);
+		});
+	})
+	.then(function() {
+		res.status(200).end();
+	})
+	.catch(function(err) {
+		writeError(404, res, err.message);
+	});
+}
+
+function postStash(req, res) {
+	var flags = git.Stash.FLAGS.DEFAULT;
+	if (req.body.IncludeUntracked) flags |= git.Stash.FLAGS.INCLUDE_UNTRACKED;
+	var message = req.body.IndexMessage || req.body.WorkingDirectoryMessage || "";
+
+	var repo;
+	return clone.getRepo(req)
+	.then(function(_repo) {
+		repo = _repo;
+		return git.Stash.save(repo, git.Signature.default(repo), message, flags);
+	})
+	.then(function() {
+		res.status(200).end();
+	})
+	.catch(function(err) {
+		writeError(404, res, err.message);
+	});
+}
 };

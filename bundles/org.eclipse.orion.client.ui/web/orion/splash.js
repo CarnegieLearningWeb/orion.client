@@ -34,12 +34,20 @@ function step(id, description, type, total) {
 	this.domNode;
 }
 
+function mark(name) {
+	if (window.performance && window.performance.mark) {
+		window.performance.mark("orion-" + name);
+	}
+}
+
 step.prototype.complete = function() {
+	mark("end splash step " + this.id);
 	this.state = this.COMPLETED;
 	this.domNode.className = 'splashSuccessImage';
 };
 
 step.prototype.spin = function(){
+	mark("start splash step " + this.id);
 	this.state = this.HAPPENING;
 	this.domNode.className = 'splashLoadingImage';
 };
@@ -97,9 +105,8 @@ function loader( domNode, title ){
 						'</div>' +
 						'<div id="steps" class="splashSteps">' +
 						'</div>' +
-						'<div id="stepMessage" class="splashMessage">' +
+						'<div id="stepMessages" class="splashMessages">' +
 						'</div>' +
-						'<div id="stepDetailedMessage" class="splashDetailedMessage">' +
 						'</div>' +
 					'</div>';   
 	
@@ -112,6 +119,10 @@ function loader( domNode, title ){
 
 loader.prototype.showFillerProgress = function(){
 	var cs = this.getStep();
+	if (!cs) {
+		this.stopFillerProgress();
+		return;
+	}
 	var increment = (cs.total - cs.worked)/10;
 	cs.worked = Math.min(cs.worked + increment, cs.total);
 	this.update();
@@ -119,7 +130,7 @@ loader.prototype.showFillerProgress = function(){
 
 loader.prototype.startFillerProgress = function() {
 	var cs = this.getStep();
-	if (cs.type !== cs.TYPE_FILLER) return;
+	if (!cs || cs.type !== cs.TYPE_FILLER) return;
 	this.interval = setInterval(function(){ this.showFillerProgress(); }.bind(this), this.FILLER_TIMEOUT);
 };
 	
@@ -181,8 +192,7 @@ loader.prototype.initialize = function(){
 	this.content = document.getElementById( this.domNode );
 	this.content.innerHTML = this.template;
 	this.splashProgress = document.getElementById( "progressbar" );
-	this.stepMessage = document.getElementById( "stepMessage" );
-	this.stepDetailedMessage = document.getElementById( "stepDetailedMessage" );
+	this.stepMessages = document.getElementById( "stepMessages" );
 	this.splashProgress.value = 0;
 };
 
@@ -248,8 +258,21 @@ loader.prototype.update = function(){
 		total += this.steps[s].total;
 	}
 	
-	this.stepMessage.textContent = cs.message || "";
-	this.stepDetailedMessage.textContent = cs.detailedMessage || "";
+	this.stepMessages.innerHTML = "";
+	var message = cs.message || "";
+	var detailedMessage = cs.detailedMessage || "";
+	if (!Array.isArray(message)) message = [message];
+	if (!Array.isArray(detailedMessage)) detailedMessage = [detailedMessage];
+	message.forEach(function(msg, i) {
+		var msgDiv = document.createElement("div");
+		msgDiv.className = "splashMessage";
+		msgDiv.textContent = msg;
+		this.stepMessages.appendChild(msgDiv);
+		msgDiv = document.createElement("div");
+		msgDiv.className = "splashDetailedMessage";
+		msgDiv.textContent = (msg !== detailedMessage[i] ? detailedMessage[i] : null) || '\u00A0';
+		this.stepMessages.appendChild(msgDiv);
+	}.bind(this));
 
 	var splashProgress = this.splashProgress;
 	if (splashProgress) {
@@ -260,9 +283,11 @@ loader.prototype.update = function(){
 
 loader.prototype.takeDown = function() {
 	if (!pageLoader) return;
-	this.pluginRegistry.addEventListener("started", this._pluginListener);
-	this.pluginRegistry.addEventListener("lazy activation", this._pluginListener);
-	this.pluginRegistry.addEventListener("starting", this._pluginListener);
+	if (this.pluginRegistry) {
+		this.pluginRegistry.removeEventListener("started", this._pluginListener);
+		this.pluginRegistry.removeEventListener("lazy activation", this._pluginListener);
+		this.pluginRegistry.removeEventListener("starting", this._pluginListener);		
+	}
 	this.nextStep();
 	var splash = document.getElementById("splash");
 	if (splash && splash.parentNode) {
@@ -279,7 +304,7 @@ loader.prototype.setPluginRegistry = function(pluginRegistry) {
 	this.pluginRegistry = pluginRegistry; 
 	var listener = this._pluginListener = function(evt) {
 		var s = this.getStep();
-		if (!s) return;
+		if (!s || s.id != "orion.splash.plugins") return;
 		var pluginName = evt.plugin.getName();
 		if (!pluginName) return;
 		s.message = i18nUtil.formatMessage(messages["plugin_" + evt.type], pluginName);
@@ -329,5 +354,7 @@ function start() {
 
 start();
 
-return pageLoader; 
+return {
+	getPageLoader: function() { return pageLoader; }
+};
 });

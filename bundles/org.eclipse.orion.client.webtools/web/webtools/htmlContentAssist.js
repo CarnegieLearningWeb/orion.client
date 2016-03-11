@@ -184,15 +184,18 @@ define([
 					return [];
 				}
 				if (this.isCompletingCommentClose(node, params.offset)){
-					return this.getComment(node, false);
+					return this.getComment(node, params.offset, ast.source, false);
 				} else if (this.isCompletingAttributeValue(node, ast.source, params)) {
-					return this.getValuesForAttribute(node, params);
+					return this.getValuesForAttribute(node, ast.source, params);
 				} else if (this.isCompletingTagAttribute(node, ast.source, params)) {
-					return this.getAttributesForNode(node, params);
+					return this.getAttributesForNode(node, ast.source, params);
 				} else if (this.isCompletingTag(node, params)){
 					if (this.isCompletingCommentOpen(node)){
-						return this.getComment(node, true);
-					} 
+						return this.getComment(node, params.offset, ast.source, true);
+					}
+					if (this.isCompletingTagWithMatchingClose(node, ast.source)){
+						return [];
+					}
 					return this.getTags(ast.source, params);
 				}
 				return this.getProposalsForTextContent(node, ast.source, params);
@@ -210,33 +213,17 @@ define([
 		 */
 		inScriptOrStyle: function(node, offset, source) {
 			if (node){
-				if(node.type === 'text' && node.parent && node.parent.type === 'tag'){
-					var name = node.parent.name ? node.parent.name.toLowerCase() : '';
+				if (node.type === 'tag'){
+					var name = node.name ? node.name.toLowerCase() : '';
 					if (name === 'script' || name === 'style') {
-						return true;
-					}
-				} else if (node.type === 'tag'){
-					name = node.name ? node.name.toLowerCase() : '';
-					if (name === 'script' || name === 'style') {
-						if (!node.children || !node.children.length > 0){
-							// Empty <script></script>, see if the previous non-whitespace character is '>'
-							if (offset > node.range[0] && offset < node.range[1]){
-								var whitespace = '\t\r\n '; //$NON-NLS-1$
-								var pos = offset;
-								var posChar;
-								var inwhite = true;
-								while (inwhite && pos > node.range[0]){
-									pos--;
-									posChar = source.charAt(pos);
-									inwhite = whitespace.indexOf(posChar) >= 0;
-								}
-								if (posChar === '>'){
-									return true;
-								}
+						if (node.openrange && node.endrange){
+							// If we are in the tag itself we are not actually in the script block
+							if (offset < node.openrange[1] || offset > node.endrange[0]){
+								return false;
 							}
 						}
+						return true;
 					}
-
 				}
 			}
 			return false;
@@ -313,8 +300,8 @@ define([
 			if(node) {
 				var offset = params.offset;
 				if(node.type === 'tag') {
-					var _n = node.name;
-					if(node.range[0]+_n.length < offset) {
+					var tagNameEnd = node.range[0] + 1 + node.name.length;
+					if(tagNameEnd < offset) {
 						var idx = offset;
 						while(idx < node.range[1]) {
 							var char = source[idx];
@@ -354,6 +341,22 @@ define([
  				}
 			}
 			return false;
+		},
+		
+		/**
+		 * Computes if we are completing a tag that already has a matching close tag
+		 * @param {Object} node The AST node to check with the offset
+		 * @param {String} source The source of the file
+		 * @returns {Boolean} True if we are completing a tag with a matching close tag, false otherwise 
+		 * @since 11.0 
+		 */
+		isCompletingTagWithMatchingClose: function(node, source) {
+			if(node && node.type === 'tag' && node.name) {
+				if (node.endrange && node.endrange.length === 2){
+					// If the HTML is incomplete, the parser recovery sometimes uses the end range of the parent element
+					return node.name === source.substring(node.endrange[0]+2, node.endrange[1]-1);
+				}
+ 			}
 		},
 		
 		/**
@@ -458,9 +461,38 @@ define([
 		 * @returns {Array.<Object>} The array of proposals
 		 * @since 10.0 
 		 */
-		getAttributesForNode: function(node, params) {
-			var attrs = Attributes.getAttributesForNode(node);
+		getAttributesForNode: function(node, source, params) {
 			var proposals = [];
+			var prefix = params.prefix ? params.prefix : "";
+			// we need to check if we need to rebuild the prefix for completion that contains a '-'
+			var index = params.offset - prefix.length - 1;
+			if (index > 0 && index < source.length) {
+				var precedingChar = source.charAt(index);
+				if (precedingChar === '-') {
+					index--;
+					if (index !== 0) {
+						// rebuild a prefix based on what characters (letter only) are before the '-'
+						precedingChar = source.charAt(index);
+						var currentPrefix = "-" + prefix;
+						loop: while (index > 0 && /[A-Za-z0-9_-]/.test(precedingChar)) {
+							index--;
+							currentPrefix = precedingChar + currentPrefix;
+							if (index === 0) {
+								break loop;
+							}
+							precedingChar = source.charAt(index);
+						}
+						params.prefix = currentPrefix;
+					}
+				} else if (precedingChar === '=' && prefix.length === 0 && (index - 1) > 0) {
+					precedingChar = source.charAt(index - 1);
+					if (/[A-Za-z0-9_]/.test(precedingChar)) {
+						proposals.push(this.makeComputedProposal("\"\"",  Messages['addQuotesToAttributes'], " - \"\"", null, prefix)); //$NON-NLS-1$ //$NON-NLS-2$
+						return proposals;
+					}
+				}
+			}
+			var attrs = Attributes.getAttributesForNode(node);
 			if(Array.isArray(attrs.global)) {
 				proposals = proposals.concat(this.addProposals(node, attrs.global, params));
 			}
@@ -476,7 +508,6 @@ define([
 					});
 					proposals = proposals.concat(arr);
 				}
-
 			}
 			if(Array.isArray(attrs.keyboardevents)) {
 				arr = this.addProposals(node, attrs.keyboardevents, params);
@@ -490,7 +521,6 @@ define([
 					});
 					proposals = proposals.concat(arr);
 				}
-
 			}
 			if(Array.isArray(attrs.mouseevents)) {
 				arr = this.addProposals(node, attrs.mouseevents, params);
@@ -504,7 +534,6 @@ define([
 						});
 					proposals = proposals.concat(arr);
 				}
-
 			}
 			if(Array.isArray(attrs.windowevents) && attrs.windowevents.length > 0) {
 				arr = this.addProposals(node, attrs.windowevents, params);
@@ -518,7 +547,6 @@ define([
 						});
 					proposals = proposals.concat(arr);
 				}
-
 			}
 			if(Array.isArray(attrs.aria)) {
 				arr = this.addProposals(node, attrs.aria, params);
@@ -533,7 +561,7 @@ define([
 					proposals = proposals.concat(arr);
 				}
 			}
-			return proposals;	
+			return proposals;
 		},
 		
 		addProposals: function addProposals(node, attrs, params) {
@@ -571,20 +599,31 @@ define([
 						hover.content += i18nUtil.formatMessage(Messages['onlineDocumentation'], attr.url);
 					}
 					var proposalText = attr.name;
-					if (typeof node.value !== 'string'){
-						proposalText += '=""'; //$NON-NLS-1$
+					var caretOffset = 0;
+					if (!Array.isArray(node.valueRange)
+							|| (node.valueRange[0] > params.offset || node.valueRange[1] < params.offset)) {
+						if (typeof node.value !== 'string') {
+							proposalText += '=""'; //$NON-NLS-1$
+							caretOffset = 2; // 2 to put the caret between the two quotes
+						} else if (proposalText.indexOf(prefix) === -1) {
+							proposalText += '=""'; //$NON-NLS-1$
+							caretOffset = 2; // 2 to put the caret between the two quotes
+						} else if (prefix.length === 0 || (prefix.length !== 0 && proposalText.indexOf(prefix) === -1)) {
+							proposalText += '=""'; //$NON-NLS-1$
+							caretOffset = 2; // 2 to put the caret between the two quotes
+						}
 					}
 					var proposal = this.makeComputedProposal(proposalText, attr.name, desc, hover, prefix);
-					proposal.escapePosition = params.offset - prefix.length + attr.name.length + 2;
+					proposal.escapePosition = params.offset - prefix.length + attr.name.length + caretOffset; 
 					proposals.push(proposal);
 				}
 			}
 			proposals.sort(function(l,r) {
 				//sort by relevance and then by name
-				if(typeof(l.relevance) === 'undefined') {
+				if(typeof l.relevance === 'undefined') {
 					l.relevance = 1;
 				}
-				if(typeof(r.relevance) === 'undefined') {
+				if(typeof r.relevance === 'undefined') {
 					r.relevance = 1;
 				}
 				if (l.relevance > r.relevance) {
@@ -607,11 +646,13 @@ define([
 		/**
 		 * Returns a comment open/close proposal or an empty array
 		 * @param {Object} node The AST node for the tag we are completing within
+		 * @param {Number} offset The offset content assist was activated at
+		 * @param {String} source The source of the file
 		 * @param {Boolean} open If true will propose open comment proposals, otherwise return close comment
 		 * @returns {Array.<Object>} The array of proposals
 		 * @since 10.0 
 		 */
-		getComment: function(node, open) {
+		getComment: function(node, offset, source, open) {
 			var proposals = [];
 			if (open){
 				var prefix = '<' + node.name;
@@ -619,9 +660,10 @@ define([
 			} else {
 				if (node.data.length > 0){
 					prefix = "";
-					if (node.data.charAt(node.data.length-1) === '-'){
+					// Check if user has typed dashes (not including the leading <!--)
+					if (source.charAt(offset-1) === '-' && offset > node.range[0]+4){
 						prefix += '-';
-						if (node.data.charAt(node.data.length-2) === '-'){
+						if (source.charAt(offset-2) === '-'){
 							prefix += '-';
 						}
 					}
@@ -639,7 +681,12 @@ define([
 		 * @returns {Boolean} True if the node has the given attribute, false otherwise
 		 */
 		_hasAttribute: function(node, attribute) {
-			return node && node.type === 'tag' && typeof(node.attributes) === 'object' && attribute && !!node.attributes[attribute];			
+			return node
+					&& node.type === 'tag'
+					&& typeof node.attributes === 'object'
+					&& attribute
+					&& !!node.attributes[attribute]
+					&& node.attributes[attribute].value !== null; // a complete attribute needs a value
 		},
 		
 		/**
@@ -649,9 +696,24 @@ define([
 		 * @returns {Array.<Object>} The array of proposals
 		 * @since 10.0 
 		 */
-		getValuesForAttribute: function(node, params) {
-			var vals = Attributes.getValuesForAttribute(node);
+		getValuesForAttribute: function(node, source, params) {
 			var proposals = [];
+			var prefix = params.prefix ? params.prefix : "";
+			// we need to check if we need to rebuild the prefix for completion that contains a '-'
+			var index = params.offset - prefix.length - 1;
+			if (index > 0 && index < source.length) {
+				var precedingChar = source.charAt(index);
+				if (precedingChar === '=' && prefix.length === 0 && (index - 1) > 0) {
+					precedingChar = source.charAt(index - 1);
+					if (/[A-Za-z0-9_]/.test(precedingChar)) {
+						if (index + 1 >= source.length || 
+								(source.charAt(index + 1) !== '\"' && source.charAt(index + 1) !== "'")) {
+							proposals.push(this.makeComputedProposal("\"\"",  Messages['addQuotesToAttributes'], " - \"\"", null, prefix)); //$NON-NLS-1$ //$NON-NLS-2$
+						}
+					}
+				}
+			}
+			var vals = Attributes.getValuesForAttribute(node);
 			if(Array.isArray(vals)) {
 				proposals = proposals.concat(this.addProposals(node, vals, params));
 			}
@@ -671,9 +733,7 @@ define([
 				var startTag;
 				// If text content is a '/' offer to close the tag
 				// If we have an uncompleted tag '</' offer to complete the tag
-				if (node.type === 'text' && node.parent && node.parent.type === 'tag'){
-					startTag = node.parent;
-				} else if (node.type === 'tag' && node.openrange && params.offset > node.openrange[1]){
+				if (node.type === 'tag' && node.openrange && params.offset > node.openrange[1]){
 					startTag = node;
 				} else if (node.type === 'tag' && (params.offset > node.range[1] || params.offset < node.range[0])){
 					startTag = node;
@@ -702,6 +762,10 @@ define([
 		isCompletingAttributeValue: function(node, source, params) {
 			// TODO We can do better with the new parser, handle no quotes cases too
 			if(node && node.type === 'attr') {
+				if (node.valueRange) {
+					var range = node.valueRange;
+					return range[0] <= params.offset && range[1] >= params.offset;
+				}
 				return this.within('"', '"', source, params.offset, node.range) || //$NON-NLS-1$ //$NON-NLS-2$
 						this.within("'", "'", source, params.offset, node.range); //$NON-NLS-1$ //$NON-NLS-2$
 			}

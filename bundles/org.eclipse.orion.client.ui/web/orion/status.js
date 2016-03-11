@@ -21,6 +21,16 @@ define([
 	// this is a cheat, all dom ids should be passed in
 	var closeButtonDomId = "closeNotifications"; //$NON-NLS-0$
 
+	function getPageLoader() {
+		return require.specified("orion/splash") && require("orion/splash").getPageLoader(); //$NON-NLS-1$
+	}
+	
+	function mark(name) {
+		if (window.performance && window.performance.mark) {
+			window.performance.mark("orion-" + name);
+		}
+	}
+
 	/**
 	 * Service for reporting status
 	 * @class Service for reporting status
@@ -72,7 +82,7 @@ define([
 		},
 		
 		_takeDownSplash: function() {
-			var pageLoader = require.specified("orion/splash") && require("orion/splash"); //$NON-NLS-1$
+			var pageLoader = getPageLoader();
 			if (pageLoader) {
 				pageLoader.takeDown();
 			}
@@ -192,6 +202,23 @@ define([
 			this._clickToDisMiss = false;
 			this._init();
 			this.progressMessage = message;
+			
+			var pageLoader = getPageLoader();
+			if (pageLoader) {
+				
+				var step = pageLoader.getStep();
+				if(step) {
+					if (typeof message === "object") {
+						step.message = message.message;
+						step.detailedMessage = message.detailedMessage;
+					} else {
+						step.message = message;
+						step.detailedMessage = "";
+					}
+					pageLoader.update();
+					return;
+				}
+			}
 			
 			var node = lib.node(this.progressDomId);
 			lib.empty(node);
@@ -400,21 +427,30 @@ define([
 		},
 		
 		_renderOngoingMonitors: function(){
+			var msg = "";
+			var title = "";
+			var pageLoader = getPageLoader();
 			if(this._progressMonitors.length > 0){
-				var msg = "";
-				var isFirst = true;
+				var msgs = [], titles = [];
 				for(var progressMonitorId in this._progressMonitors){
 					if(this._progressMonitors[progressMonitorId].status){
-						if(!isFirst)
-							msg+=", "; //$NON-NLS-0$
-						msg+=this._progressMonitors[progressMonitorId].status;
-						isFirst = false;
+						msgs.push(this._progressMonitors[progressMonitorId].status);
 					}
+					titles.push(this._progressMonitors[progressMonitorId].title);
 				}
-				this.setProgressMessage(msg);
-			} else {
-				this.setProgressMessage("");
+				if (pageLoader) {
+					msg = msgs;
+					title = titles;
+				} else {
+					msg = msgs.join(", ");
+					title = titles[0] || "";
+				}
 			}
+			if (pageLoader) {
+				this.setProgressMessage({message: title, detailedMessage: msg});			
+				return;
+			}
+			this.setProgressMessage(msg);
 		},
 		
 		_beginProgressMonitor: function(monitor){
@@ -444,6 +480,7 @@ define([
 	function ProgressMonitor(statusService, progressId, deferred, message){
 		this.statusService = statusService;
 		this.progressId = progressId;
+		this.title = message;
 		if(deferred){
 			this.deferred = deferred;
 			this.begin(message);
@@ -459,6 +496,7 @@ define([
 						if (progress.message) {
 							var msg = progress.message;
 							if (typeof progress.loaded === "number" && typeof progress.total === "number") {
+								if (progress.loaded > progress.total) progress.loaded = progress.total;
 								msg = i18nUtil.formatMessage(messages["workedProgress"], msg, progress.loaded, progress.total);
 							}
 							that.worked(msg);
@@ -472,6 +510,7 @@ define([
 	 * @param {String} message
 	 */
 	ProgressMonitor.prototype.begin = function(message){
+				mark("start " + this.progressId + ": " + this.title);
 				this.status = message;
 				this.statusService._beginProgressMonitor(this);
 			};
@@ -483,6 +522,7 @@ define([
 	 * from the Orion server.
 	 */
 	ProgressMonitor.prototype.done = function(_status){
+				mark("end " + this.progressId + ": " + this.title);
 				this.status = _status;
 				this.statusService._doneProgressMonitor(this);
 			};

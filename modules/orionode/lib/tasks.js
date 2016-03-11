@@ -6,90 +6,133 @@
  * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
  *
  * Contributors:
- *     IBM Corporation - initial API and implementation
+ *	 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-
-var connect = require('connect');
-var resource = require('./resource');
-var api = require('./api'), writeError = api.writeError;
+var express = require('express');
+var bodyParser = require('body-parser');
+var api = require('./api');
+var writeError = api.writeError;
 
 var taskList = {};
 
 function orionTasksAPI(options) {
-    var workspaceRoot = options.root;
-    if (!workspaceRoot) { throw new Error('options.root path required'); }
+	var root = options.root;
+	if (!root) { throw new Error('options.root path required'); }
 
-    return connect()
-    .use(connect.json())
-    .use(resource(workspaceRoot, {
-        GET: function(req, res, next, rest) {
-
-            if(rest.indexOf("id/") !== 0) return writeError(403, res);
-
-            var id = rest.replace("id/", "");
-
-            if (!taskList[id]) return writeError(404, res);
-
-            if (taskList[id].Result) del = true;
-
-            var resp = JSON.stringify(taskList[id]);
-
-            res.statusCode = 200;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(resp);
-            // console.log("sent task " + id)
-            // console.log(resp)
-        },
-        // POST: function(req, res, next, rest) {
-        //     writeError(403, res);
-        // },
-        // PUT: function(req, res, next, rest) {
-        //     writeError(403, res);
-        // },
-        DELETE: function(req, res, next, rest) {
-            if(rest.indexOf("id/") !== 0) return writeError(403, res);
-            
-            var id = rest.replace("id/", "");
-            delete taskList[id];
-
-            res.statusCode = 200;
-            res.end();
-        }
-    }));
+	return express.Router()
+	.use(bodyParser.json())
+	.param('id', function(req, res, next, value) {
+		req.id = value;
+		next();
+	})
+	.get('/id/:id', function(req, res/*, next*/) {
+		var id = req.id;
+		if (!taskList[id]) return writeError(404, res);
+		res.json(taskList[id].toJSON());
+	})
+	.delete('/id/:id', function(req, res/*, next*/) {
+		var id = req.id;
+		delete taskList[id];
+		res.sendStatus(200);
+	});
 }
 
-//Add the task, return the task so it can be sent
-function addTask(id, message, running, completionPercent) {
-    var task = {
-        Id: id,
-        Message: message,
-        Running: running,
-        PercentComplete: completionPercent,
-        Location: "/task/id/" + id
-    };
-
-    taskList[id] = task;
-
-    return task;
+function Task(res, cancelable, lengthComputable, wait) {
+	this.id = Date.now();
+	this.cancelable = !!cancelable;
+	this.lengthComputable = !!lengthComputable;
+	this.timestamp = this.id;
+	this.total = this.loaded = 0;
+	this.type = "loadstart";
+	this.res = res;
+	if (wait === 0) {
+		this.start();
+	} else {
+		this.timeout = setTimeout(function() {
+			delete this.timeout;
+			this.start();
+		}.bind(this), typeof wait === "number" ? wait : 100);
+	}
 }
-
-function updateTask(id, completionPercentage, result, type) {
-    if (taskList[id]) {
-
-        //if (result) return taskList[id] = result;
-        taskList[id]["PercentComplete"] = completionPercentage;
-        taskList[id]["Result"] = result;
-        if (type) taskList[id]["type"] = type;
-
-        if (completionPercentage === 100) {
-            taskList[id].Running = false;
-        }
-    }
-}
+Task.prototype = {
+	start: function() {
+		if (!this.isRunning()) return;
+		this.started = true;
+		taskList[this.id] = this;
+		var resp = JSON.stringify(this.toJSON());
+		var res = this.res;
+		res.statusCode = 202;
+		res.setHeader('Content-Type', 'application/json');
+		res.setHeader('Content-Length', resp.length);
+		res.end(resp);
+	},
+	done: function(result) {
+		this.result = result;
+		switch (result.Severity) {
+			case "Ok":
+			case "Info":
+				this.type = "loadend";
+				break;
+			case "Error":
+			case "Warning":
+				this.type = "error";
+				break;
+			default:
+				this.type = "abort";
+		}
+		if (!this.started) {
+			if (this.timeout) {
+				clearTimeout(this.timeout);
+				delete this.timeout;
+			}
+			var res = this.res;
+			if (this.result.JsonData) {
+				res.statusCode = this.result.HttpCode;
+				var resp = JSON.stringify(this.result.JsonData);
+				res.setHeader('Content-Type', 'application/json');
+				res.setHeader('Content-Length', resp.length);
+				res.end(resp);
+			} else if (this.type === "error") {
+				res.writeHead(this.result.HttpCode, this.result.Message || "");
+				res.end();
+			}
+		}
+		delete this.res;
+	},
+	isRunning: function() {
+		return this.type !== "error" && this.type !== "abort";
+	},
+	updateProgress: function(message, loaded, total) {
+		if (!this.lengthComputable) return;
+		this.type = "progress";
+		if (typeof message === "string") this.message = message;
+		if (typeof loaded === "number") this.loaded = loaded;
+		if (typeof total === "number") this.total = total;
+	},
+	toJSON: function() {
+		var result = {
+			lengthComputable: this.lengthComputable,
+			cancelable: this.cancelable,
+			timestamp: this.timestamp,
+			type: this.type
+		};
+		if (this.lengthComputable) {
+			result.loaded = this.loaded;
+			result.total = this.total;
+			result.message = this.message;
+		}
+		if (this.result) {
+			result.Result = this.result;
+		} else {
+			// Do not set location so that tasks is deleted
+			result.Location = "/task/id/" + this.id;
+		}
+		return result;
+	}
+};
 
 module.exports = {
-    orionTasksAPI: orionTasksAPI,
-    addTask: addTask,
-    updateTask: updateTask
+	orionTasksAPI: orionTasksAPI,
+	Task: Task,
 };

@@ -21,12 +21,12 @@ hard-coded numbers elsewhere.
 
 /* $HeaderHeight */
 .headerLayout {
-	height: 50px;
+	height: 35px;
 }
 
 /* $ToolbarHeight */
 .toolbarLayout {
-	height: 50px;
+	height: 35px;
 	
 	display: -webkit-box;
 	display: -moz-box;
@@ -117,6 +117,14 @@ hard-coded numbers elsewhere.
 
     width: 20%; 
     padding-right:5px;
+}
+
+.banner-maximized {
+	display: none;
+}
+
+.footer-maximized {
+	display: none;
 }
 
 .content-fixedHeight {
@@ -316,7 +324,7 @@ hard-coded numbers elsewhere.
 
 .toolbarTarget {
 	position: absolute;
-	top: 50px;  /* $ToolbarHeight + 2 */
+	top: 35px;  /* $ToolbarHeight + 2 */
  	width: 100%;
  	overflow-y: auto;
 }
@@ -327,11 +335,11 @@ hard-coded numbers elsewhere.
 
 .pageLayoutTarget {
 	position: absolute;
- 	width: calc( 100% - 60px );
+ 	width: calc( 100% - 15px );
  	bottom: 0;
  	overflow-y: auto;
 	box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.33); /* 0 0 0 1px #d1d1d1,0 0 4px 1px #ccc; */
-	margin: 20px;
+	margin: 5px;
 	margin-right: 0;
 	padding-top: 10px;
 	padding-bottom: 5px;
@@ -645,7 +653,7 @@ and (max-device-width : 1024px)  {
 	text-decoration:none !important;
 	width: 100%;
 	display: inline-block;
-	padding: 9px 0px 12px 0px;
+	padding: 4px 0 4px 0;
 }
 .sideMenuItem>.submenu-trigger:hover, .sideMenuItem.expanded>.submenu-trigger{
 	text-decoration:none;
@@ -850,18 +858,12 @@ and (max-device-width : 1024px)  {
     display: flex;
 	display: -webkit-flex;
     height:300px;
-    width:400px;
+    width:100%;
     flex-direction: column;
     -webkit-flex-direction: column;
     align-items: center;
     -webkit-align-items: center;
 	background-color: rgb(57,75,84);
-	padding: 20px;
-	padding-top: 60px;
-	padding-bottom: 0px;
-	border-radius: 4px;
-	Xbox-shadow: 5px 5px 5px 0 rgba(0,0,0,0.2);
-	Xborder-bottom: 1px solid rgb(59,222,255);
 }
 
 .splashAbout {
@@ -888,14 +890,18 @@ and (max-device-width : 1024px)  {
 	height:24px;
 }
 
+.splashMessages {
+}
+
 .splashMessage {
 	color: white;
-	font-size: 12px;
+	font-size: 14px;
 }
 
 .splashDetailedMessage {
 	color: white;
 	font-size: 12px;
+	padding-left: 20px;
 }
 
 .splashVisual {

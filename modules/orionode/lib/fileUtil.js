@@ -9,14 +9,14 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var crypto = require('crypto');
-var fs = require('fs');
-var dfs = require('deferred-fs'), Deferred = dfs.Deferred;
+var ETag = require('./util/etag');
 var path = require('path');
+var Promise = require('bluebird');
 var rimraf = require('rimraf');
 var url = require('url');
 var api = require('./api');
-var async = require('./async');
+
+var fs = Promise.promisifyAll(require('fs'));
 
 /*
  * Utils for representing files as objects in the Orion File API
@@ -34,18 +34,18 @@ var async = require('./async');
 var getChildren = exports.getChildren = function(directory, parentLocation, excludes, callback) {
 	// If 'excludes' is omitted, the callback can be given as the 3rd argument
 	callback = excludes || callback;
-	dfs.readdir(directory).then(function(files) {
+	fs.readdirAsync(directory).then(function(files) {
 		// stat each file to find if it's a Directory -- ugh
 		var childStatPromises = files.map(function(file) {
 			if (Array.isArray(excludes) && excludes.indexOf(file) !== -1) {
 				return null; // omit
 			}
 			var filepath = path.join(directory, file);
-			return dfs.stat(filepath).then(function(stat) {
+			return fs.statAsync(filepath).then(function(stat) {
 				return [filepath, stat];
 			});
 		}).filter(function(f) { return f; }); // skip omitted stuff
-		Deferred.all(childStatPromises).then(function(childStats) {
+		Promise.all(childStatPromises).then(function(childStats) {
 			var children = childStats.map(function(cs) {
 				var childname = path.basename(cs[0]);
 				var isDirectory = cs[1].isDirectory();
@@ -151,17 +151,17 @@ function _copyDir(srcPath, destPath, callback) {
 	 */
 	_copyRecursive = function(root, dirlist) {
 		var stack = [{path: root, dir: true}];
-		var treeDone = new Deferred();
-		(function handleNextDir() {
-			if (!stack.length) {
-				treeDone.resolve();
-				return;
-			}
-			var dir = stack.shift();
-			dirlist.push(dir);
-			processDir(stack, dir, dirlist).then(handleNextDir);
-		}());
-		return treeDone;
+		return new Promise(function(resolve) {
+			(function handleNextDir() {
+				if (!stack.length) {
+					resolve();
+					return;
+				}
+				var dir = stack.shift();
+				dirlist.push(dir);
+				processDir(stack, dir, dirlist).then(handleNextDir);
+			}());
+		});
 	};
 	/** @returns A promise that resolves once all items in 'dir' have been either: deleted (if simple file) or 
 	 * pushed to 'stack' for later handling (if directory).
@@ -170,36 +170,34 @@ function _copyDir(srcPath, destPath, callback) {
 	 * @param {Array} List of the mix of files and directories, in the top down order, that will be copied first for all folders then files.
 	 */
 	processDir = function(stack, dir, dirlist) {
-		return dfs.readdir(dir.path).then(function(files) {
-			return Deferred.all(files.map(function(filename) {
+		return fs.readdirAsync(dir.path).then(function(files) {
+			return Promise.all(files.map(function(filename) {
 				var fullpath = path.join(dir.path, filename);
-				return dfs.stat(fullpath).then(function(stat) {
+				return fs.statAsync(fullpath).then(function(stat) {
 					if (stat.isDirectory()) {
 						stack.push({path: fullpath, dir: true});
 					} else {
 						dirlist.push({path: fullpath, dir: false});
 					}
-					return new Deferred().resolve();
+					return Promise.resolve();
 				});
 			}));
 		});
 	};
 	cpDir = function(dirlist) {
-		return async.sequence(dirlist.map(function(d) {
-			if(d.dir){
-				var currentDestFolderPath = d.path.replace(srcPath, destPath);
-				return function() {
-					return dfs.mkdir(currentDestFolderPath);
-				};
-			} else {
-				return function(){
-					var currentDestFolderPath = d.path.replace(srcPath, destPath);
-					var rs = dfs.createReadStream(d.path);
-					var ws = dfs.createWriteStream(currentDestFolderPath);
-					rs.pipe(ws);
-				};
+		return Promise.each(dirlist, function(d) {
+			var currentDestFolderPath = d.path.replace(srcPath, destPath)
+			if (d.dir) {
+				return fs.mkdirAsync(currentDestFolderPath);
 			}
-		}));
+			// file
+			var rs = fs.createReadStream(d.path);
+			var ws = fs.createWriteStream(currentDestFolderPath);
+			rs.pipe(ws);
+			// TODO resolve once writing has finished?
+			// return new Promise((resolve) => rs.on('end', resolve))
+			return Promise.resolve();
+		});
 	};
 	cpFile = function(dirlist) {
 		dirlist.forEach(function(item) {
@@ -260,35 +258,6 @@ var withStats = exports.withStats = function(filepath, callback) {
 };
 
 /**
- * @name orion.node.ETag
- * @class Represents an ETag for a stream.
- * @param input A stream or a string.
- */
-function ETag(input) {
-	var hash = crypto.createHash('sha1'), _this = this;
-	var update = function(data) {
-		hash.update(data);
-	};
-	var end = function() {
-		_this.value = hash.digest('base64');
-	};
-
-	if (typeof input === "string") {
-		update(input);
-		end();
-		return;
-	}
-	input.on('data', update);
-	input.on('end', end);
-}
-ETag.prototype = /** @lends orion.node.ETag.prototype */ {
-	getValue: function() {
-		return this.value;
-	}
-};
-exports.ETag = ETag;
-
-/**
  * Gets the stats for filepath and calculates the ETag based on the bytes in the file.
  * @param {Function} callback Invoked as callback(error, stats, etag) -- the etag can be null if filepath represents a directory.
  */
@@ -296,19 +265,20 @@ exports.withStatsAndETag = function(filepath, callback) {
 	fs.stat(filepath, function(error, stats) {
 		if (error) {
 			callback(error);
-		} else if (stats.isFile()) {
-			var stream = fs.createReadStream(filepath);
-			var etag = new ETag(stream);
-			stream.on('error', function(error) {
-				callback(error);
-			});
-			stream.on('end', function() {
-				callback(null, stats, etag.getValue());
-			});
-		} else {
+			return;
+		}
+		if (!stats.isFile()) {
 			// no etag
 			callback(null, stats, null);
+			return;
 		}
+		var etag = ETag();
+		var stream = fs.createReadStream(filepath);
+		stream.pipe(etag);
+		stream.on('error', callback);
+		stream.on('end', function() {
+			callback(null, stats, etag.read());
+		});
 	});
 };
 
@@ -354,8 +324,8 @@ var writeFileMetadata = exports.writeFileMetadata = function(fileRoot, res, wwwp
 		//Charset: "UTF-8",
 		Attributes: {
 			// TODO fix this
-			ReadOnly: false,//!(stats.mode & USER_WRITE_FLAG === USER_WRITE_FLAG),
-			Executable: false//!(stats.mode & USER_EXECUTE_FLAG === USER_EXECUTE_FLAG)
+			ReadOnly: false, //!(stats.mode & USER_WRITE_FLAG === USER_WRITE_FLAG),
+			Executable: false //!(stats.mode & USER_EXECUTE_FLAG === USER_EXECUTE_FLAG)
 		}
 	};
 	if (metadataMixins) {
@@ -397,16 +367,6 @@ var writeFileMetadata = exports.writeFileMetadata = function(fileRoot, res, wwwp
 };
 
 /**
- * The connect framework removes leading path segments that precede the path Orion is mounted at. This function
- * returns the leading segments.
- * @param {Request} req Request object.
- */
-var getContextPath = exports.getContextPath = function(req) {
-	var orig = req.originalUrl, _url = req.url;
-	return orig.substr(0, orig.length - _url.length);
-};
-
-/**
  * Helper for fulfilling a file POST request (for example, copy, move, or create).
  * @param {String} fileRoot The route of the /file handler (not including context path)
  * @param {Object} req
@@ -420,7 +380,10 @@ var getContextPath = exports.getContextPath = function(req) {
 exports.handleFilePOST = function(workspaceDir, fileRoot, req, res, wwwpath, destFilepath, metadataMixins, statusCode) {
 	var getSafeFilePath = safeFilePath.bind(null, workspaceDir);
 	var isDirectory = req.body && getBoolean(req.body, 'Directory');
-	var fileRootUrl = getContextPath(req) + fileRoot;
+	if (typeof req.contextPath !== "string") {
+		throw new Error("Missing context path");
+	}
+	var fileRootUrl = req.contextPath + fileRoot;
 
 	fs.exists(destFilepath, function(destExists) {
 		function checkXCreateOptions(opts) {

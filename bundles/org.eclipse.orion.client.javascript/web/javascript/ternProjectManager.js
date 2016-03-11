@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation and others.
+ * Copyright (c) 2015, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -14,9 +14,10 @@ define([
 'orion/objects',
 'orion/Deferred',
 'orion/URITemplate',
+'orion/i18nUtil',
 'javascript/ternProjectValidator',
 'i18n!javascript/nls/problems'
-], function(Objects, Deferred, URITemplate, Validator, Messages) {
+], function(Objects, Deferred, URITemplate, i18nUtil, Validator, Messages) {
 
 	/**
 	 * @description Creates a new open declaration command
@@ -27,12 +28,14 @@ define([
 	 * @param {ServiceRegistry} serviceRegistry The service registry 
 	 * @since 8.0
 	 */
-	function TernProjectManager(ternWorker, scriptResolver, serviceRegistry) {
+	function TernProjectManager(ternWorker, scriptResolver, serviceRegistry, setStarting) {
 		this.ternWorker = ternWorker;
 		this.scriptResolver = scriptResolver;
-		this.currentProjectLocation = null;
+		this.projectLocation = null;
 		this.currentFile = null;
 		this.registry = serviceRegistry;
+		this.starting = setStarting;
+		this.json = null;
 	}
 
 	Objects.mixin(TernProjectManager.prototype, {
@@ -54,86 +57,54 @@ define([
 							  "<p>"+message+"</p>"; //$NON-NLS-1$ //$NON-NLS-2$
 				if(this.currentFile) {
 					var href = new URITemplate("#{,resource,params*}").expand( //$NON-NLS-1$
-		    		                      {
-		    		                      resource: this.currentFile,
-		    		                      params: {}
-		    		                      });
+							{
+								resource: this.currentFile,
+								params: {}
+							});
 					msg.Message += "<p><a href=\""+href+"\" alt=\""+Messages['openFile']+"\">"+Messages['openFile']+"</a></p>"; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 				}
 				this.registry.getService("orion.page.message").setProgressResult(msg); //$NON-NLS-1$
 			}
 		},
-		/**
-		 * @description Get the file client;
-		 * @function
-		 * @returns {orion.FileClient} returns a file client
-		 */
-		getFileClient: function() {
-			return this.scriptResolver.getFileClient();
-		},
-		
-		/**
-		 * Returns the top level file folder representing the project that contains the given file.
-		 * The file must have a parents property (either parents or Parents).
-		 * @param file {Object} file to lookup the project for
-		 * @returns returns the top level project file or <code>null</code>
-		 */
-		getProjectFile: function(file) {
-			// file will have different properties depending on whether it came from an editor event or a command
-			if(file){
-				var parents = file.parents ? file.parents : file.Parents;
-				if (parents && parents.length>0){
-					return parents[parents.length-1];
-				}
-			}
-			return null;
-		},
 		
 		/**
 		 * Returns a deferred to find the location of the .tern-project file for the given project if one exists
-		 * @param projectFile {Object} the project container
-		 * @returns returns {Deferred} Deferred to get the string file location or <code>null</code> if there is no .tern-project file
+		 * @returns {String} The fully qualified path to the .tern-project file
 		 */
-		getTernProjectFileLocation: function(projectFile) {
-			this.currentFile = null;
-			if (!projectFile){
-				return null;
-			}
-			var deferred;
-			if(projectFile.Children){
-				 deferred = new Deferred().resolve(projectFile.Children);
-			} else if(projectFile.ChildrenLocation) {
-				deferred = this.getFileClient().fetchChildren(projectFile.ChildrenLocation);
-			}
-			return deferred.then(function(children){
-				for(var i=0; i<children.length; i++){
-					if(children[i].Name === ".tern-project"){
-						this.currentFile = children[i].Location;
-						return this.currentFile;
-					}
-				}
-				return null;
-			}.bind(this));
+		getTernProjectFileLocation: function() {
+			return this.currentFile;
 		},
 		
 		/**
-		 * Returns a deferred to find the location of the .tern-project file for the given project. If a .tern-project file
-		 * does not exist, an empty file will be created at the returned location. The deferred returns <code>null</code>
-		 * if there is a problem creating the file.
-		 * @param projectFile {Object} the project container
-		 * @returns returns {Deferred} Deferred to get the location of the .tern-project file or <code>null</code> if there was a probem creating one
+		 * @description Returns the current project file path or null
+		 * @function
+		 * @returns {String} The current project file path, or null
 		 */
-		ensureTernProjectFileLocation: function(projectFile) {
-			return this.getTernProjectFileLocation(projectFile).then(function(ternFileLocation){
-				if (!ternFileLocation) {
-					return this.getFileClient().createFile(projectFile.Location, '.tern-project').then(function(){ //$NON-NLS-1$
-						return ternFileLocation;
-					});
-				} 
-				return ternFileLocation;
-			}.bind(this));
+		getProjectFile: function() {
+			return this.projectLocation;
 		},
 		
+		/**
+		 * @description Returns the JSON parsed from the current project file or null
+		 * @function
+		 * @returns {Object} Returns the parsed JSON or null
+		 */
+		getJSON: function() {
+			return this.json;
+		},
+		
+		refresh : function(file) {
+			if(file) {
+				if (file.endsWith(".tern-project")) {
+					this.currentFile = file;
+				}
+				this.starting();
+				return this.parseTernJSON(file).then(function(jsonOptions){
+					this.json = jsonOptions;
+					return this.loadTernProjectOptions(jsonOptions);
+				}.bind(this));
+			}
+		},
 		/**
 		 * Returns a deferred that reads the file at the given location and returns the parsed JSON contents
 		 * @param {String} fileLocation The location of the file to parse
@@ -143,11 +114,19 @@ define([
 			if(!fileLocation) {
 				return new Deferred().resolve({});
 			}
-			return this.getFileClient().read(fileLocation).then(function(content) {
+			return this.scriptResolver.getFileClient().read(fileLocation).then(function(content) {
 				try {
 					var json = content ? JSON.parse(content) : {};
-					json.projectLoc = fileLocation.slice(0, fileLocation.lastIndexOf('/')+1);
-					this._simpleValidate(json);
+					// create a copy of json in order to prevent the addition of the projectLoc property.
+					// the returned value is now cached into the getJSON() function.
+					var copyJson = Object.create(null);
+					for (var prop in json) {
+						if (json.hasOwnProperty(prop)) {
+							copyJson[prop] = json[prop];
+						}
+					}
+					copyJson.projectLoc = fileLocation.slice(0, fileLocation.lastIndexOf('/')+1);
+					this._simpleValidate(copyJson);
 					return json;
 				} catch(e) {
 					this._report(Messages['errorParsing'], e);
@@ -164,6 +143,7 @@ define([
 		 * @returns returns
 		 */
 		_simpleValidate: function _simpleValidate(json) {
+			this._hasValidationProblem = false;
 			if(!this.inEditor) {
 				var problems = Validator.validate(json);
 				if(problems.length > 1) {
@@ -172,31 +152,15 @@ define([
 						pbString += "<li>"+pb+"</li>"; //$NON-NLS-1$ //$NON-NLS-2$
 					});
 					pbString += "</ul>"; //$NON-NLS-1$
+					this._hasValidationProblem = true;
 					this._report(Messages['multiAttrProblems'], pbString);
 				} else if(problems.length === 1) {
+					this._hasValidationProblem = true;
 					this._report(Messages['attrProblem'], problems[0]);
 				}
 			}
 		},
 		
-		/**
-		 * Returns a deferred to write the stringified JSON options into the .tern-project file at the given
-		 * location.  The file must already exist (use ensureTernProjectFileLocation).  Returns <code>null</code>
-		 * if there is a problem stringifying the JSON.
-		 * @param fileLocation {String} location of the .tern-project file to write to
-		 * @param jsonOptions {Object} options to write into the file
-		 * @returns returns {Deferred} Deferred to write the options into the file or <code>null</code> on error
-		 */
-		writeTernFile: function(fileLocation, jsonOptions) {
-			this.currentFile = fileLocation;
-			try {
-				var jsonString = JSON.stringify(jsonOptions, null, 4);
-				return this.fileClient.write(fileLocation, jsonString);
-			} catch(e) {
-				this._report(Messages['failedWrite'], e);
-			}
-		},
-				
 		/**
 		 * Loads the given jsonOptions into Tern, either by restarting the Tern server with new initialization options
 		 * or by adding additional type information to the running Tern server.  The messages sent to Tern are processed
@@ -204,8 +168,10 @@ define([
 		 * @param jsonOptions {Object} options to load into Tern
 		 */
 		loadTernProjectOptions: function(jsonOptions) {
-			this.ternWorker.postMessage({request: "start_server", args: {options: jsonOptions}}); //$NON-NLS-1$
-			if (Array.isArray(jsonOptions.loadEagerly)) {
+			if (Array.isArray(jsonOptions.loadEagerly) && jsonOptions.loadEagerly.length > 0) {
+				var fileLoadPromises = [];
+				this._fileLoadWarnings = [];
+				var filesToLoad = [];
 				for (var i = 0; i < jsonOptions.loadEagerly.length; i++) {
 					var filename = jsonOptions.loadEagerly[i];
 					var ext = 'js'; //$NON-NLS-1$
@@ -214,18 +180,44 @@ define([
 					} else if (filename.match(/\.htm$/)){
 						ext = 'htm'; //$NON-NLS-1$
 					}
-					this.scriptResolver.getWorkspaceFile(filename, {ext: ext}).then(function(files) {
+					fileLoadPromises.push(this.scriptResolver.getWorkspaceFile(filename, {ext: ext}).then(function(_filename, files) {
 						if (Array.isArray(files) && files.length > 0){
-//							if (files.length > 1) {
-//								this._report("Mutiple matches were found eagerly loading file: "+filename, 
-//								files[0].location+" was chosen and loaded.");							
-//							}
-							this.ternWorker.postMessage(
-								{request:'addFile', args:{file: files[0].location}} //$NON-NLS-1$
-							);
+							if (files.length > 1) {
+								this._fileLoadWarnings.push(i18nUtil.formatMessage(Messages['multipleFileMatchesProblem'], _filename, files[0].location));
+							}
+							filesToLoad.push(files[0].location);
+						} else {
+							this._fileLoadWarnings.push(i18nUtil.formatMessage(Messages['noFileMatchProblem'], _filename));
 						}
+					}.bind(this, filename)));
+				}
+				if (!this._hasValidationProblem){
+					this.registry.getService("orion.page.message").setProgressMessage(Messages['fileMatchProgress']); //$NON-NLS-1$
+				}
+				var currentOptions = jsonOptions;
+				currentOptions.loadEagerly = filesToLoad;
+				if(fileLoadPromises.length > 0) {
+					return Deferred.all(fileLoadPromises).then(function(){
+						if (!this._hasValidationProblem){  // Don't hide validation warnings
+							this.registry.getService("orion.page.message").close(); //$NON-NLS-1$
+							if (this._fileLoadWarnings.length > 0){
+								var message = "";
+								for (var j=0; j<this._fileLoadWarnings.length && j<10; j++) {
+									message += this._fileLoadWarnings[j] + '<br>'; //$NON-NLS-1$
+								}
+								if (this._fileLoadWarnings.length > 10){
+									message += i18nUtil.formatMessage(Messages['tooManyFileMatchProblems'],this._fileLoadWarnings.length-10) + '<br>'; //$NON-NLS-1$
+								}
+								this._report(Messages['fileMatchProblems'], message);
+							}
+						}
+						this._fileLoadWarnings = [];
+						this.ternWorker.postMessage({request: "start_server", args: {options: currentOptions}}); //$NON-NLS-1$
 					}.bind(this));
 				}
+				this.ternWorker.postMessage({request: "start_server", args: {options: currentOptions}}); //$NON-NLS-1$
+			} else {
+				this.ternWorker.postMessage({request: "start_server", args: {options: currentOptions}}); //$NON-NLS-1$
 			}
 		},
 		
@@ -237,18 +229,25 @@ define([
 		onInputChanged: function onInputChanged(evnt) {
 			this.inEditor = ".tern-project" === evnt.file.name;
 			if(this.inEditor) {
-				this.currentProjectLocation = null;
+				this.projectLocation = null;
 			} else {
-				var file = evnt.file;
-				var projectFile = this.getProjectFile(file);
-				if (projectFile && (!this.currentProjectLocation || projectFile.Location !== this.currentProjectLocation)){
-					this.currentProjectLocation = projectFile.Location;
-					this.scriptResolver.setSearchLocation(projectFile.Location);
-					return this.getTernProjectFileLocation(projectFile).then(function(ternFileLocation){
-						return this.parseTernJSON(ternFileLocation).then(function(jsonOptions){
-							this.loadTernProjectOptions(jsonOptions);
-						}.bind(this));
-					}.bind(this));
+				var file = evnt.file,
+					project;
+				if(file) {
+					var parents = file.parents ? file.parents : file.Parents;
+					if (parents && parents.length > 0){
+						project = parents[parents.length-1];
+					}
+				}
+				if (project && (!this.projectLocation || project.Location !== this.projectLocation)){
+					this.projectLocation = project.Location;
+					this.scriptResolver.setSearchLocation(project.Location);
+					var c = project.Children;
+					for(var i = 0, len = c.length; i < len; i++) {
+						if(".tern-project" === c[i].Name) {
+							return this.refresh(c[i].Location);
+						}
+					}
 				}
 			}
 		}

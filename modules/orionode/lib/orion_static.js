@@ -9,11 +9,12 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var connect = require('connect');
-var path = require('path');
-var mime = connect.mime;
-var statik = connect['static'];
+var express = require('express');
+var nodePath = require('path');
+var mime = require('mime');
+//var mime = connect.mime;
 
+//not sure what mime is for
 mime.define({
 	'application/json': ['pref', 'json']
 });
@@ -21,13 +22,13 @@ mime.define({
 var _24_HOURS = 1440 * 60000;
 
 /**
- * @param {Object} options Options to be passed to connect/static
+ * @param {Object} options Options to be passed to static middleware
  * @param {Number} [options.maxAge]
  */
 exports = module.exports = function(options) {
 	options = options || {};
+	options.dotfiles = 'allow';
 	options.maxAge = typeof options.maxAge === "number" ? options.maxAge : _24_HOURS;
-	options.hidden = true;
 	var orionClientRoot = options.orionClientRoot;
 	if (!orionClientRoot) { throw new Error('orion-static root path required'); }
 
@@ -38,17 +39,22 @@ exports = module.exports = function(options) {
  *  /                        lib/orion.client/bundles/org.eclipse.orion.client.core/web       Orion core
  *  /                        lib/orion.client/bundles/org.eclipse.orion.client.ui/web         Orion IDE
  *  /                        lib/orion.client/bundles/org.eclipse.orion.client.editor/web     Orion editor
+ *  ... and so on
  */
 
 	// Handle the Orion IDE and Orion editor mappings:
-	return connect(
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.core/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.editor/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.javascript/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.ui/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.help/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.git/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.webtools/web'), options),
-		statik(path.resolve(orionClientRoot, './bundles/org.eclipse.orion.client.users/web'), options)
-	);
+	var app = express();
+	[	'./bundles/org.eclipse.orion.client.core/web',
+		'./bundles/org.eclipse.orion.client.editor/web',
+		'./bundles/org.eclipse.orion.client.javascript/web',
+		'./bundles/org.eclipse.orion.client.ui/web',
+		'./bundles/org.eclipse.orion.client.help/web',
+		'./bundles/org.eclipse.orion.client.git/web',
+		'./bundles/org.eclipse.orion.client.webtools/web',
+		'./bundles/org.eclipse.orion.client.users/web',
+	].forEach(function(bundlePath) {
+		var path = nodePath.resolve(orionClientRoot, bundlePath);
+		app.use(express.static(path, options));
+	});
+	return app;
 };

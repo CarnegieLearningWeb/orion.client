@@ -1,6 +1,6 @@
- /*******************************************************************************
+/*******************************************************************************
  * @license
- * Copyright (c) 2014, 2015 IBM Corporation and others.
+ * Copyright (c) 2014, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -18,7 +18,7 @@ define([
 'javascript/compilationUnit',
 'orion/metrics'
 ], function(Objects, Deferred, TextModel, Finder, CU, Metrics) {
-	
+
 	/**
 	 * @description Creates a new JavaScript quick fix computer
 	 * @param {javascript.ASTManager} astManager The AST manager
@@ -27,10 +27,11 @@ define([
 	 * @returns {javascript.JavaScriptQuickfixes} The new quick fix computer instance
 	 * @since 8.0
 	 */
-	function JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand) {
+	function JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand, ternProjectManager) {
 	   this.astManager = astManager;
 	   this.renamecommand = renameCommand;
 	   this.generatedoc = generateDocCommand;
+	   this.ternProjectManager = ternProjectManager;
 	}
 	
 	/**
@@ -298,36 +299,48 @@ define([
 	 */
 	function applySingleFixToAll(editorContext, annotation, annotations, createTextChange){
 		if (!annotations){
-			var change = createTextChange(annotation);
-			if (change){
-				return editorContext.setText(change.text, change.start, change.end);
-			}
-		} else {
-			var textEdits = [];
-			var rangeEdits = [];
-			var annotationIndex = 0;
-			for (var i=0; i<annotations.length; i++) {
-				var current = annotations[i];
-				if (current.id === annotation.id){
-					var currentChange = createTextChange(current);
-					if (currentChange){
-						textEdits.push(currentChange.text);
-						rangeEdits.push({start: currentChange.start, end: currentChange.end});
-						if (current.start === annotation.start && current.end === annotation.end){
-							annotationIndex = i;
-						}
+			annotations = [annotation];
+		}
+		var edits = [];
+		var annotationIndex = 0;
+		for (var i=0; i<annotations.length; i++) {
+			var current = annotations[i];
+			if (current.id === annotation.id){
+				var currentChange = createTextChange(current);
+				if (Array.isArray(currentChange)){
+					if (current.start === annotation.start && current.end === annotation.end){
+						annotationIndex = i;
 					}
+					for (var j=0; j<currentChange.length; j++) {
+						var theChange = currentChange[j];
+						edits.push({text: theChange.text, range: {start: theChange.start, end: theChange.end}});
+					}
+				} else if (typeof currentChange === 'object'){
+					edits.push({text: currentChange.text, range: {start: currentChange.start, end: currentChange.end}});
+					if (current.start === annotation.start && current.end === annotation.end){
+						annotationIndex = i;
+					}
+				} 
+			}
+		}
+		// To use setText() with multiple selections they must be in range order
+		edits = edits.sort(function(a, b){
+			return a.range.start - b.range.start;
+		});
+		var textEdits = [];
+		var rangeEdits = [];
+		for (i=0; i<edits.length; i++) {
+			textEdits.push(edits[i].text);
+			rangeEdits.push(edits[i].range);
+		}
+    	return editorContext.setText({text: textEdits, selection: rangeEdits}).then(function(){
+    		return editorContext.getSelections().then(function(selections){
+    			if (selections.length > 0){
+    				var selection = selections[selections.length > annotationIndex ? annotationIndex : 0];
+    				return editorContext.setSelection(selection.start, selection.end, true);	
 				}
-			}
-	    	return editorContext.setText({text: textEdits, selection: rangeEdits}).then(function(){
-	    		return editorContext.getSelections().then(function(selections){
-	    			if (selections.length > 0){
-	    				var selection = selections[selections.length > annotationIndex ? annotationIndex : 0];
-	    				return editorContext.setSelection(selection.start, selection.end, true);	
-					}
-	    		});
-	    	});
-    	}
+    		});
+    	});
 	}
 	
 	Objects.mixin(JavaScriptQuickfixes.prototype, /** @lends javascript.JavaScriptQuickfixes.prototype*/ {
@@ -359,6 +372,24 @@ define([
 		    return new Deferred().resolve(null) ;
 		},
 		fixes : {
+			"radix": function(editorContext, context, astManager) {
+				return astManager.getAST(editorContext).then(function(ast) {
+					return applySingleFixToAll(editorContext, context.annotation, context.annotations, function(currentAnnotation) {
+						var node = Finder.findNode(currentAnnotation.start, ast, {parents:true});
+						if(node && node.type === 'Identifier') {
+							node = node.parents[node.parents.length-1];
+							if(node.type === 'CallExpression' && Array.isArray(node.arguments)) {
+								var arg = node.arguments[node.arguments.length-1];
+								return {
+									text: ", 10", //$NON-NLS-1$
+									start: arg.range[1],
+									end: arg.range[1]
+								};
+							}
+						}
+					});
+				});
+			},
 			"curly": function(editorContext, context, astManager) {
 				return astManager.getAST(editorContext).then(function(ast) {
 					var tok = Finder.findToken(context.annotation.start, ast.tokens);
@@ -405,6 +436,14 @@ define([
 				});
 			},
 			"no-dupe-keys": function(editorContext, context) {
+				var start = context.annotation.start,
+					groups = [{data: {}, positions: [{offset: start, length: context.annotation.end-start}]}],
+					linkModel = {groups: groups};
+				return editorContext.exitLinkedMode().then(function() {
+					return editorContext.enterLinkedMode(linkModel);
+				});
+			},
+			"no-duplicate-case": function(editorContext, context) {
 				var start = context.annotation.start,
 					groups = [{data: {}, positions: [{offset: start, length: context.annotation.end-start}]}],
 					linkModel = {groups: groups};
@@ -684,10 +723,47 @@ define([
 	                return editorContext.setText(fix, context.annotation.start+1, context.annotation.start+1);
 	            });
 	        },
+			/** fix for the no-extra-parens linting rule */
+			"no-extra-parens": function(editorContext, context, astManager) {
+				return astManager.getAST(editorContext).then(function(ast) {
+					return applySingleFixToAll(editorContext, context.annotation, context.annotations, function(currentAnnotation) {
+						var token = Finder.findToken(currentAnnotation.start, ast.tokens);
+						var openBracket = ast.tokens[token.index-1];
+						if (openBracket.value === '(') {
+							var closeBracket = Finder.findToken(currentAnnotation.end, ast.tokens);
+							if (closeBracket.value === ')') {
+								var replacementText = "";
+								if (token.index >= 2) {
+									var previousToken = ast.tokens[token.index - 2];
+									if (previousToken.range[1] === openBracket.range[0]
+											&& (previousToken.type === "Identifier" || previousToken.type === "Keyword")) {
+										// now we should also check if there is a space between the '(' and the next token
+										if (token.range[0] === openBracket.range[1]) {
+											replacementText = " ";
+										}
+									}
+								}
+								return [
+									{
+										text: replacementText,
+										start: openBracket.range[0],
+										end: openBracket.range[1]
+									},
+									{
+										text: '',
+										start: closeBracket.range[0],
+										end: closeBracket.range[1]
+									}
+								];
+							}
+						}
+					});
+				});
+			},
 			/** fix for the no-extra-semi linting rule */
 			"no-extra-semi": function(editorContext, context) {
 				return applySingleFixToAll(editorContext, context.annotation, context.annotations, function(currentAnnotation){
-		            return {
+		           return {
 		            	text: '',
 		            	start: currentAnnotation.start,
 		            	end: currentAnnotation.end
@@ -951,8 +1027,7 @@ define([
 	                return null;
 	            });
 	        },
-	        /** 
-	         * easter is here
+	        /**
 	         * @callback
 	         */
 	        "no-unused-vars-unused": function(editorContext, context, astManager) {
@@ -970,11 +1045,30 @@ define([
                                 if(idx > -1) {
                                     return removeIndexedItem(decl.declarations, idx, editorContext);
                                 }
-//	                            var start = declr.range[1];
-//	                            var lstart = getLineStart(ast.source, start);
-//	                            var indent = computeIndent(ast.source, lstart);
-//	                            var fix = '\n'+indent+'console.log("Variable '+node.name+' is unused: "+'+node.name+');';
-//	                            return editorContext.setText(fix, start, start);
+	                        }
+	                    }
+	                }
+	                return null;
+	            });
+	        },
+	        /**
+	         * @callback
+	         */
+	        "no-unused-vars-unread": function(editorContext, context, astManager) {
+	            return astManager.getAST(editorContext).then(function(ast) {
+	                var node = Finder.findNode(context.annotation.start, ast, {parents:true});
+	                if(node && node.parents && node.parents.length > 0) {
+	                    var declr = node.parents.pop();
+	                    if(declr.type === 'VariableDeclarator') {
+	                        var decl = node.parents.pop();
+	                        if(decl.type === 'VariableDeclaration') {
+	                            if(decl.declarations.length === 1) {
+	                                return editorContext.setText('', decl.range[0], decl.range[1]);
+	                            }
+                                var idx = indexOf(decl.declarations, declr);
+                                if(idx > -1) {
+                                    return removeIndexedItem(decl.declarations, idx, editorContext);
+                                }
 	                        }
 	                    }
 	                }
@@ -1148,7 +1242,66 @@ define([
 		        		return null;
 					});
         		});
-    		}
+    		},
+		/** @callback fix the check-tern-project rule */
+		"check-tern-project" :
+			function(editorContext, context, astManager) {
+				var self = this;
+				return astManager.getAST(editorContext).then(function(ast) {
+					var ternFileLocation = self.ternProjectManager.getTernProjectFileLocation();
+					var ternProjectFile = self.ternProjectManager.getProjectFile();
+					var json = self.ternProjectManager.getJSON();
+					var currentFileName = context.input.substring(ternProjectFile.length);
+					var noTernProjectFile = !ternFileLocation;
+					if(noTernProjectFile) {
+						ternFileLocation = ternProjectFile + ".tern-project";
+					}
+					if (!json) {
+						json = {
+								"plugins": {},
+								"libs": ["ecma5"],
+								"ecmaVersion": 5,
+								"loadEagerly": []
+						};
+					}
+					var loadEagerly = json.loadEagerly;
+					var updated = [];
+					if (!loadEagerly) {
+						loadEagerly = [];
+					}
+					var found = false;
+					loadEagerly.forEach(function(element) {
+						var currentElement = element.substring(ternProjectFile.length);
+						if (currentFileName !== currentElement) {
+							updated.push(currentElement);
+						} else {
+							found = true;
+						}
+					});
+					if (!found) {
+						// add the current file name
+						updated.push(currentFileName);
+						json.loadEagerly = updated;
+						// now we should find a way to save the updated contents
+						var contents = JSON.stringify(json, null, '\t');
+						var fileClient = self.ternProjectManager.scriptResolver.getFileClient();
+						if (noTernProjectFile) {
+							return fileClient.createFile(ternProjectFile, ".tern-project").then(function(fileMetadata) {
+								return fileClient.write(fileMetadata.Location, contents).then(/* @callback */ function(result) {
+									self.ternProjectManager.refresh(ternFileLocation);
+									// now we need to run the syntax checker on the current file to get rid of stale annotations
+									editorContext.syntaxCheck(ast.sourceFile, null, ast.source);
+								});
+							});
+						}
+						return fileClient.write(ternFileLocation, contents).then(/* @callback */ function(result) {
+							self.ternProjectManager.refresh(ternFileLocation);
+							// now we need to run the syntax checker on the current file to get rid of stale annotations
+							editorContext.syntaxCheck(ast.sourceFile, null, ast.source);
+						});
+					}
+				});
+			}
 		}
 	});
 	

@@ -11,257 +11,226 @@
 /*eslint-env node */
 var api = require('../api'), writeError = api.writeError;
 var git = require('nodegit');
-var fs = require('fs');
 var async = require('async');
+var mRemotes = require('./remotes');
+var clone = require('./clone');
+var express = require('express');
+var bodyParser = require('body-parser');
 
-function getBranches(workspaceDir, fileRoot, req, res, next, rest) {
-	var repoPath = rest.replace("branch/file/", "");
-	var fileDir = repoPath;
-	var gitPath;
-    repoPath = api.join(workspaceDir, repoPath);
+module.exports = {};
 
-    var theRepo;
-	var remotes = [];
-	var branches = [];
+module.exports.router = function(options) {
+	var fileRoot = options.fileRoot;
+	if (!fileRoot) { throw new Error('options.root is required'); }
 
-	git.Repository.open(repoPath)
-	.then(function(repo) {
-		theRepo = repo;
-		return repo.getReferences(null);
-	})		
-	.then(function(referenceList) {
- 		referenceList.forEach(function(ref) {
- 			if (ref.isBranch()) {
- 				var branchURL = ref.name().split("/").join("%252F");
- 				var branchName = ref.name().replace("refs/heads/", "");
- 				var isCurrent = ref.isHead() ? true : false;
+	return express.Router()
+	.use(bodyParser.json())
+	.get('/file*', getBranches)
+	.get('/:branchName*', getBranches)
+	.delete('/:branchName*', deleteBranch)
+	.post('*', createBranch);
 
- 				branches.push({
-		 			"CloneLocation": "/gitapi/clone/file/"+ fileDir,
-		 			"CommitLocation": "/gitapi/commit/" + branchURL + "/file/" + fileDir,
-		 			"Current": isCurrent,
-		 			"DiffLocation": "/gitapi/diff/" + branchName + "/file/" + fileDir,
-		 			"FullName": "refs/heads/" + branchName,
-		 			"HeadLocation": "/gitapi/commit/HEAD/file/" + fileDir,
-		 			"LocalTimeStamp": 1424471958000, //hardcoded local timestamp
-		 			"Location": "/gitapi/branch/" + branchName + "/file/" + fileDir,
-		 			"Name": branchName,
-		 			"RemoteLocation": [],
-		 			"TreeLocation": "/gitapi/tree/file/" + fileDir + "/" + branchName,
-		 			"Type": "Branch"
-	 			});
- 			}
-		});
-
-		return git.Remote.list(theRepo);
- 	})
- 	.then(function(remotes) {
-		// It appears that the java server just generates a remote object for each remote that exists,
-		// regardless if there is actually a remote tracking branch that exists.
-		async.each(remotes, function(remote, cb) {
-			git.Remote.lookup(theRepo, remote)
-			.then(function(remote) {
-				var remoteName = remote.name();
-
-				branches.forEach(function(branch) {
-					var remoteBranchName = api.join(remoteName, branch["Name"]);
-
-					branch["RemoteLocation"].push({
-				        "Children": [{
-				          // "CloneLocation": branch["CloneLocation"],
-				          // "CommitLocation": "/gitapi/commit/" + remoteBranchName + "/file/" + fileDir,
-				          // "DiffLocation": "/gitapi/diff/" + remoteBranchName + "/file/" + fileDir,
-				          "FullName": "refs/remotes/" + remoteName,
-				          "GitUrl": remote.url(),
-				          // "HeadLocation": "/gitapi/commit/HEAD/" + fileDir,
-				          //"Id": id, is listed in wiki, but not in Java server
-				          // "IndexLocation": "/gitapi/index/" + fileDir,
-				          "Location": "/gitapi/remote/" + remoteBranchName + "/file/" + fileDir,
-				          "Name": remoteBranchName,
-				          // "TreeLocation": "/gitapi/tree/file/" + fileDir + "/" + remoteBranchName,
-				          "Type": "RemoteTrackingBranch"
-				        }],
-				        "CloneLocation": branch["CloneLocation"],
-				        "GitUrl": remote.url(),
-				        "IsGerrit": false, //hardcoded
-				        "Location": "/gitapi/remote/" + remoteName + "/file/" + fileDir,
-				        "Name": remoteName,
-				        "Type": "Remote"
-					})
-				})
-
+	function branchJSON(repo, ref, fileDir) {
+		var fullName = ref.name();
+		var shortName = ref.shorthand();
+		var branchURL = encodeURIComponent(fullName);
+		var current = !!ref.isHead() || repo.headDetached() && ref.name() === "HEAD";
+		return {
+			"CloneLocation": "/gitapi/clone"+ fileDir,
+			"CommitLocation": "/gitapi/commit/" + branchURL + fileDir,
+			"Current": current,
+			"Detached": current && !!repo.headDetached(),
+			"DiffLocation": "/gitapi/diff/" + shortName + fileDir,
+			"FullName": fullName,
+			"HeadLocation": "/gitapi/commit/HEAD" + fileDir,
+			"Location": "/gitapi/branch/" + branchURL + fileDir,
+			"Name": shortName,
+			"RemoteLocation": [],
+			"TreeLocation": "/gitapi/tree" + fileDir + "/" + branchURL,
+			"Type": "Branch"
+		};
+	}
+	
+	function getBranchCommit(repo, branches, callback) {
+		async.each(branches, function(branch, cb) {
+			return repo.getReferenceCommit(branch.FullName)
+			.then(function(commit) {
+				branch["LocalTimeStamp"] = commit.timeMs();
+				branch["HeadSHA"] = commit.sha();
 				cb();
 			})
-			.catch(function(err) {
-				cb(err);
+			.catch(function() {
+				cb();
 			});
 		}, function(err) {
-			if (err) {
-				console.log(err);
-				return writeError(500, res);
-			}
-			var resp = JSON.stringify({
-				"Children": branches,
-				"Type": "Branch"
-			});
-		
-			res.statusCode = 200;
-			res.setHeader('Content-Type', 'application/json');
-			res.setHeader('Content-Length', resp.length);
-			res.end(resp);
+			callback(err);
 		});
-	})
-	.catch(function(err) {
-		console.log(err);
-		writeError(500, res);
-	});
-}
-
-function getBranchMetadata(workspaceDir, fileRoot, req, res, next, rest) {
-	var repoPath = rest.replace("branch/", "");
-	var branchName = repoPath.substring(0, repoPath.indexOf("/"));
-	repoPath = repoPath.substring(repoPath.indexOf("/")+1).replace("file/", "");
-	var fileDir = repoPath;
-	repoPath = api.join(workspaceDir, repoPath);
-	git.Repository.open(repoPath)
-	.then(function(repo) {
-		git.Branch.lookup(repo, branchName,	git.Branch.BRANCH.LOCAL)
-		.then(function(ref) {
-			var remotes = [];
-			repo.getReferences(git.Reference.TYPE.OID)
-			.then(function(referenceList) {
-		 		referenceList.forEach(function(ref) {
-	 				if (ref.isRemote()) {
-						var remoteName = ref.name().replace("refs/remotes/", "");
-						remotes.push(remoteName);
-					}
-	 			});
-		 	})
-		 	.then(function() {
-		 		var remoteLocations = [];
-
-	 			remotes.forEach(function(remote) {
-					var nameToMatch = remote.substring(remote.indexOf("/") + 1);
-					var remoteURL = remote.split("/").join("%252F");
-					var remoteName = remote.substring(0, remote.indexOf("/"));
-					if (remoteName === branchName) {
-						remoteLocations.push({
-					        "Children": [{
-					          "CloneLocation": branches[nameToMatch]["CloneLocation"], // FIXME
-					          "CommitLocation": "/gitapi/commit/" + remoteURL + "/file/" + fileDir,
-					          "DiffLocation": "/gitapi/diff/" + remoteURL + "/file/" + fileDir,
-					          "FullName": "refs/remotes/" + remote,
-					          "GitUrl": "git@github.com:albertcui/orion.client.git", //hardcoded
-					          "HeadLocation": "/gitapi/commit/HEAD/" + fileDir,
-					          "Id": "08c41c776f2e9e5dca7fbbbcfe2c8c9c06300998", //hardcoded
-					          "IndexLocation": "/gitapi/index/" + fileDir,
-					          "Location": "/gitapi/remote/" + remote + "/file/" + fileDir,
-					          "Name": "origin/node_git_pages",
-					          "TreeLocation": "/gitapi/tree/file/" + fileDir + "/" + remoteURL,
-					          "Type": "RemoteTrackingBranch"
-					        }],
-					        "CloneLocation": "/gitapi/clone/file/" + fileDir,
-					        "GitUrl": "git@github.com:albertcui/orion.client.git",
-					        "IsGerrit": false, //hardcoded
-					        "Location": "/gitapi/remote/" + remoteName + "/" + fileDir,
-					        "Name": "origin",
-					        "Type": "Remote"
-						})
-					}
+	}
+	
+	function getBranchRemotes(repo, branches, fileDir, callback) {
+		return git.Remote.list(repo)
+	 	.then(function(remotes) {
+			async.each(remotes, function(remote, cb) {
+				git.Remote.lookup(repo, remote)
+				.then(function(remote) {
+					return Promise.all(branches.map(function(branch) {
+						return git.Branch.lookup(repo, api.join(remote.name(), branch.Name), git.Branch.BRANCH.REMOTE).then(function(remoteBranch) {
+							return repo.getBranchCommit(remoteBranch).then(function(commit) {
+								branch["RemoteLocation"].push(mRemotes.remoteJSON(remote, fileDir, [mRemotes.remoteBranchJSON(remoteBranch, commit, remote, fileDir)]));
+							});
+						}).catch(function() {
+							//No remote tracking branch
+							branch["RemoteLocation"].push(mRemotes.remoteJSON(remote, fileDir, [mRemotes.remoteBranchJSON(null, null, remote, fileDir, branch)]));
+						});
+					}));
+				})
+				.then(function() {
+					cb();
+				})
+				.catch(function(err) {
+					cb(err);
 				});
-
-				var branchRes = {
-					"CloneLocation": "/gitapi/clone/file/" + fileDir,
-					"CommitLocation": "/gitapi/commit/" + branchName + "/file/" + fileDir,
-					"Current": git.Branch.isHead(ref) ? true : false,
-					"DiffLocation": "/gitapi/diff/" + branchName + "/file/" + fileDir,
-					"FullName": ref.name(),
-					"HeadLocation": "/gitapi/commit/HEAD/file/" + fileDir,
-					"LocalTimeStamp": 1234567890000, //hardcoded
-					"Location": "/gitapi/branch/" + branchName + "/file/" + fileDir,
-					"Name": branchName,
-					"RemoteLocation": remoteLocations,
-					"TreeLocation": "/gitapi/tree/file/" + fileDir + "/" + branchName,
-					"Type": "Branch"
-				}
-				
-				var resp = JSON.stringify(branchRes);
-				
-				res.statusCode = 200;
-				res.setHeader('Content-Type', 'application/json');
-				res.setHeader('Content-Length', resp.length);
-				res.end(resp);
-	 		})
-
+			}, callback);
+		});
+	}
+	
+	function getBranches(req, res) {
+		var branchName = decodeURIComponent(req.params.branchName || "");
+		var fileDir;
+		
+		var theRepo;
+		if (branchName) {
+			var theBranch;
+			clone.getRepo(req)
+			.then(function(repo) {
+				theRepo = repo;
+				fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+				return git.Branch.lookup(repo, branchName, git.Branch.BRANCH.LOCAL);
+			})
+			.then(function(ref) {
+				theBranch = ref;
+				var branch = branchJSON(theRepo, theBranch, fileDir);
+				return getBranchCommit(theRepo, [branch], function() {
+					return getBranchRemotes(theRepo, [branch], fileDir, function(err) {
+						if (err) {
+							console.log(err);
+							return writeError(500, res);
+						}
+						res.status(200).json(branch);
+					});
+				});
+			})
+			.catch(function(err) {
+				writeError(500, res, err.message);
+			});
+			return;
+		}
+		
+		var branches = [], theHead;
+		var filter = req.query.filter;
+	
+		clone.getRepo(req)
+		.then(function(repo) {
+			theRepo = repo;
+			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			return repo.head();
 		})
-	});
-}
-
-function createBranch(workspaceDir, fileRoot, req, res, next, rest) {
-	var repoPath = rest.replace("branch/file/", "");
-	var fileDir = repoPath;
-	var gitPath;
-    repoPath = api.join(workspaceDir, repoPath);
-	git.Repository.open(repoPath)
-	.then(function(repo) {
-		repo.getCurrentBranch()
-		.then(function(reference) {
-			repo.getBranchCommit(reference)
-			.then(function(commit) {
-				var branchName = req.body.Name;
-				var signature = git.Signature.default(repo);
-				git.Branch.create(repo, branchName, commit, 0, signature, null)
-				.then(function(ref) {
-					var resp = JSON.stringify({
-						"CloneLocation": "/gitapi/clone/file/" + fileDir,
-						"CommitLocation": "/gitapi/commit/" + branchName + "/file/" + fileDir,
-						"Current": git.Branch.isHead(ref) ? true : false,
-						"DiffLocation": "/gitapi/diff/" + branchName + "/file/" + fileDir,
-						"FullName": ref.name(),
-						"HeadLocation": "/gitapi/commit/HEAD/file/" + fileDir,
-						"LocalTimeStamp": 1234567890000, //hardcoded
-						"Location": "/gitapi/branch/" + branchName + "/file/" + fileDir,
-						"Name": branchName,
-						"RemoteLocation": [],
-						"TreeLocation": "/gitapi/tree/file/" + fileDir + "/" + branchName,
+		.then(function(head) {
+			theHead = head;
+			return theRepo.getReferences(git.Reference.TYPE.LISTALL);
+		})
+		.then(function(referenceList) {
+			if (theRepo.headDetached()) {
+				referenceList.unshift(theHead);
+			}
+			referenceList.forEach(function(ref) {
+				if (ref.isBranch() || theRepo.headDetached() && ref === theHead) {
+					if (!filter || ref.shorthand().indexOf(filter) !== -1) {
+						branches.push(branchJSON(theRepo, ref, fileDir));
+					}
+				}
+			});
+			
+			branches.sort(function(a, b) {
+				if (a.Current) return -1;
+				if (b.Current) return 1;
+				return a.LocalTimeStamp < b.LocalTimeStamp ? 1 : a.LocalTimeStamp > b.LocalTimeStamp ? -1 : b.Name.localeCompare(a.Name);
+			});
+	
+			return getBranchCommit(theRepo, branches, function() {
+				return getBranchRemotes(theRepo, branches, fileDir, function(err) {
+					if (err) {
+						console.log(err);
+						return writeError(500, res);
+					}
+					res.status(200).json({
+						"Children": branches,
 						"Type": "Branch"
 					});
-					
-					res.statusCode = 201;
-					res.setHeader('Content-Type', 'application/json');
-					res.setHeader('Content-Length', resp.length);
-					res.end(resp);
 				});
 			});
+		})
+		.catch(function(err) {
+			writeError(500, res, err.message);
 		});
-	});
-}
-
-function deleteBranch(workspaceDir, fileRoot, req, res, next, rest) {
-	var repoPath = rest.replace("branch/", "");
-	var branchName = repoPath.substring(0, repoPath.indexOf("/"));
-	repoPath = repoPath.substring(repoPath.indexOf("/")+1).replace("file/", "");
-	repoPath = api.join(workspaceDir, repoPath);
-	git.Repository.open(repoPath)
-	.then(function(repo) {
-		git.Branch.lookup(repo, branchName,	git.Branch.BRANCH.ALL)
+	}
+	
+	function createBranch(req, res) {
+		var branchName = req.body.Name;
+		var startPoint = req.body.Branch;
+		var theRepo, theRef, fileDir;
+	
+		if (!branchName) {
+			if (!startPoint) {
+				return writeError(400, res, "Branch name must be provided.");
+			}
+		}
+		clone.getRepo(req)
+		.then(function(repo) {
+			theRepo = repo;
+			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			return startPoint ? git.Reference.lookup(repo, "refs/remotes/" + startPoint) : repo.getCurrentBranch();
+		})
+		.then(function(reference) {
+			theRef = reference;
+			return theRepo.getReferenceCommit(reference);
+		})
+		.then(function(commit) {
+			if (!branchName) {
+				branchName = theRef.shorthand().split("/").slice(1).join("/");
+			}
+			return git.Branch.create(theRepo, branchName, commit, 0);
+		})
+		.then(function(ref) {
+			var branch = branchJSON(theRepo, ref, fileDir);
+			return getBranchRemotes(theRepo, [branch], fileDir, function(err) {
+				if (err) {
+					console.log(err);
+					return writeError(500, res);
+				}
+				res.status(200).json(branch);
+			});
+		})
+		.catch(function(err) {
+			writeError(500, res, err.message);
+		});
+	}
+	
+	function deleteBranch(req, res) {
+		var branchName = decodeURIComponent(req.params.branchName);
+		clone.getRepo(req)
+		.then(function(repo) {
+			return git.Reference.lookup(repo, branchName);
+		})
 		.then(function(ref) {
 			if (git.Branch.delete(ref) === 0) {
-				res.statusCode = 200;
-				res.end();
+				res.status(200).end();
 			} else {
 				writeError(403, res);
-		    } 
+			}
 		})
-		.catch(function(reasonForFailure) {
+		.catch(function() {
 			writeError(403, res);
 		});
-	});
-}
-
-module.exports = {
-	getBranches: getBranches,
-	getBranchMetadata: getBranchMetadata,
-	createBranch: createBranch,
-	deleteBranch: deleteBranch
+	}
 };

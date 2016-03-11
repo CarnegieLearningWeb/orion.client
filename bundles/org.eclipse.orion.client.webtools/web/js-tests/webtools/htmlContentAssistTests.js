@@ -22,7 +22,7 @@ define([
     var astmanager = new ASTManager.HtmlAstManager();
     var assist = new HTMLAssist.HTMLContentAssistProvider(astmanager);
     var tagTemplates = assist.getTags("", "");
-    var globalTagAttributes = assist.getAttributesForNode({name: "zzz", type: "tag"}, {offset: 0, prefix: ""});
+    var globalTagAttributes = assist.getAttributesForNode({name: "zzz", type: "tag"}, "", {offset: 0, prefix: ""});
     
     /**
      * Set up the test and return an object for the test context
@@ -190,14 +190,14 @@ define([
     		});
     	});    	
     	// TODO This test should be made to pass but the parser ignores the <a> tag
-//    	it('Close tag </ nested', function() {
-//    		var _o = setup({buffer: '<body><a>foo\n\n</</body>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 16}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '</a>', prefix: '</'}
-//    			]);
-//    		});
-//    	});
+    	it.skip('Close tag </ nested', function() {
+    		var _o = setup({buffer: '<body><a>foo\n\n</</body>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 16}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '</a>', prefix: '</'}
+    			]);
+    		});
+    	});
     	it('Close tag </ whitespace after 1', function() {
     		var _o = setup({buffer: '<a></  '});
     		return assist.computeContentAssist(_o.editorContext, {offset: 7}).then(function(proposals) {
@@ -327,30 +327,27 @@ define([
     			]);
     		});
     	});
-    	// TODO The parser gets us the body node rather than zzz so we get proposals specific to the body tag
-//    	it('Tag attribute proposals 3', function() {
-//    		var _o = setup({buffer: '<body>\n<zzz lang="test" >\n</body>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 24}).then(function(proposals) {
-//    			assertGlobalTagAttributes(proposals);
-//    		});
-//    	});
-		// TODO The parser doesn't recognize that we are inside of a valid tag so tag proposals rather than attributes are returned
-//		it('Tag attribute proposals 4', function() {
-//    		var _o = setup({buffer: '<body>\n<zzz  lang="test">\n</body>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 12}).then(function(proposals) {
-//    			assertGlobalTagAttributes(proposals);
-//    		});
-//    	});
-    	// TODO: This should propose both href and hreflang, but it only proposes hreflang
-//    	it('Tag attribute proposals 5', function() {
-//    		var _o = setup({buffer: '<a href></a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 7, prefix: 'href'}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: 'href=""', prefix: 'href'},
-//    				{proposal: 'hreflang=""', prefix: 'href'}
-//    			]);
-//    		});
-//    	});
+    	it('Tag attribute proposals 4', function() {
+    		var _o = setup({buffer: '<body><zzz xxxx="test" ></body>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 23}).then(function(proposals) {
+    			assertGlobalTagAttributes(proposals);
+    		});
+    	});
+		it('Tag attribute proposals 5', function() {
+    		var _o = setup({buffer: '<body><zzz  xxxx="test"></body>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 12}).then(function(proposals) {
+    			assertGlobalTagAttributes(proposals);
+    		});
+    	});
+    	it('Tag attribute proposals 6', function() {
+    		var _o = setup({buffer: '<a href></a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 7, prefix: 'href'}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: 'href=""', prefix: 'href'},
+    				{proposal: 'hreflang=""', prefix: 'href'}
+    			]);
+    		});
+    	});
     	it('Tag attribute proposals filter existing 1', function() {
     		var _o = setup({buffer: '<html><body ></body></html>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 12}).then(function(proposals) {
@@ -495,28 +492,27 @@ define([
     			]);
     		});
     	});
-    	// TODO The parser does not return the correct ranges on the zzz start tag so we don't recognize that we are looking for attributes
-//    	it('Tag attribute proposals prefix 4', function() {
-//    		var _o = setup({buffer: '<body><zzz acc lang="test"></body>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 14, prefix: 'acc'}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: 'accesskey=""', prefix: 'acc'},
-//    			]);
-//    		});
-//    	});
+    	it('Tag attribute proposals prefix 4', function() {
+    		var _o = setup({buffer: '<body><zzz acc lang="test"></body>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 14, prefix: 'acc'}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: 'accesskey=""', prefix: 'acc'},
+    			]);
+    		});
+    	});
     	// TODO The parser does not create a start tag element so we don't recognize that we are looking for attributes
-//    	it('Tag attribute proposals incomplete tag 1', function() {
-//    		var _o = setup({buffer: '<zzz '});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
-//    			assertGlobalTagAttributes(proposals);
-//    		});
-//    	});
-//    	it('Tag attribute proposals incomplete tag 2', function() {
-//    		var _o = setup({buffer: '<body><zzz </body>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 11}).then(function(proposals) {
-//    			assertGlobalTagAttributes(proposals);
-//    		});
-//    	});
+    	it.skip('Tag attribute proposals incomplete tag 1', function() {
+    		var _o = setup({buffer: '<zzz '});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
+    			assertGlobalTagAttributes(proposals);
+    		});
+    	});
+    	it.skip('Tag attribute proposals incomplete tag 2', function() {
+    		var _o = setup({buffer: '<body><zzz </body>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 11}).then(function(proposals) {
+    			assertGlobalTagAttributes(proposals);
+    		});
+    	});
 		it('Tag attribute proposals script blocks 1', function() {
     		var _o = setup({buffer: '<body><script ></script></body>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 14}).then(function(proposals) {
@@ -649,11 +645,11 @@ define([
     			assertProposals(proposals, []);
     		});
     	});
-    	// TODO: This returns 0 proposals. Shouldn't this propose href=""?  No proposals because = isn't a valid content assist character
-    	it.skip('Attribute value proposals 3', function() {
+    	it('Attribute value proposals 3', function() {
     		var _o = setup({buffer: '<a href=></a>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 8, prefix: 'href='}).then(function(proposals) {
-    			assertProposals(proposals, [{proposal: 'href=""', prefix: 'href='}]);
+    			assertProposals(proposals, [{proposal: 'href=""', prefix: 'href='},
+    										{proposal: 'hreflang=""', prefix: 'href='}]);
     		});
     	});
     	it('Attribute value proposals incomplete tag 1', function() {
@@ -691,7 +687,6 @@ define([
     	it('Offsets within tags proposals 2', function() {
     		var _o = setup({buffer: '<zzz href="" ></zzz>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 12}).then(function(proposals) {
-    			// TODO Can you have two attributes touching when the value is quoted correctly?
     			assertGlobalTagAttributes(proposals);
     		});
     	});
@@ -769,64 +764,64 @@ define([
     			assertTagProposals(proposals);
     		});
     	});
-    	// TODO Can't test inside tags as the parser doesn't create a separate tag start
-//    	it('Comment open proposals inside tag 1', function() {
-//    		var _o = setup({buffer: '<a<!'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 4}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '<!-- ', prefix: '<!'},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment open proposals inside tag 2', function() {
-//    		var _o = setup({buffer: '<a<!-'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '<!-- ', prefix: '<!-'},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment open proposals inside tag 3', function() {
-//    		var _o = setup({buffer: '<a<!--'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 6}).then(function(proposals) {
-//    			assertProposals(proposals, []);
-//    		});
-//    	});
-//    	it('Comment open proposals inside tag 4', function() {
-//    		var _o = setup({buffer: '<a<'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 3}).then(function(proposals) {
-//    			assertTagProposals(proposals);
-//    		});    	
-//    	});
-		// TODO Can't test inside nested tags as the parser includes the start of the close tag in the name
-//    	it('Comment open proposals nested tag 1', function() {
-//    		var _o = setup({buffer: '<a><!</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '<!-- ', prefix: '<!'},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment open proposals nested tag 2', function() {
-//    		var _o = setup({buffer: '<a><!-</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 6}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '<!-- ', prefix: '<!-'},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment open proposals nested tag 3', function() {
-//    		var _o = setup({buffer: '<a><!--</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 7}).then(function(proposals) {
-//    			assertProposals(proposals, []);
-//    		});
-//    	});
-//    	it('Comment open proposals nested tag 4', function() {
-//    		var _o = setup({buffer: '<a><</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 4}).then(function(proposals) {
-//    			assertTagProposals(proposals);
-//    		});
-//    	});
+    	it('Comment open proposals inside tag 1', function() {
+    		var _o = setup({buffer: '<a<!'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 4}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '<!-- ', prefix: '<!'},
+    			]);
+    		});
+    	});
+    	it('Comment open proposals inside tag 2', function() {
+    		var _o = setup({buffer: '<a<!-'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '<!-- ', prefix: '<!-'},
+    			]);
+    		});
+    	});
+    	it('Comment open proposals inside tag 3', function() {
+    		var _o = setup({buffer: '<a<!--'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6}).then(function(proposals) {
+    			assertProposals(proposals, []);
+    		});
+    	});
+    	it('Comment open proposals inside tag 4', function() {
+    		var _o = setup({buffer: '<a<'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 3}).then(function(proposals) {
+    			assertTagProposals(proposals);
+    		});    	
+    	});
+    	it('Comment open proposals nested tag 1', function() {
+    		var _o = setup({buffer: '<a><!</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '<!-- ', prefix: '<!'},
+    			]);
+    		});
+    	});
+    	it('Comment open proposals nested tag 2', function() {
+    		var _o = setup({buffer: '<a><!-</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '<!-- ', prefix: '<!-'},
+    			]);
+    		});
+    	});
+    	it('Comment open proposals nested tag 3', function() {
+    		var _o = setup({buffer: '<a><!--</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 7}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '-->', prefix: ''},
+    			]);
+    		});
+    	});
+    	it('Comment open proposals nested tag 4', function() {
+    		var _o = setup({buffer: '<a><</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 4}).then(function(proposals) {
+    			assertTagProposals(proposals);
+    		});
+    	});
 		it('Comment close proposals 1', function() {
     		var _o = setup({buffer: '<!-- '});
     		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
@@ -863,44 +858,42 @@ define([
     			assertProposals(proposals, []);
     		});
     	});
-    	// TODO Can't test inside nested tags as the parser includes the start of the close tag in the name
-//    	it('Comment close proposals in tag 1', function() {
-//    		var _o = setup({buffer: '<a><!-- </a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 8}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '-->', prefix: ''},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment close proposals in tag 2', function() {
-//    		var _o = setup({buffer: '<a><!-- -</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 9}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '-->', prefix: '-'},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment close proposals in tag 3', function() {
-//    		var _o = setup({buffer: '<a><!-- --</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 10}).then(function(proposals) {
-//    			assertProposals(proposals, [
-//    				{proposal: '-->', prefix: '--'},
-//    			]);
-//    		});
-//    	});
-//    	it('Comment close proposals in tag 4', function() {
-//    		var _o = setup({buffer: '<a><!-- --></a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 11}).then(function(proposals) {
-//    			assertTagProposals(proposals);
-//    		});
-//    	});
-//    	it('Comment close proposals in tag 5', function() {
-//    		var _o = setup({buffer: '<a><!--</a>'});
-//    		return assist.computeContentAssist(_o.editorContext, {offset: 7}).then(function(proposals) {
-//    			assertProposals(proposals, []);
-//    		});
-//    	});
-    	// TODO HTML5 does not require lower case tags/attributes, our templates require lower case
+    	it('Comment close proposals in tag 1', function() {
+    		var _o = setup({buffer: '<a><!-- </a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 8}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '-->', prefix: ''},
+    			]);
+    		});
+    	});
+    	it('Comment close proposals in tag 2', function() {
+    		var _o = setup({buffer: '<a><!-- -</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 9}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '-->', prefix: '-'},
+    			]);
+    		});
+    	});
+    	it('Comment close proposals in tag 3', function() {
+    		var _o = setup({buffer: '<a><!-- --</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 10}).then(function(proposals) {
+    			assertProposals(proposals, [
+    				{proposal: '-->', prefix: '--'},
+    			]);
+    		});
+    	});
+    	it('Comment close proposals in tag 4', function() {
+    		var _o = setup({buffer: '<a><!-- --></a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 11}).then(function(proposals) {
+    			assertTagProposals(proposals);
+    		});
+    	});
+    	it('Comment close proposals in tag 5', function() {
+    		var _o = setup({buffer: '<a><!--</a>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 7}).then(function(proposals) {
+    			assertProposals(proposals, [{proposal: '-->', prefix: ''}]);
+    		});
+    	});
     	/*
     	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=483924
     	 */
@@ -941,7 +934,7 @@ define([
     		var _o = setup({buffer: '<html><a styl=></a></html>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 13, prefix: 'styl'}).then(function(proposals) {
     			assertProposals(proposals, [
-    			{proposal: 'style', prefix: 'styl'},
+    			{proposal: 'style=""', prefix: 'styl'},
     			]);
     		});
     	});
@@ -956,8 +949,62 @@ define([
     			]);
     		});
     	});
+    	/*
+    	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=486676
+    	 */
+    	it('Inside script block - text, no children', function() {
+    		var _o = setup({buffer: '<script>x</script>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 9, prefix: 'x'}).then(function(proposals) {
+    			assertProposals(proposals, [	]);
+    		});
+    	});
+    	/*
+    	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=486676
+    	 */
+    	it('Inside script block - no text, children', function() {
+    		var _o = setup({buffer: '<script><a></a></script>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 11}).then(function(proposals) {
+    			assertProposals(proposals, [	]);
+    		});
+    	});
+    	/*
+    	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=486676
+    	 */
+    	it('Inside script block - no text, no children', function() {
+    		var _o = setup({buffer: '<script></script>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 8}).then(function(proposals) {
+    			assertProposals(proposals, [	]);
+    		});
+    	});
+    	
+    	/*
+    	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=488254
+    	 */
+    	it('Complete tag name should have no proposals', function() {
+    		var _o = setup({buffer: '<style>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6, prefix: 'style'}).then(function(proposals) {
+    			assertProposals(proposals, [	]);
+    		});
+    	});
+    	/*
+    	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=488726
+    	 */
+    	it('Complete tag name with matching end tag should no proposals', function() {
+    		var _o = setup({buffer: '<style></style>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6, prefix: 'style'}).then(function(proposals) {
+    			assertProposals(proposals, [	]);
+    		});
+    	});
+    	/*
+    	 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=488726
+    	 */
+    	it('Invalid tag name with matching end tag should no proposals', function() {
+    		var _o = setup({buffer: '<sty></sty>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6, prefix: 'style'}).then(function(proposals) {
+    			assertProposals(proposals, [	]);
+    		});
+    	});
     });
-    
 
 	describe('ARIA Content Assist Tests', function() {
 		// Global aria-* attributes: aria-atomic, aria-busy, aria-controls, aria-describedby, aria-disabled, aria-dropeffect, aria-flowto, aria-grabbed,
@@ -1040,11 +1087,18 @@ define([
     			assert(knownProp, "Could not find expected proposal role");
     		});
     	});
-    	// TODO: What should happen here? I think it should insert ="" after role
-    	it.skip('The role attribute with div. Prefix role. <div role>', function() {
+    	it('The role attribute with div. Prefix role. <div role>', function() {
     		var _o = setup({buffer: '<html><body><div role></div></body></html>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 21, prefix: 'role'}).then(function(proposals) {
-				assertProposals(proposals, [{proposal: 'role=""', prefix: 'role'}]);
+    			var expectedCount = 2; // "ARIA title" + role
+				assert(proposals.length === expectedCount, "Incorrect number of proposals for div tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
+    			var knownProp;
+    			for (var i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "role"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal role");
     		});
     	});
     	it('Tags that support the attributes of all roles: div. Filter existing. <div role="dialog">', function() {
@@ -1212,7 +1266,35 @@ define([
     	});
     	it('Tags with only ARIA globals (no role allowed). Filter existing. <picture aria-label="x" >', function() {
     		var _o = setup({buffer: '<html><body><picture aria-label="x" ></picture></body></html>'});
-    		return assist.computeContentAssist(_o.editorContext, {offset: 21}).then(function(proposals) { // TODO: why does this fail for offset 36 ??
+    		return assist.computeContentAssist(_o.editorContext, {offset: 21}).then(function(proposals) {
+    			var expectedCount = globalTagAttributes.length - 1; // picture tag attributes = globals - aria-label
+    			assert(proposals.length === expectedCount, "Incorrect number of proposals for picture tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
+    			var knownProp;
+    			for (var i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-label") {
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(!knownProp, "Proposal for aria-label found but not expected");
+    			knownProp = null;
+     			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-labelledby") {
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-labelledby");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "role") {
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(!knownProp, "Proposal for role found but not expected");
+    		});
+    	});
+    	it('Tags with only ARIA globals (no role allowed). Filter existing 2. <picture aria-label="x" >', function() {
+    		var _o = setup({buffer: '<html><body><picture aria-label="x" ></picture></body></html>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 36}).then(function(proposals) {
     			var expectedCount = globalTagAttributes.length - 1; // picture tag attributes = globals - aria-label
     			assert(proposals.length === expectedCount, "Incorrect number of proposals for picture tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
     			var knownProp;
@@ -1240,7 +1322,7 @@ define([
     	});
     	it('Tags with only ARIA globals (no role allowed). Filter existing. <col aria-label="x" >', function() {
     		var _o = setup({buffer: '<html><body><col aria-label="x" ></col></body></html>'});
-    		return assist.computeContentAssist(_o.editorContext, {offset: 17}).then(function(proposals) { // TODO: why does this fail for offset 32 ??
+    		return assist.computeContentAssist(_o.editorContext, {offset: 17}).then(function(proposals) {
     			var expectedCount = globalTagAttributes.length + 2; // col tag attributes = globals - aria-label + align + bgcolor + span
     			assert(proposals.length === expectedCount, "Incorrect number of proposals for col tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
     			var knownProp;
@@ -1266,7 +1348,34 @@ define([
     			assert(!knownProp, "Proposal for role found but not expected");
     		});
     	});
-
+		it('Tags with only ARIA globals (no role allowed). Filter existing 2. <col aria-label="x" >', function() {
+    		var _o = setup({buffer: '<html><body><col aria-label="x" ></col></body></html>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 32}).then(function(proposals) {
+    			var expectedCount = globalTagAttributes.length + 2; // col tag attributes = globals - aria-label + align + bgcolor + span
+    			assert(proposals.length === expectedCount, "Incorrect number of proposals for col tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
+    			var knownProp;
+    			for (var i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-label") {
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(!knownProp, "Proposal for aria-label found but not expected");
+    			knownProp = null;
+     			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-labelledby") {
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-labelledby");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "role") {
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(!knownProp, "Proposal for role found but not expected");
+    		});
+    	});
 
 		// Tags that support the attributes of only one role:
 		//     address (contentinfo), area (link), audio (application), datalist (listbox), link (link), menuitem (menuitem), progress (progressbar),
@@ -1651,6 +1760,97 @@ define([
     			assert(knownProp, "Could not find expected proposal role");
     		});
     	});
+    	it('Tags that support the attributes of many roles: details (13). Prefix role. <details r>', function() {
+    		var _o = setup({buffer: '<html><body><details role></details></body></html>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 25, prefix: 'role'}).then(function(proposals) {
+    			var expectedCount = 2; // "ARIA title" + role
+    			assert(proposals.length === expectedCount, "Incorrect number of proposals for details tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
+    			var knownProp;
+    			for (var i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "role"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal role");
+    		});
+    	});
+    	it('Tags that support the attributes of many roles: details (13). Prefix empty. <details r>', function() {
+    		var _o = setup({buffer: '<html><body><details role=></details></body></html>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 26, prefix: ''}).then(function(proposals) {
+    			var expectedCount = 1; // "ARIA title" + role
+    			assert(proposals.length === expectedCount, "Incorrect number of proposals for details tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
+    			var knownProp;
+    			for (var i=0; i<proposals.length; i++) {
+    				if (proposals[i].proposal === "\"\""){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal role");
+    		});
+    	});
+    	it('Tags that support the attributes of many roles: details (13). Empty prefix. <details aria->', function() {
+    		var _o = setup({buffer: '<html><body><details aria-></details></body></html>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 26, prefix: ''}).then(function(proposals) {
+    			var expectedCount = 17 + 13; // "ARIA title" + 16 aria-* globals + 13 role-specific aria-* attributes
+    			assert(proposals.length === expectedCount, "Incorrect number of proposals for details tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
+    			var knownProp;
+    			for (var i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-checked"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-checked");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-expanded"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-expanded");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-activedescendant"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-activedescendant");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-multiselectable"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-multiselectable");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-pressed"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-pressed");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-required"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-required");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-posinset"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-posinset");
+    			knownProp = null;
+    			for (i=0; i<proposals.length; i++) {
+    				if (proposals[i].name === "aria-setsize"){
+    					knownProp = proposals[i];
+    				}
+    			}
+    			assert(knownProp, "Could not find expected proposal aria-setsize");
+    		});
+    	});
     	it('Tags that support the attributes of many roles: details (13). Prefix ar. <details ar>', function() {
     		var _o = setup({buffer: '<html><body><details ar></details></body></html>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 21, prefix: 'ar'}).then(function(proposals) {
@@ -1946,7 +2146,7 @@ define([
     	});
 
 		// Tag-specific ARIA roles.
-		// TODO: The following test should pass after we implement the cool allowed-role-for-tag feature
+		// TODO: The following test should pass after we implement the cool allowed-role-for-tag feature (https://bugs.eclipse.org/bugs/show_bug.cgi?id=484255)
 //    	it('Tag-specific ARIA roles: ul can have 11 possible role values. <ul role="|">', function() {
 //    		var _o = setup({buffer: '<html><body><ul role=""></ul></body></html>'});
 //    		return assist.computeContentAssist(_o.editorContext, {offset: 22}).then(function(proposals) {
@@ -1992,7 +2192,7 @@ define([
 
 		// Role-specific aria-* attributes: aria-activedescendant, aria-autocomplete, aria-checked, aria-expanded, aria-level, aria-multiline, aria-multiselectable, aria-orientation,
 		//     aria-posinset, aria-pressed, aria-readonly, aria-required, aria-selected, aria-setsize, aria-sort, aria-valuemax, aria-valuemin, aria-valuenow, aria-valuetext
-		// TODO: The following test should pass after we implement the cool allowed-attributes-for-role feature
+		// TODO: The following test should pass after we implement the cool allowed-attributes-for-role feature (https://bugs.eclipse.org/bugs/show_bug.cgi?id=484254)
 //    	it('Role-specific aria-* attributes. Filter role. <span role="checkbox" >', function() {
 //    		var _o = setup({buffer: '<html><body><span role="checkbox" ></span></body></html>'});
 //    		return assist.computeContentAssist(_o.editorContext, {offset: 34}).then(function(proposals) {

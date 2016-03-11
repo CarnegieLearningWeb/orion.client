@@ -9,29 +9,31 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api');
 var git = require('nodegit');
 var finder = require('findit');
+var express = require('express');
+var bodyParser = require('body-parser');
+var clone = require('./clone');
 
-function getBlame(workspaceDir, fileRoot, req, res, next, rest) {
+module.exports = {};
 
-    finder(workspaceDir).on('directory', function (dir, stat, stop) {
-        git.Repository.open(dir)
-        .then(function(repo) {
-            git.Blame.file(repo, dir).then(function(blame) {
-                var resp = JSON.stringify(blame);
-                res.statusCode = 200;
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Content-Length', resp.length);
-                res.end(resp);
+module.exports.router = function(options) {
+	var fileRoot = options.fileRoot;
+	if (!fileRoot) { throw new Error('options.root is required'); }
 
-                return blame;
-            });
-        });
-
-    });
+	return express.Router()
+	.use(bodyParser.json())
+	.get('*', getBlame);
+	
+function getBlame(req, res) {
+	finder(req.user.workspaceDir).on('directory', function (dir, stat, stop) {
+		clone.getRepo(req)
+		.then(function(repo) {
+			git.Blame.file(repo, dir).then(function(blame) {
+				res.status(200).json(blame);
+				return blame;
+			});
+		});
+	});
 }
-
-module.exports = {
-    getBlame: getBlame
 };

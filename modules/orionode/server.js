@@ -9,31 +9,23 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var connect = require('connect'),
+var auth = require('./lib/middleware/auth'),
+	express = require('express'),
+	http = require('http'),
+	compression = require('compression'),
     path = require('path'),
     socketio = require('socket.io'),
     util = require('util'),
-    appSocket = require('./lib/node_app_socket'),
     argslib = require('./lib/args'),
+    ttyShell = require('./lib/tty_shell'),
     orion = require('./index.js');
-
-function noop(req, res, next) { next(); }
-
-function auth(pwd) {
-	if (typeof pwd === 'string' && pwd.length > 0) {
-		return connect.basicAuth(function(user, password) {
-			return password === pwd;
-		});
-	}
-	return noop;
-}
 
 // Get the arguments, the workspace directory, and the password file (if configured), then launch the server
 var args = argslib.parseArgs(process.argv);
-var port = args.port || args.p || 8081;
+var port = args.port || args.p || process.env.PORT || 8081;
 var configFile = args.config || args.c || path.join(__dirname, 'orion.conf');
 
-argslib.readConfigFile(configFile, function(configParams) {
+argslib.readConfigFile(configFile, function(err, configParams) {
 	configParams = configParams || {};
 
 	var workspaceArg = args.workspace || args.w;
@@ -49,7 +41,7 @@ argslib.readConfigFile(configFile, function(configParams) {
 		workspaceDir = path.join(__dirname, '.workspace');
 	}
 
-	argslib.createDirs([workspaceDir], function(dirs) {
+	argslib.createDirs([workspaceDir], function() {
 		var passwordFile = args.password || args.pwd;
 		argslib.readPasswordFile(passwordFile, function(password) {
 			var dev = Object.prototype.hasOwnProperty.call(args, 'dev');
@@ -63,22 +55,33 @@ argslib.readConfigFile(configFile, function(configParams) {
 			console.log(util.format('Using workspace: %s', workspaceDir));
 			console.log(util.format('Listening on port %d...', port));
 
-			// create web server
-			var orionMiddleware = orion({
-				workspaceDir: dirs[0],
-				configParams: configParams,
-				maxAge: (dev ? 0 : undefined),
-			}), appContext = orionMiddleware.appContext;
-			var server = connect()
-				.use(log ? connect.logger('tiny') : noop)
-				.use(auth(password || configParams.pwd))
-				.use(connect.compress())
-				.use(orionMiddleware)
-				.listen(port);
-
-			// add socketIO and app support
-			var io = socketio.listen(server, { 'log level': 1 });
-			appSocket.install({ io: io, appContext: appContext });
+			var server;
+			try {
+				// create web server
+				var orionMiddleware = orion({
+					workspaceDir: workspaceDir,
+					configParams: configParams,
+					maxAge: (dev ? 0 : undefined),
+				});
+				
+				// add socketIO and app support
+				var app = express();
+				server = http.createServer(app);
+				if (log) {
+					app.use(express.logger('tiny'));
+				}
+				if (password || configParams.pwd) {
+					app.use(auth(password || configParams.pwd));
+				}
+				app.use(compression());
+				app.use(orionMiddleware);
+				server.listen(port);
+				
+				var io = socketio.listen(server, { 'log level': 1 });
+				ttyShell.install({ io: io, fileRoot: '/file', workspaceDir: workspaceDir });
+			} catch (e) {
+				console.error(e && e.stack);
+			}
 			server.on('error', function(err) {
 				console.log(err);
 			});
