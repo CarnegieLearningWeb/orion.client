@@ -186,10 +186,35 @@ define([
         "12_extendScene.js"             : "JS1:Customize_Action_Game_-_Extend_Scene",
         "13_addGoal.js"                 : "JS1:Customize_Action_Game_-_Add_Goal_and_Victory_Screen",
         "14a_addIngredientMusic.js"     : "Help:JS_Ingredient_-_Background_Music",
+        "14b_addIngredientMusic.js"		: "Help:JS_Ingredient_-_Background_Music",
+        "14c_addIngredientMusic.js"		: "Help:JS_Ingredient_-_Background_Music",
+        "14d_addIngredientMusic.js"		: "Help:JS_Ingredient_-_Background_Music",
+        "14e_addIngredientMusic.js"		: "Help:JS_Ingredient_-_Background_Music",
+        
+        "14a_addIngredientHealth.js"    : "Help:JS_Ingredient_-_Health_Bar",
         "14b_addIngredientHealth.js"    : "Help:JS_Ingredient_-_Health_Bar",
+        "14c_addIngredientHealth.js"    : "Help:JS_Ingredient_-_Health_Bar",
+        "14d_addIngredientHealth.js"    : "Help:JS_Ingredient_-_Health_Bar",
+        "14e_addIngredientHealth.js"    : "Help:JS_Ingredient_-_Health_Bar",
+        
+        "14a_addIngredientKeyboard.js"  : "Help:JS_Ingredient_-_Keyboard_Control",
+        "14b_addIngredientKeyboard.js"  : "Help:JS_Ingredient_-_Keyboard_Control",
         "14c_addIngredientKeyboard.js"  : "Help:JS_Ingredient_-_Keyboard_Control",
+        "14d_addIngredientKeyboard.js"  : "Help:JS_Ingredient_-_Keyboard_Control",
+        "14e_addIngredientKeyboard.js"  : "Help:JS_Ingredient_-_Keyboard_Control",
+        
+        "14a_addIngredientAnimation.js" : "Help:JS_Ingredient_-_Animation",
+        "14b_addIngredientAnimation.js" : "Help:JS_Ingredient_-_Animation",
+        "14c_addIngredientAnimation.js" : "Help:JS_Ingredient_-_Animation",
         "14d_addIngredientAnimation.js" : "Help:JS_Ingredient_-_Animation",
+        "14e_addIngredientAnimation.js" : "Help:JS_Ingredient_-_Animation",
+        
+        "14a_addIngredientJumping.js"   : "Help:JS_Ingredient_-_Jumping",
+        "14b_addIngredientJumping.js"   : "Help:JS_Ingredient_-_Jumping",
+        "14c_addIngredientJumping.js"   : "Help:JS_Ingredient_-_Jumping",
+        "14d_addIngredientJumping.js"   : "Help:JS_Ingredient_-_Jumping",
         "14e_addIngredientJumping.js"   : "Help:JS_Ingredient_-_Jumping",
+        
         "15_playtest.js"                : "JS1:Customize_Action_Game_-_Playtest",
         "16_tuneGamePlay.js"            : "JS1:Customize_Action_Game_-_Tune_Game_Play",
         "17_presentGame.js"             : "JS1:Customize_Action_Game_-_Present_Game"
