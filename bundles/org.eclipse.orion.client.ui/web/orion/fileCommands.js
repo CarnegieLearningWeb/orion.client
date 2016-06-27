@@ -1410,7 +1410,8 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
             "addGoal",
             "addGoal",      // Duplicate is needed to keep correct index num used to append file prefixes
             "playtest",
-            "tuneGamePlay"
+            "tuneGamePlay",
+            "presentGame"
         ];
 
         var nextLessonCommand = new mCommands.Command({

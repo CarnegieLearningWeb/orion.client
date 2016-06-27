@@ -11,26 +11,27 @@
 /*eslint-env browser, amd*/
 /*global URL*/
 define([
-    'orion/i18nUtil',
     'i18n!orion/nls/messages',
     'orion/commands',
     'orion/editor/editor',
-    'orion/fileCommands',
     'orion/objects',
     'orion/webui/littlelib',
     'orion/URITemplate',
     'orion/PageUtil',
     'orion/webui/splitter',
-    'orion/URL-shim'
-], function(i18nUtil, messages, mCommands, mEditor, mFileCommands, objects, lib, URITemplate, PageUtil, mSplitter) {
+    'mixloginstatic/javascript/jquery',
+    'globaloria/gide'
+], function(messages, mCommands, mEditor, objects, lib, URITemplate, PageUtil, mSplitter, jquery, mGide) {
 
-    var uriTemplate = new URITemplate("#{,resource,params*}"); //$NON-NLS-0$
+    var uriTemplate = new URITemplate("#{,resource,params*}");
     var toggleOrientationCommand;
     var previewDiv;
 
+    var Gide = new mGide.Gide;
+
     var BaseEditor = mEditor.BaseEditor;
     function HTMLEditor(options) {
-        this.id = "orion.editor.html"; //$NON-NLS-0$
+        this.id = "orion.editor.html";
         this._fileService = options.fileService;
         this._metadata = options.metadata;
         this._parent = options.parent;
@@ -48,7 +49,7 @@ define([
             var newParams = PageUtil.matchResourceParameters(e.newURL);
             if (oldParams.resource !== newParams.resource || oldParams.editor !== newParams.editor) {
                 /* a different editor instance is being opened */
-                window.removeEventListener("hashchange", hashChangeListener); //$NON-NLS-0$
+                window.removeEventListener("hashchange", hashChangeListener);
                 return;
             }
 
@@ -62,7 +63,7 @@ define([
             }
         }.bind(this);
 
-        window.addEventListener("hashchange", hashChangeListener); //$NON-NLS-0$
+        window.addEventListener("hashchange", hashChangeListener);
 
         BaseEditor.apply(this, arguments);
     }
@@ -77,38 +78,38 @@ define([
             var textView = editor.getTextView();
             var annotationModel = editor.getAnnotationModel();
 
-            this._splitter.addEventListener("resize", this._splitterResizeListener); //$NON-NLS-0$
+            this._splitter.addEventListener("resize", this._splitterResizeListener);
 
             var settings = this._editorView.getSettings();
 
             var currentFile = window.location.hash.slice(1,window.location.hash.length);
         },
         install: function() {
-            this._rootDiv = document.createElement("div"); //$NON-NLS-0$
-            this._rootDiv.style.position = "absolute"; //$NON-NLS-0$
-            this._rootDiv.style.width = "100%"; //$NON-NLS-0$
-            this._rootDiv.style.height = "100%"; //$NON-NLS-0$
+            this._rootDiv = document.createElement("div");
+            this._rootDiv.style.position = "absolute";
+            this._rootDiv.style.width = "100%";
+            this._rootDiv.style.height = "100%";
             this._parent.appendChild(this._rootDiv);
 
-            this._editorDiv = document.createElement("div"); //$NON-NLS-0$
+            this._editorDiv = document.createElement("div");
             this._rootDiv.appendChild(this._editorDiv);
             this._editorView.setParent(this._editorDiv);
 
-            this._splitterDiv = document.createElement("div"); //$NON-NLS-0$
-            this._splitterDiv.id = "orion.html.editor.splitter"; //$NON-NLS-0$
+            this._splitterDiv = document.createElement("div");
+            this._splitterDiv.id = "orion.html.editor.splitter";
             this._rootDiv.appendChild(this._splitterDiv);
 
-            this._previewWrapperDiv = document.createElement("div"); //$NON-NLS-0$
-            this._previewWrapperDiv.style.overflowX = "hidden"; //$NON-NLS-0$
-            this._previewWrapperDiv.style.overflowY = "auto"; //$NON-NLS-0$
+            this._previewWrapperDiv = document.createElement("div");
+            this._previewWrapperDiv.style.overflowX = "hidden";
+            this._previewWrapperDiv.style.overflowY = "auto";
             this._rootDiv.appendChild(this._previewWrapperDiv);
 
-            previewDiv = document.createElement("div"); //$NON-NLS-0$
-            previewDiv.classList.add("orionHTML"); //$NON-NLS-0$
+            previewDiv = document.createElement("div");
+            previewDiv.classList.add("orionHTML");
 
             this._previewWrapperDiv.appendChild(previewDiv);
 
-            createIframeWindow(previewDiv);
+            Gide.createIframeWindow(previewDiv);
 
             this._splitter = new mSplitter.Splitter({
                 node: this._splitterDiv,
@@ -127,7 +128,7 @@ define([
         },
         uninstall: function() {
             var textView = this._editorView.editor.getTextView();
-            this._splitter.removeEventListener("resize", this._splitterResizeListener); //$NON-NLS-0$
+            this._splitter.removeEventListener("resize", this._splitterResizeListener);
             lib.empty(this._parent);
             BaseEditor.prototype.uninstall.call(this);
         }
@@ -136,7 +137,7 @@ define([
     function HTMLEditorView(options) {
         this._options = options;
 
-        ID = "html.toggle.orientation"; //$NON-NLS-0$
+        ID = "html.toggle.orientation";
         toggleOrientationCommand = new mCommands.Command({
             id: ID,
             callback: /* @callback */ function(data) {
@@ -144,15 +145,15 @@ define([
                     this.editor.togglePaneOrientation();
                 }
             }.bind(this),
-            type: "switch", //$NON-NLS-0$
-            imageClass: "core-sprite-split-pane-orientation", //$NON-NLS-0$
+            type: "switch",
+            imageClass: "core-sprite-split-pane-orientation",
             tooltip: messages["TogglePaneOrientationTooltip"],
             visibleWhen: function() {
                 return !!this._options;
             }.bind(this),
         });
         options.commandRegistry.addCommand(toggleOrientationCommand);
-        options.commandRegistry.registerCommandContribution("settingsActions", ID, 1, null, false); //$NON-NLS-0$
+        options.commandRegistry.registerCommandContribution("settingsActions", ID, 1, null, false);
     }
     HTMLEditorView.prototype = {
         create: function() {
@@ -171,55 +172,24 @@ define([
         }
     };
 
-    function createIframeWindow(targetNode) {
-        // Add the current page iframe to the current page
-        var frameDiv          = document.createElement("div");
-        frameDiv.id           = 'previewHtml'; //$NON-NLS-0$
+    window.toggleWindow = function() {
+        // Grab the current iFrame id
+        var iframe = $("#previewHTMLFrame")[0];
 
-        var iframe            = document.createElement("iframe"); //$NON-NLS-0$
-        iframe.id             = 'previewFrame'; //$NON-NLS-0$
-        iframe.name           = 'HTML Previewer'; //$NON-NLS-0$
-        iframe.type           = "text/html"; //$NON-NLS-0$
-        iframe.sandbox        = "allow-scripts allow-same-origin allow-forms"; //$NON-NLS-0$
-        frameDiv.style.border = "none"; //$NON-NLS-0$
-        frameDiv.style.width  = "100%"; //$NON-NLS-0$
-        frameDiv.style.height = "100%"; //$NON-NLS-0$
-        iframe.style.width    = "100%"; //$NON-NLS-0$
-        iframe.style.height   = "100%"; //$NON-NLS-0$
+        if (typeof iframe === 'undefined') {
+            var targetNode = document.getElementById('previewHtml');
 
-        var currentFile = window.location.hash.slice(1,window.location.hash.length);
-        //TODO not sure why the edit view adds an extra 25 to the %20 space character, but this adjusts for that
-        currentFile  = currentFile.replace(new RegExp('\%2025', 'g'),'\%20');
-        currentFile  = currentFile.replace(',editor=orion.editor.html','');
-        var port     = ":"+window.location.port;
-        var protocol = window.location.protocol+"//";
-        var fullUrl;
-
-        if(window.location.port!=='')
-            fullUrl = protocol+window.location.hostname+port+currentFile;
-        else
-            fullUrl = protocol+window.location.hostname+currentFile;
-
-        iframe.src = fullUrl;
-
-        // Add a refresh button to reload the game
-        var reloadButton         = document.createElement("button");
-        reloadButton.textContent = 'Refresh Preview';
-        reloadButton.className   = 'btn glife-green';
-        reloadButton.setAttribute('onClick', 'document.getElementById("previewFrame").contentWindow.location.reload()');
-
-        // Add a refresh button to reload the game
-        var newWindowButton         = document.createElement("a");
-        newWindowButton.textContent = 'Open in New Page';
-        newWindowButton.className   = 'btn glife-navy';
-        newWindowButton.setAttribute('href', fullUrl);
-        newWindowButton.setAttribute('target', '_blank');
-
-        frameDiv.appendChild(reloadButton);
-        frameDiv.appendChild(newWindowButton);
-        frameDiv.appendChild(iframe);
-        targetNode.appendChild(frameDiv);       
-    }
+            // we do not have an iframe, delete the instructional
+            // div and build an html frame
+            Gide.destroyPreviewInstructionDiv();
+            Gide.destroyIframeNavigationWindow();
+            Gide.createIframeWindow(targetNode);
+        } else {
+            // we have a iframe, delete it and add instructional div
+            Gide.destroyIframeHTMLWindow();
+            Gide.buildIframeInstructionWindow();
+        }
+    };
 
     return {
         HTMLEditorView: HTMLEditorView
