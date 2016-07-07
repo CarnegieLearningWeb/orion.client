@@ -70,10 +70,37 @@ define([
         }
     };
 
+    /**
+     * This object contains the mapping to be able to create
+     * next lessons for different courses
+     */
+    var nextLessonMapping = {
+        "ActionGame" : [
+            "createCanvas",
+            "drawShape",
+            "moveShape",
+            "controlShape",
+            "displayScore",
+            "increaseScore",
+            "multipleCollectables",
+            "multipleEnemies",
+            "addArtwork",
+            "addSound",
+            "addGameOver",
+            "extendScene",
+            "addGoal",
+            "addGoal",      // Duplicate is needed to keep correct index num used to append file prefixes
+            "playtest",
+            "tuneGamePlay",
+            "presentGame"
+        ]
+    };
+
     // Constructor
     function Gide(options) {
         options = options || {};
         this.namespacingMapping = namespacingMapping;
+        this.nextLessonMapping  = nextLessonMapping;
     };
 
     Gide.prototype = {

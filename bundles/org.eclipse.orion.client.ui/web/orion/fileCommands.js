@@ -15,8 +15,9 @@
 define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18nUtil', 'orion/uiUtils', 'orion/fileUtils', 'orion/commands', 'orion/fileDownloader',
     'orion/commandRegistry', 'orion/contentTypes', 'orion/compare/compareUtils',
     'orion/Deferred', 'orion/webui/dialogs/DirectoryPrompterDialog', 'orion/webui/dialogs/SFTPConnectionDialog',
-    'orion/EventTarget', 'orion/form', 'orion/xsrfUtils', 'orion/bidiUtils'],
-    function(messages, lib, i18nUtil, mUIUtils, mFileUtils, mCommands, mFileDownloader, mCommandRegistry, mContentTypes, mCompareUtils, Deferred, DirPrompter, SFTPDialog, EventTarget, form, xsrfUtils, bidiUtils){
+    'orion/EventTarget', 'orion/form', 'orion/xsrfUtils', 'orion/bidiUtils', 'globaloria/gide'],
+    function(messages, lib, i18nUtil, mUIUtils, mFileUtils, mCommands, mFileDownloader, mCommandRegistry, mContentTypes, mCompareUtils, Deferred, DirPrompter, SFTPDialog, EventTarget, form, xsrfUtils, bidiUtils, mGide){
+
 
     /**
      * Utility methods
@@ -33,6 +34,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
     var progressService = null;
 
     var lastItemLoaded = {Location: null};
+
+    /**
+    * Gide class/ prototype
+    * @class This class is a globaloria utility class for handling lesson mapping and custom functionality
+    */
+    var Gide = new mGide.Gide;
 
     var explorer;
     fileCommandUtils.setExplorer = function(newExplorer) {
@@ -367,6 +374,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
     fileCommandUtils.createFileCommands = function(serviceRegistry, commandService, fileClient) {
         progressService = serviceRegistry.getService("orion.page.progress"); //$NON-NLS-0$
         var dispatchModelEvent = dispatchModelEventOn.bind(null);
+
+        // Create Gide class
+        var windowHash  = window.location.hash;
+        var lessonName  = Gide.getCurrentLessonFromURL(windowHash)
+        var courseName  = Gide.getCourseName(windowHash);
+        var lessonNames = Gide.nextLessonMapping[courseName];
 
         function contains(arr, item) {
             return arr.indexOf(item) !== -1;
@@ -1393,26 +1406,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                 }
             });
         commandService.addCommand(duplicateFileCommand);
-
-        var lessonNames = [
-            "createCanvas",
-            "drawShape",
-            "moveShape",
-            "controlShape",
-            "displayScore",
-            "increaseScore",
-            "multipleCollectables",
-            "multipleEnemies",
-            "addArtwork",
-            "addSound",
-            "addGameOver",
-            "extendScene",
-            "addGoal",
-            "addGoal",      // Duplicate is needed to keep correct index num used to append file prefixes
-            "playtest",
-            "tuneGamePlay",
-            "presentGame"
-        ];
 
         var nextLessonCommand = new mCommands.Command({
                 name: messages["nextLesson"],
