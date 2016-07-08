@@ -39,31 +39,31 @@ define([
             "14c_addIngredientMusic"     : "Help:JS_Ingredient_-_Background_Music",
             "14d_addIngredientMusic"     : "Help:JS_Ingredient_-_Background_Music",
             "14e_addIngredientMusic"     : "Help:JS_Ingredient_-_Background_Music",
-            
+
             "14a_addIngredientHealth"    : "Help:JS_Ingredient_-_Health_Bar",
             "14b_addIngredientHealth"    : "Help:JS_Ingredient_-_Health_Bar",
             "14c_addIngredientHealth"    : "Help:JS_Ingredient_-_Health_Bar",
             "14d_addIngredientHealth"    : "Help:JS_Ingredient_-_Health_Bar",
             "14e_addIngredientHealth"    : "Help:JS_Ingredient_-_Health_Bar",
-            
+
             "14a_addIngredientKeyboard"  : "Help:JS_Ingredient_-_Keyboard_Control",
             "14b_addIngredientKeyboard"  : "Help:JS_Ingredient_-_Keyboard_Control",
             "14c_addIngredientKeyboard"  : "Help:JS_Ingredient_-_Keyboard_Control",
             "14d_addIngredientKeyboard"  : "Help:JS_Ingredient_-_Keyboard_Control",
             "14e_addIngredientKeyboard"  : "Help:JS_Ingredient_-_Keyboard_Control",
-            
+
             "14a_addIngredientAnimation" : "Help:JS_Ingredient_-_Animation",
             "14b_addIngredientAnimation" : "Help:JS_Ingredient_-_Animation",
             "14c_addIngredientAnimation" : "Help:JS_Ingredient_-_Animation",
             "14d_addIngredientAnimation" : "Help:JS_Ingredient_-_Animation",
             "14e_addIngredientAnimation" : "Help:JS_Ingredient_-_Animation",
-            
+
             "14a_addIngredientJumping"   : "Help:JS_Ingredient_-_Jumping",
             "14b_addIngredientJumping"   : "Help:JS_Ingredient_-_Jumping",
             "14c_addIngredientJumping"   : "Help:JS_Ingredient_-_Jumping",
             "14d_addIngredientJumping"   : "Help:JS_Ingredient_-_Jumping",
             "14e_addIngredientJumping"   : "Help:JS_Ingredient_-_Jumping",
-            
+
             "15_playtest"                : "JS1:Customize_Action_Game_-_Playtest",
             "16_tuneGamePlay"            : "JS1:Customize_Action_Game_-_Tune_Game_Play",
             "17_presentGame"             : "JS1:Customize_Action_Game_-_Present_Game"

@@ -375,12 +375,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
         progressService = serviceRegistry.getService("orion.page.progress"); //$NON-NLS-0$
         var dispatchModelEvent = dispatchModelEventOn.bind(null);
 
-        // Create Gide class
-        var windowHash  = window.location.hash;
-        var lessonName  = Gide.getCurrentLessonFromURL(windowHash)
-        var courseName  = Gide.getCourseName(windowHash);
-        var lessonNames = Gide.nextLessonMapping[courseName];
-
         function contains(arr, item) {
             return arr.indexOf(item) !== -1;
         }
@@ -1411,7 +1405,17 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                 name: messages["nextLesson"],
                 id: "eclipse.nextLesson",
                 visibleWhen: function(item) {
-                    var currItem      = forceSingleItem(item);
+                    // Set necessary course/ lesson details
+                    var windowHash  = window.location.hash;
+                    var lessonName  = Gide.getCurrentLessonFromURL(windowHash)
+                    var courseName  = Gide.getCourseName(windowHash);
+                    var lessonNames = Gide.nextLessonMapping[courseName];
+
+                    var currItem = forceSingleItem(item);
+
+                    if (typeof currItem === 'object')
+                        currItem = forceSingleItem(currItem);
+
                     // Grab just the file name with out dashes and extentions
                     var filename      = currItem.Name;
                     var cleanFilename = cleanupFileName(filename);
@@ -1449,13 +1453,19 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     // Copy file contents to the buffer
                     copyToBuffer(data);
 
+                    // Set necessary course/ lesson details
+                    var windowHash  = window.location.hash;
+                    var lessonName  = Gide.getCurrentLessonFromURL(windowHash)
+                    var courseName  = Gide.getCourseName(windowHash);
+                    var lessonNames = Gide.nextLessonMapping[courseName];
+
                     // Grab necessary variables
                     var currItem       = forceSingleItem(data.items);
                     var parentLocation = currItem.parent.Location;
                     var filename       = currItem.Name;
                     var splitResults   = filename.split('.');
                     var cleanFilename  = cleanupFileName(filename);
-                    var nextLessonInfo = getNextLessonInfo(cleanFilename);
+                    var nextLessonInfo = getNextLessonInfo(cleanFilename, lessonNames, courseName);
                     var nextFileName   = nextLessonInfo.nextFileName;
                     var nextFileIndex  = nextLessonInfo.nextFileIndex;
                     var newFileName    = generateNextFileName(nextFileName, nextFileIndex, 'html');
@@ -1508,7 +1518,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
             return filename;
         }
 
-        var getNextLessonInfo = function(filename) {
+        var getNextLessonInfo = function(filename, lessonNames, courseName) {
             var indexOfCurrFile   = lessonNames.indexOf(filename);
             var indexOfNextLesson = indexOfCurrFile + 1;
             var nextFileName      = lessonNames[indexOfNextLesson];
