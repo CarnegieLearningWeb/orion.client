@@ -1418,7 +1418,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 
                     // Grab just the file name with out dashes and extentions
                     var filename      = currItem.Name;
-                    var cleanFilename = cleanupFileName(filename);
+                    var cleanFilename = Gide.removeFileExtension(filename);
                     var isDirectory   = currItem.Directory;
 
                     if (!explorer || !explorer.isCommandsVisible()) {
@@ -1447,93 +1447,63 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     return true;
                 },
                 callback: function(data) {
-                    /*******************************/
-                    /* Copy the HTML file First    */
-                    /*******************************/
-                    // Copy file contents to the buffer
-                    copyToBuffer(data);
-
                     // Set necessary course/ lesson details
                     var windowHash  = window.location.hash;
                     var lessonName  = Gide.getCurrentLessonFromURL(windowHash)
                     var courseName  = Gide.getCourseName(windowHash);
                     var lessonNames = Gide.nextLessonMapping[courseName];
 
+                    var isCssException = false;
+
                     // Grab necessary variables
                     var currItem       = forceSingleItem(data.items);
                     var parentLocation = currItem.parent.Location;
                     var filename       = currItem.Name;
                     var splitResults   = filename.split('.');
-                    var cleanFilename  = cleanupFileName(filename);
-                    var nextLessonInfo = getNextLessonInfo(cleanFilename, lessonNames, courseName);
-                    var nextFileName   = nextLessonInfo.nextFileName;
-                    var nextFileIndex  = nextLessonInfo.nextFileIndex;
-                    var newFileName    = generateNextFileName(nextFileName, nextFileIndex, 'html');
+                    var cleanFilename  = Gide.removeFileExtension(filename);
+                    var nextLessonName = getNextLessonName(cleanFilename, lessonNames);
+                    var newFilename    = Gide.addFileExtension(nextLessonName, 'html');
 
-                    // Paste the contents into the new created file
-                    pasteFromBufferNoPrompt(data, newFileName);
+                    // Copy the HTML file contents to the buffer
+                    copyToBuffer(data);
+                    // Paste the contents into the new created HTML file
+                    pasteFromBufferNoPrompt(data, newFilename);
+
 
                     /**************************************************/
                     /* Create the JavaScript file from the HTML file  */
                     /**************************************************/
                     // Generate JavaScript file name
-                    var jsOldFileName     = generateNextFileName(cleanFilename, nextFileIndex - 1, 'js');
-                    var jsNewFileName     = generateNextFileName(nextFileName, nextFileIndex, 'js');
+                    var oldFilename = Gide.addFileExtension(cleanFilename, 'js');
+                    var newFilename = Gide.addFileExtension(nextLessonName, 'js');
 
                     // If this is an ingidient, break current file naming rules & replace the original filename
                     // extension with .js instead of html
                     if (cleanFilename.match(/addIngredient/))
-                        jsOldFileName = filename.replace('.html', '.js');
+                        oldFilename = filename.replace('.html', '.js');
 
                     // Generate JavaScript file 'Location' path
                     var jsParentLocation  = parentLocation + 'js/';
-                    var jsOldLocationPath = jsParentLocation + jsOldFileName;
+                    var jsOldLocationPath = jsParentLocation + oldFilename;
 
-                    if (jsNewFileName === '02_drawShape.js') {
+                    if (newFilename === '02_drawShape.js') {
                         // If this is the first file, we create an empty file
-                        fileClient.createFile(jsParentLocation, jsNewFileName);
+                        fileClient.createFile(jsParentLocation, newFilename);
                     } else {
                         // Copy the contents of the current file and use it to create
                         // the next JS file
-                        fileClient.copyFile(jsOldLocationPath, jsParentLocation, jsNewFileName);
+                        fileClient.copyFile(jsOldLocationPath, jsParentLocation, newFilename);
                     }
                 }
             });
         commandService.addCommand(nextLessonCommand);
 
-        var cleanupFileName = function(filename) {
-            if (filename.match(/_/)) {
-                var startIndex = filename.indexOf('_') + 1;
-                var endIndex   = filename.length;
-
-                filename = filename.slice(startIndex, endIndex);
-            }
-
-            if (filename.match(/\./)) {
-                var splitArr = filename.split('.');
-
-                filename = splitArr[0];
-            }
-
-            return filename;
-        }
-
-        var getNextLessonInfo = function(filename, lessonNames, courseName) {
+        var getNextLessonName = function(filename, lessonNames) {
             var indexOfCurrFile   = lessonNames.indexOf(filename);
             var indexOfNextLesson = indexOfCurrFile + 1;
-            var nextFileName      = lessonNames[indexOfNextLesson];
+            var nextFilename      = lessonNames[indexOfNextLesson];
 
-            if (filename.match(/addIngredient/)){
-                indexOfNextLesson = lessonNames.indexOf('playtest');
-                nextFileName      = lessonNames[indexOfNextLesson];
-            }
-
-            var lessonInfo = {
-                nextFileName  : nextFileName,
-                nextFileIndex : indexOfNextLesson + 1 //because arrays are 0 index
-            };
-
-            return lessonInfo;
+            return nextFilename;
         }
 
         var pasteFromBufferNoPrompt = function(data, nextFilename) {
@@ -1586,13 +1556,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     }
                 });
             }
-        }
-
-        var generateNextFileName = function(nextFileName, nextFileIndex, fileExt) {
-            var prefix      = (nextFileIndex >= 10 ) ? nextFileIndex : '0' + nextFileIndex;
-            var newFileName = prefix + '_' + nextFileName + '.' + fileExt;
-
-            return newFileName;
         }
 
         var isDirectory = function(item) {

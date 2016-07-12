@@ -76,20 +76,44 @@ define([
      */
     var nextLessonMapping = {
         "ActionGame" : [
-            "createCanvas",
-            "drawShape",
-            "moveShape",
-            "controlShape",
-            "displayScore",
-            "increaseScore",
-            "multipleCollectables",
-            "multipleEnemies",
-            "addArtwork",
-            "addSound",
-            "addGameOver",
-            "extendScene",
-            "addGoal",
-            "addGoal",      // Duplicate is needed to keep correct index num used to append file prefixes
+            "01_createCanvas",
+            "02_drawShape",
+            "03_moveShape",
+            "04_controlShape",
+            "05_displayScore",
+            "06_increaseScore",
+            "07_multipleCollectables",
+            "08_multipleEnemies",
+            "09_addArtwork",
+            "10_addSound",
+            "11_addGameOver",
+            "12_extendScene",
+            "13_addGoal",
+            "playtest",
+            "tuneGamePlay",
+            "presentGame"
+        ],
+        "HomePage" : [
+            "01_csw_homepage",
+            "02_csw_homepage",
+            "03_csw_homepage",
+            "04_csw_homepage",
+            "05_csw_homepage",
+            "06_csw_homepage",
+            "07_csw_homepage",
+            "08_createCanvas",
+            "09_drawShape",
+            "10_moveShape",
+            "11_controlShape",
+            "12_displayScore",
+            "13_increaseScore",
+            "14_multipleCollectables",
+            "15_multipleEnemies",
+            "16_addArtwork",
+            "17_addSound",
+            "18_addGameOver",
+            "19_extendScene",
+            "20_addGoal",
             "playtest",
             "tuneGamePlay",
             "presentGame"
@@ -99,6 +123,7 @@ define([
     // Constructor
     function Gide(options) {
         options = options || {};
+
         this.namespacingMapping = namespacingMapping;
         this.nextLessonMapping  = nextLessonMapping;
     };
@@ -364,6 +389,10 @@ define([
 
         removeFileExtension: function(filename) {
             return filename.split('.')[0];
+        },
+
+        addFileExtension: function(nextFilename, fileExt) {
+            return nextFilename + '.' + fileExt;
         }
     }
 
