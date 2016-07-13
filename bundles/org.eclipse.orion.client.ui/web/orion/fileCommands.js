@@ -1453,7 +1453,10 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     var courseName  = Gide.getCourseName(windowHash);
                     var lessonNames = Gide.nextLessonMapping[courseName];
 
-                    var isCssException = false;
+                    // This is the default file extension for creating new
+                    // non html next lessons
+                    var newFileExtension   = 'js';
+                    var skipFileGeneration = false;
 
                     // Grab necessary variables
                     var currItem       = forceSingleItem(data.items);
@@ -1464,35 +1467,60 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     var nextLessonName = getNextLessonName(cleanFilename, lessonNames);
                     var newFilename    = Gide.addFileExtension(nextLessonName, 'html');
 
+
+                    if (filename === '08_csw_homepage.html') {
+                        // Grab old location value and split it to manipulate it
+                        var location = data.items[0].Location;
+                        var tempArr = location.split('/');
+
+                        // Create new location with '00_topicTemplate.html' as the source file
+                        tempArr[tempArr.length - 1] = '00_topicTemplate.html';
+                        var newLocation = tempArr.join('/');
+
+                        // Assign the new location
+                        data.items[0].Location = newLocation;
+                    }
+
                     // Copy the HTML file contents to the buffer
                     copyToBuffer(data);
                     // Paste the contents into the new created HTML file
                     pasteFromBufferNoPrompt(data, newFilename);
 
+                    if (courseName === 'GameDesign') {
+                        if (lessonNames.indexOf(lessonName) < 7) {
+                            newFileExtension = 'css';
+                        } else {
+                            if (lessonName === '08_csw_homepage') {
+                                skipFileGeneration = true;
+                            }
+                        }
+                    }
 
-                    /**************************************************/
-                    /* Create the JavaScript file from the HTML file  */
-                    /**************************************************/
-                    // Generate JavaScript file name
-                    var oldFilename = Gide.addFileExtension(cleanFilename, 'js');
-                    var newFilename = Gide.addFileExtension(nextLessonName, 'js');
+                    if (!skipFileGeneration) {
+                        /*******************************************************/
+                        /* Create the JavaScript/ CSS file from the HTML file  */
+                        /*******************************************************/
+                        // Generate filenames
+                        var oldFilename = Gide.addFileExtension(cleanFilename, newFileExtension);
+                        var newFilename = Gide.addFileExtension(nextLessonName, newFileExtension);
 
-                    // If this is an ingidient, break current file naming rules & replace the original filename
-                    // extension with .js instead of html
-                    if (cleanFilename.match(/addIngredient/))
-                        oldFilename = filename.replace('.html', '.js');
+                        // If this is an ingidient, break current file naming rules & replace the original filename
+                        // extension with .js instead of html
+                        if (cleanFilename.match(/addIngredient/))
+                            oldFilename = filename.replace('.html', '.js');
 
-                    // Generate JavaScript file 'Location' path
-                    var jsParentLocation  = parentLocation + 'js/';
-                    var jsOldLocationPath = jsParentLocation + oldFilename;
+                        // Generate file 'Location' path
+                        var newFileParentLocation = parentLocation + newFileExtension + '/';
+                        var oldFileLocationPath   = newFileParentLocation + oldFilename;
 
-                    if (newFilename === '02_drawShape.js') {
-                        // If this is the first file, we create an empty file
-                        fileClient.createFile(jsParentLocation, newFilename);
-                    } else {
-                        // Copy the contents of the current file and use it to create
-                        // the next JS file
-                        fileClient.copyFile(jsOldLocationPath, jsParentLocation, newFilename);
+                        if (newFilename.match(/drawShape.js$/)) {
+                            // If this is the first file, we create an empty file
+                            fileClient.createFile(newFileParentLocation, newFilename);
+                        } else {
+                            // Copy the contents of the current file and use it to create
+                            // the next JS file
+                            fileClient.copyFile(oldFileLocationPath, newFileParentLocation, newFilename);
+                        }
                     }
                 }
             });
