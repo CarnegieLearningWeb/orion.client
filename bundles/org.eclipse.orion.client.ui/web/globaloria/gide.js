@@ -221,8 +221,8 @@ define([
             navigationDiv.appendChild(reloadButton);
             navigationDiv.appendChild(newWindowButton);
 
-            if (this.displayToggleBtn())
-                navigationDiv.appendChild(toggleWindowButton);
+            // if (this.displayToggleBtn())
+            //     navigationDiv.appendChild(toggleWindowButton);
 
             return navigationDiv;
         },
