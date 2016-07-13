@@ -67,6 +67,31 @@ define([
             "15_playtest"                : "JS1:Customize_Action_Game_-_Playtest",
             "16_tuneGamePlay"            : "JS1:Customize_Action_Game_-_Tune_Game_Play",
             "17_presentGame"             : "JS1:Customize_Action_Game_-_Present_Game"
+        },
+        "GameDesign" : {
+            "01_csw_homepage"         : "CSW:Setup_Your_Website",
+            "02_csw_homepage"         : "CSW:Design_Game_Scene",
+            "03_csw_homepage"         : "CSW:Make_Paper_Prototype",
+            "04_csw_homepage"         : "CSW:Create_Game_Art",
+            "05_csw_homepage"         : "CSW:Style_Website_with_CSS",
+            "06_csw_homepage"         : "CSW:Add_More_HTML_Pages",
+            "07_csw_homepage"         : "",
+            "08_createCanvas"         : "",
+            "09_drawShape"            : "",
+            "10_moveShape"            : "",
+            "11_controlShape"         : "",
+            "12_displayScore"         : "",
+            "13_increaseScore"        : "",
+            "14_multipleCollectables" : "",
+            "15_multipleEnemies"      : "",
+            "16_addArtwork"           : "",
+            "17_addSound"             : "",
+            "18_addGameOver"          : "",
+            "19_extendScene"          : "",
+            "20_addGoal"              : "",
+            "playtest"                : "",
+            "tuneGamePlay"            : "",
+            "presentGame"             : ""
         }
     };
 
@@ -93,7 +118,7 @@ define([
             "tuneGamePlay",
             "presentGame"
         ],
-        "HomePage" : [
+        "GameDesign" : [
             "01_csw_homepage",
             "02_csw_homepage",
             "03_csw_homepage",
