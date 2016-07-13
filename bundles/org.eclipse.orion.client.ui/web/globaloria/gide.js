@@ -127,23 +127,7 @@ define([
             "05_csw_homepage",
             "06_csw_homepage",
             "07_csw_homepage",
-            "08_csw_homepage",
-            "09_createCanvas",
-            "10_drawShape",
-            "11_moveShape",
-            "12_controlShape",
-            "13_displayScore",
-            "14_increaseScore",
-            "15_multipleCollectables",
-            "16_multipleEnemies",
-            "17_addArtwork",
-            "18_addSound",
-            "19_addGameOver",
-            "20_extendScene",
-            "21_addGoal",
-            "22_playtest",
-            "23_tuneGamePlay",
-            "24_presentGame"
+            "08_csw_homepage"
         ]
     };
 
@@ -303,9 +287,10 @@ define([
 
         createHelpDiv: function(topicFullURL) {
             // Create new 'sticky' div for help and view topic buttons
-            var helpDiv       = document.createElement('div');
-            helpDiv.id        = 'helpDiv';
-            helpDiv.className = 'help-div';
+            var helpDiv          = document.createElement('div');
+            helpDiv.id           = 'helpDiv';
+            helpDiv.className    = 'help-div';
+            helpDiv.style.zIndex = '100';
 
             // Add a refresh button to reload the game
             var getHelpButton         = document.createElement("a");
@@ -373,16 +358,48 @@ define([
                     var link  = document.createElement('link');
                     link.rel  = 'stylesheet';
                     link.type = 'text/css';
-                    link.href = 'https://myglife.org/mwiki/skins/globaloria/globaloria.css';
+                    link.href = 'https://myglife.org/mwiki/skins/Globaloria/material.css';
+
+
+                    // Link2 css styles to the content
+                    var link2  = document.createElement('link');
+                    link2.rel  = 'stylesheet';
+                    link2.type = 'text/css';
+                    link2.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+
+                    // Link3 css styles to the content
+                    var link3  = document.createElement('link');
+                    link3.rel  = 'stylesheet';
+                    link3.type = 'text/css';
+                    link3.href = 'https://myglife.org/mwiki/skins/Globaloria/components/common.less';
+
+                    // Link4 css styles to the content
+                    var link4  = document.createElement('link');
+                    link4.rel  = 'stylesheet';
+                    link4.type = 'text/css';
+                    link4.href = 'https://myglife.org/mwiki/load.php?debug=false&lang=en&modules=ext.pygments%7Cext.uls.nojs%7Cmediawiki.legacy.commonPrint%2Cshared%7Cmediawiki.sectionAnchor%7Cmediawiki.skinning.interface%7Cskins.globaloria.styles%7Cskins.mdl.styles&only=styles&skin=globaloria';
 
                     // Create new 'sticky' div for help and view topic buttons
                     var helpDiv = _self.createHelpDiv(topicFullURL);
 
-                    instructionDiv.appendChild(link);
+                    // instructionDiv.appendChild(link);
+                    instructionDiv.appendChild(link2);
+                    instructionDiv.appendChild(link3);
+                    instructionDiv.appendChild(link4);
                     instructionDiv.appendChild(content[0]);
                     instructionDiv.appendChild(helpDiv);
 
                     targetNode.appendChild(instructionDiv);
+
+                    var mdlCards = $('.globaloria-mdl-card .mdl-card__title');
+
+                    if (mdlCards.length > 0) {
+                            // Update the mdl cards to have padding top and bottom
+                        mdlCards.css({
+                            paddingTop: 15,
+                            paddingBottom: 15
+                        });
+                    }
                 },
                 function(results) {
                     console.log('Error Loading AJAX Request Content');

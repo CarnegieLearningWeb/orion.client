@@ -1444,6 +1444,15 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                         return false;
                     }
 
+                    /**
+                     * THIS IS TEMPORARY...
+                     * REMOVE THIS WHEN YOU ADD THE SECOND COURSE FOR THE
+                     * 'GameDesign' COURSE
+                     */
+                    if (cleanFilename === '08_csw_homepage') {
+                        return false;
+                    }
+
                     return true;
                 },
                 callback: function(data) {
