@@ -1444,6 +1444,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                         return false;
                     }
 
+                    // If this is the last lesson, do not allow next lesson option
+                    if (lessonName === lessonNames[lessonNames.length - 1]) {
+                        return false;
+                    }
+
                     return true;
                 },
                 callback: function(data) {
@@ -1468,7 +1473,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     var newFilename    = Gide.addFileExtension(nextLessonName, 'html');
 
 
-                    if (filename === '08_csw_homepage.html') {
+                    if (filename === '07_csw_homepage.html') {
                         // Grab old location value and split it to manipulate it
                         var location = data.items[0].Location;
                         var tempArr = location.split('/');
@@ -1487,10 +1492,12 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
                     pasteFromBufferNoPrompt(data, newFilename);
 
                     if (courseName === 'GameDesign') {
-                        if (lessonNames.indexOf(lessonName) < 7) {
+                        if (lessonNames.indexOf(lessonName) < 6) {
                             newFileExtension = 'css';
                         } else {
-                            if (lessonName === '08_csw_homepage') {
+                            // 01_csg_createGamePage does not have an associated
+                            // JavaScript page, so skip file generation
+                            if (lessonName === '07_csw_homepage') {
                                 skipFileGeneration = true;
                             }
                         }

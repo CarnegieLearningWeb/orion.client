@@ -69,30 +69,32 @@ define([
             "17_presentGame"             : "JS1:Customize_Action_Game_-_Present_Game"
         },
         "GameDesign" : {
-            "01_csw_homepage"         : "CSW:Setup_Your_Website",
-            "02_csw_homepage"         : "CSW:Design_Game_Scene",
-            "03_csw_homepage"         : "CSW:Make_Paper_Prototype",
-            "04_csw_homepage"         : "CSW:Create_Game_Art",
-            "05_csw_homepage"         : "CSW:Style_Website_with_CSS",
-            "06_csw_homepage"         : "CSW:Add_More_HTML_Pages",
-            "07_csw_homepage"         : "CSW:Present_Game_Concept",
-            "08_csw_homepage"         : "CSW:Get_Globey_Ready",
-            "09_createCanvas"         : "JS1:Build_Basic_Game_-_Create_Canvas",
-            "10_drawShape"            : "JS1:Build_Basic_Game_-_Draw_Shape",
-            "11_moveShape"            : "JS1:Build_Basic_Game_-_Move_Shape",
-            "12_controlShape"         : "JS1:Build_Basic_Game_-_Control_Shape",
-            "13_displayScore"         : "JS1:Build_Basic_Game_-_Display_Score",
-            "14_increaseScore"        : "JS1:Build_Basic_Game_-_Increase_Score",
-            "15_multipleCollectables" : "JS1:Build_Basic_Game_-_Multiple_Collectables",
-            "16_multipleEnemies"      : "JS1:Build_Basic_Game_-_Multiple_Enemies",
-            "17_addArtwork"           : "JS1:Customize_Action_Game_-_Add_Artwork",
-            "18_addSound"             : "JS1:Customize_Action_Game_-_Add_Sounds",
-            "19_addGameOver"          : "JS1:Customize_Action_Game_-_Add_Game_Over_Screen",
-            "20_extendScene"          : "JS1:Customize_Action_Game_-_Extend_Scene",
-            "21_addGoal"              : "JS1:Customize_Action_Game_-_Add_Goal_and_Victory_Screen",
-            "22_playtest"             : "JS1:Customize_Action_Game_-_Playtest",
-            "23_tuneGamePlay"         : "JS1:Customize_Action_Game_-_Tune_Game_Play",
-            "24_presentGame"          : "JS1:Customize_Action_Game_-_Present_Game"
+            "01_csw_homepage"             : "CSW:Setup_Your_Website",
+            "02_csw_homepage"             : "CSW:Design_Game_Scene",
+            "03_csw_homepage"             : "CSW:Make_Paper_Prototype",
+            "04_csw_homepage"             : "CSW:Create_Game_Art",
+            "05_csw_homepage"             : "CSW:Style_Website_with_CSS",
+            "06_csw_homepage"             : "CSW:Add_More_HTML_Pages",
+            "07_csw_homepage"             : "CSW:Present_Game_Concept",
+            "01_csg_createGamePage"       : "CSG:Create_Game_Page",
+            "02_csg_drawShape"            : "CSG:Draw_Shape",
+            "03_csg_moveShape"            : "CSG:Move_Shape",
+            "04_csg_controlShape"         : "CSG:Control_Shape",
+            "05_csg_displayScore"         : "CSG:Display_Score",
+            "06_csg_increaseScore"        : "CSG:Increase_Score",
+            "07_csg_multipleCollectables" : "CSG:Multiple_Collectables",
+            "08_csg_multipleEnemies"      : "CSG:Multiple_Enemies",
+            "09_csg_extendScene"          : "CSG:Extend_Scene",
+            "10_csg_addSound"             : "CSG:Add_Sounds",
+            "11_csg_addArtwork"           : "CSG:Add_Artwork",
+            "12_csg_addScreens"           : "CSG:Add_Game_Over_and_Victory_Screens",
+            "13_csg_backgroundMusic"      : "CSG:Background_Music",
+            "13_csg_healthBar"            : "CSG:Health_Bar",
+            "13_csg_keyboardControl"      : "CSG:Keyboard_Control",
+            "13_csg_animation"            : "CSG:Animation",
+            "13_csg_jumping"              : "CSG:Jumping",
+            "14_csg_playtest"             : "CSG:Playtest",
+            "15_csg_tuneGamePlay"         : "CSG:Tune_Game_Play"
         }
     };
 
@@ -127,7 +129,25 @@ define([
             "05_csw_homepage",
             "06_csw_homepage",
             "07_csw_homepage",
-            "08_csw_homepage"
+            "01_csg_createGamePage",
+            "02_csg_drawShape",
+            "03_csg_moveShape",
+            "04_csg_controlShape",
+            "05_csg_displayScore",
+            "06_csg_increaseScore",
+            "07_csg_multipleCollectables",
+            "08_csg_multipleEnemies",
+            "09_csg_extendScene",
+            "10_csg_addSound",
+            "11_csg_addArtwork",
+            "12_csg_addScreens",
+            "13_csg_backgroundMusic",
+            "13_csg_healthBar",
+            "13_csg_keyboardControl",
+            "13_csg_animation",
+            "13_csg_jumping",
+            "14_csg_playtest",
+            "15_csg_tuneGamePlay"
         ]
     };
 
@@ -221,8 +241,8 @@ define([
             navigationDiv.appendChild(reloadButton);
             navigationDiv.appendChild(newWindowButton);
 
-            // if (this.displayToggleBtn())
-            //     navigationDiv.appendChild(toggleWindowButton);
+            if (this.displayToggleBtn())
+                navigationDiv.appendChild(toggleWindowButton);
 
             return navigationDiv;
         },
