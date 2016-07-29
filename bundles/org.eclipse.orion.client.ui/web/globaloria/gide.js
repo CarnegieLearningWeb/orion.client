@@ -77,25 +77,25 @@ define([
             "06_csw_homepage"             : "CSW:Add_More_HTML_Pages",
             "07_csw_homepage"             : "CSW:Present_Game_Concept",
             "08_csw_homepage"             : "CSG:Your_Homepage",
-            "01_csg_createGamePage"       : "CSG:Create_Game_Page",
-            "02_csg_drawShape"            : "CSG:Draw_Shape",
-            "03_csg_moveShape"            : "CSG:Move_Shape",
-            "04_csg_controlShape"         : "CSG:Control_Shape",
-            "05_csg_displayScore"         : "CSG:Display_Score",
-            "06_csg_increaseScore"        : "CSG:Increase_Score",
-            "07_csg_multipleCollectables" : "CSG:Multiple_Collectables",
-            "08_csg_multipleEnemies"      : "CSG:Multiple_Enemies",
-            "09_csg_extendScene"          : "CSG:Extend_Scene",
-            "10_csg_addSound"             : "CSG:Add_Sounds",
-            "11_csg_addArtwork"           : "CSG:Add_Artwork",
-            "12_csg_addScreens"           : "CSG:Add_Game_Over_and_Victory_Screens",
-            "13_csg_backgroundMusic"      : "CSG:Background_Music",
-            "13_csg_healthBar"            : "CSG:Health_Bar",
-            "13_csg_keyboardControl"      : "CSG:Keyboard_Control",
-            "13_csg_animation"            : "CSG:Animation",
-            "13_csg_jumping"              : "CSG:Jumping",
-            "14_csg_playtest"             : "CSG:Playtest",
-            "15_csg_tuneGamePlay"         : "CSG:Tune_Game_Play"
+            "09_csg_createGamePage"       : "CSG:Create_Game_Page",
+            "10_csg_drawShape"            : "CSG:Draw_Shape",
+            "11_csg_moveShape"            : "CSG:Move_Shape",
+            "12_csg_controlShape"         : "CSG:Control_Shape",
+            "13_csg_displayScore"         : "CSG:Display_Score",
+            "14_csg_increaseScore"        : "CSG:Increase_Score",
+            "15_csg_multipleCollectables" : "CSG:Multiple_Collectables",
+            "16_csg_multipleEnemies"      : "CSG:Multiple_Enemies",
+            "17_csg_extendScene"          : "CSG:Extend_Scene",
+            "18_csg_addSound"             : "CSG:Add_Sounds",
+            "19_csg_addArtwork"           : "CSG:Add_Artwork",
+            "20_csg_addScreens"           : "CSG:Add_Game_Over_and_Victory_Screens",
+            "21_csg_backgroundMusic"      : "CSG:Background_Music",
+            "21_csg_healthBar"            : "CSG:Health_Bar",
+            "21_csg_keyboardControl"      : "CSG:Keyboard_Control",
+            "21_csg_animation"            : "CSG:Animation",
+            "21_csg_jumping"              : "CSG:Jumping",
+            "22_csg_playtest"             : "CSG:Playtest",
+            "23_csg_tuneGamePlay"         : "CSG:Tune_Game_Play"
         }
     };
 
@@ -292,19 +292,40 @@ define([
             // if it does, the next element will be the course folder.
             // Return that element
             var re = /-OrionContent/;
+            var courseName;
+
             for (var i = 0; i < hash.length; i++) {
                 if (hash[i].match(re)) {
-                    return hash[i+1];
+                    courseName = hash[i+1];
+
+                    if (this.nextLessonMapping[courseName]) {
+                        return courseName;
+                    } else {
+                        // Check if courseName exists. We have to have this check because
+                        // when we load Orion, this will be undefined and it will prevent
+                        // orion from loading
+                        if (this.courseExists(courseName)) {
+                            // Check if the courseName has a dash (-) in the name, if so,
+                            // return the right courseName with out the dash
+                            for (var key in this.nextLessonMapping) {
+                                if (courseName.indexOf(key) > -1)
+                                    return key;
+                            }
+                        }
+                    }
                 }
             }
         },
 
         displayToggleBtn: function() {
             var windowHash = window.location.hash;
-            var lessonName = this.getCurrentLessonFromURL(windowHash)
+            var lessonName = this.getCurrentLessonFromURL(windowHash);
             var courseName = this.getCourseName(windowHash);
 
-            return namespacingMapping[courseName].hasOwnProperty(lessonName) ? true: false;
+            if (namespacingMapping[courseName])
+                return namespacingMapping[courseName].hasOwnProperty(lessonName) ? true: false;
+
+            return false;
         },
 
         createHelpDiv: function(topicFullURL) {
@@ -350,83 +371,105 @@ define([
             instructionDiv.style.width  = "100%";
             instructionDiv.style.height = "100%";
 
-            var lessonTopicMapping = namespacingMapping[courseName];
+            // Check if the mapping exists first
+            if (this.courseExists(courseName)) {
+                var lessonTopicMapping = namespacingMapping[courseName];
 
-            // Only create help and topic links if this file contains a link to map to
-            if(lessonTopicMapping.hasOwnProperty(lessonName)) {
-                var topicBaseURL      = "https://myglife.org/mwiki/index.php/"
-                var topicFullURL      = topicBaseURL + lessonTopicMapping[lessonName];
+                // Only create help and topic links if this file contains a link to map to
+                if(lessonTopicMapping.hasOwnProperty(lessonName)) {
+                    var topicBaseURL      = "https://myglife.org/mwiki/index.php/"
+                    var topicFullURL      = topicBaseURL + lessonTopicMapping[lessonName];
 
-                // Grab reference of this because this will change context inside the ajax call
-                var _self = this;
+                    // Grab reference of this because this will change context inside the ajax call
+                    var _self = this;
 
-                // Make ajax call to get current lesson contents
-                $.ajax({
-                    method: 'GET',
-                    url: topicFullURL,
-                }).then(function(results) {
-                    // Replace all instance of an absolute path with a full url
-                    var re            = /"\/mwiki/gi;
-                    var updatedString = results.replace(re, '"https://myglife.org/mwiki');
+                    // Make ajax call to get current lesson contents
+                    $.ajax({
+                        method: 'GET',
+                        url: topicFullURL,
+                    }).then(function(results) {
+                        // Replace all instance of an absolute path with a full url
+                        var re            = /"\/mwiki/gi;
+                        var updatedString = results.replace(re, '"https://myglife.org/mwiki');
 
-                    // Create temp div child to create a searchable DOM element from
-                    // the html string we got back from ajax
-                    var tempDiv       = document.createElement('div');
-                    tempDiv.innerHTML = updatedString;
-                    var childNodes    = tempDiv.childNodes;
-                    var content       = $(childNodes).find('#exportContentToGIDE');
-                    
-                    // Link css styles to the content
-                    var link  = document.createElement('link');
-                    link.rel  = 'stylesheet';
-                    link.type = 'text/css';
-                    link.href = 'https://myglife.org/mwiki/skins/Globaloria/material.css';
+                        // Create temp div child to create a searchable DOM element from
+                        // the html string we got back from ajax
+                        var tempDiv       = document.createElement('div');
+                        tempDiv.innerHTML = updatedString;
+                        var childNodes    = tempDiv.childNodes;
+                        var content       = $(childNodes).find('#exportContentToGIDE');
 
+                        // Link css styles to the content
+                        var link  = document.createElement('link');
+                        link.rel  = 'stylesheet';
+                        link.type = 'text/css';
+                        link.href = 'https://myglife.org/mwiki/skins/Globaloria/material.css';
 
-                    // Link2 css styles to the content
-                    var link2  = document.createElement('link');
-                    link2.rel  = 'stylesheet';
-                    link2.type = 'text/css';
-                    link2.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+                        // Link2 css styles to the content
+                        var link2  = document.createElement('link');
+                        link2.rel  = 'stylesheet';
+                        link2.type = 'text/css';
+                        link2.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
 
-                    // Link3 css styles to the content
-                    var link3  = document.createElement('link');
-                    link3.rel  = 'stylesheet';
-                    link3.type = 'text/css';
-                    link3.href = 'https://myglife.org/mwiki/skins/Globaloria/components/common.less';
+                        // Link3 css styles to the content
+                        var link3  = document.createElement('link');
+                        link3.rel  = 'stylesheet';
+                        link3.type = 'text/css';
+                        link3.href = 'https://myglife.org/mwiki/skins/Globaloria/components/common.less';
 
-                    // Link4 css styles to the content
-                    var link4  = document.createElement('link');
-                    link4.rel  = 'stylesheet';
-                    link4.type = 'text/css';
-                    link4.href = 'https://myglife.org/mwiki/load.php?debug=false&lang=en&modules=ext.pygments%7Cext.uls.nojs%7Cmediawiki.legacy.commonPrint%2Cshared%7Cmediawiki.sectionAnchor%7Cmediawiki.skinning.interface%7Cskins.globaloria.styles%7Cskins.mdl.styles&only=styles&skin=globaloria';
+                        // Link4 css styles to the content
+                        var link4  = document.createElement('link');
+                        link4.rel  = 'stylesheet';
+                        link4.type = 'text/css';
+                        link4.href = 'https://myglife.org/mwiki/load.php?debug=false&lang=en&modules=ext.pygments%7Cext.uls.nojs%7Cmediawiki.legacy.commonPrint%2Cshared%7Cmediawiki.sectionAnchor%7Cmediawiki.skinning.interface%7Cskins.globaloria.styles%7Cskins.mdl.styles&only=styles&skin=globaloria';
 
-                    // Create new 'sticky' div for help and view topic buttons
-                    var helpDiv = _self.createHelpDiv(topicFullURL);
+                        // Create new 'sticky' div for help and view topic buttons
+                        var helpDiv = _self.createHelpDiv(topicFullURL);
 
-                    // instructionDiv.appendChild(link);
-                    instructionDiv.appendChild(link2);
-                    instructionDiv.appendChild(link3);
-                    instructionDiv.appendChild(link4);
-                    instructionDiv.appendChild(content[0]);
-                    instructionDiv.appendChild(helpDiv);
+                        // instructionDiv.appendChild(link);
+                        instructionDiv.appendChild(link2);
+                        instructionDiv.appendChild(link3);
+                        instructionDiv.appendChild(link4);
+                        instructionDiv.appendChild(content[0]);
+                        instructionDiv.appendChild(helpDiv);
 
-                    targetNode.appendChild(instructionDiv);
+                        targetNode.appendChild(instructionDiv);
 
-                    var mdlCards = $('.globaloria-mdl-card .mdl-card__title');
+                        var mdlCards = $('.globaloria-mdl-card .mdl-card__title');
 
-                    if (mdlCards.length > 0) {
-                            // Update the mdl cards to have padding top and bottom
-                        mdlCards.css({
-                            paddingTop: 15,
-                            paddingBottom: 15
-                        });
-                    }
-                },
-                function(results) {
-                    console.log('Error Loading AJAX Request Content');
-                    console.log(results);
-                });
+                        if (mdlCards.length > 0) {
+                                // Update the mdl cards to have padding top and bottom
+                            mdlCards.css({
+                                paddingTop: 15,
+                                paddingBottom: 15
+                            });
+                        }
+                    },
+                    function(results) {
+                        console.log('Error Loading AJAX Request Content');
+                        console.log(results);
+                    });
+                } else {
+                    var notFoundH1             = document.createElement('h1');
+                    notFoundH1.style.color     = '#ffffff';
+                    notFoundH1.style.textAlign = 'center';
+                    notFoundH1.innerHTML       = 'There was an error with the file you are trying to preview';
+
+                    var notFoundGif   = document.createElement('img');
+                    notFoundGif.src   = '../www404noHeader2.gif';
+                    notFoundGif.style.display = 'block';
+                    notFoundGif.style.marginLeft = 'auto';
+                    notFoundGif.style.marginRight = 'auto';
+                    notFoundGif.alt   = 'Sorry! Lesson not found';
+                    document.querySelector('.orionHTML').style.backgroundColor = '#004A80';
+
+                    var notFoundDiv = document.createElement('div');
+                    notFoundDiv.className = 'not-found-div';
+
+                    notFoundDiv.appendChild(notFoundH1);
+                    notFoundDiv.appendChild(notFoundGif);
+                    instructionDiv.appendChild(notFoundDiv);
+                }
 
             } else {
                 var notFoundH1             = document.createElement('h1');
@@ -459,6 +502,18 @@ define([
 
         addFileExtension: function(nextFilename, fileExt) {
             return nextFilename + '.' + fileExt;
+        },
+
+        courseExists: function(courseName) {
+            if (typeof courseName === 'undefined')
+                return false;
+
+            for (var key in this.nextLessonMapping) {
+                if (courseName.indexOf(key) > -1)
+                    return true;
+            }
+
+            return false;
         }
     }
 
