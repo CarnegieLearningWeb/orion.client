@@ -61,7 +61,7 @@ img {
 }
 
 .central {
-    padding-bottom: 200px;
+    // padding-bottom: 200px;
 }
 
 .header {
@@ -354,9 +354,9 @@ input::-ms-reveal {
 }
 
 .redirect-section {
-    margin-top: 50px;
+    margin-top: 40px;
     background-color: #ffffff;
-    padding: 50px
+    padding: 30px 40px
 }
 
 .orion-auth.in-progress .form-elements {
@@ -593,7 +593,7 @@ input::-ms-reveal {
 }
 
 .footer {
-    position:absolute;
+    position:relative;
     bottom: 0;
     height: 50px;
     text-align: center;
