@@ -124,6 +124,12 @@
 	-webkit-flex: 0 0 auto;
 }
 
+html[dir="rtl"] .mainToolbar .sectionWrapper { /* ACGC */
+	margin-right: 0;
+	margin-left: 10px;
+	float: right;
+}
+
 .mainToolbar .sectionWrapper.sectionOpened {
 	border-bottom-left-radius: 0;
 	border-bottom-right-radius: 0;
@@ -580,8 +586,13 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 }
 
 .gitListCell {
-	padding-top: 6px;
-	padding-bottom: 4px;
+	display: flex;
+	display: -ms-flexbox;
+	display: -webkit-flex;
+	align-items: center;
+	-webkit-align-items: center;		 		 /* Safari */
+	padding-top: 1px;
+	padding-bottom: 1px;
 	overflow: visible;
 }
 
@@ -950,6 +961,7 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 
 .git-sprite-branch-active{
 	padding-right:5px;
+	padding-bottom:5px;
 }
 
 .git-sprite-branch-active-tag{

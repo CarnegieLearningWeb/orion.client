@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2015 IBM Corporation and others.
+ * Copyright (c) 2010, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -21,8 +21,9 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 	'orion/editor/textTheme', //$NON-NLS-1$
 	'orion/editor/util', //$NON-NLS-1$
 	'orion/util', //$NON-NLS-1$
+	'orion/bidiUtils', //$NON-NLS-1$
 	'orion/metrics' //$NON-NLS-1$
-], function(messages, mTextModel, mKeyModes, mEventTarget, mTextTheme, textUtil, util, mMetrics) {
+], function(messages, mTextModel, mKeyModes, mEventTarget, mTextTheme, textUtil, util, bidiUtils, mMetrics) {
 
 	/** @private */
 	function getWindow(doc) {
@@ -695,7 +696,6 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				applyStyle(e.style, lineDiv, div);
 				if (div) { div._trim = null; }
 				lineDiv.viewStyle = e.style;
-				lineDiv.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-2$
 			}
 			lineDiv.lineIndex = lineIndex;
 			
@@ -852,12 +852,17 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 		_createRange: function(text, start, end, style, data) {
 			if (start > end) { return; }
 			var tabSize = this.view._customTabSize, range;
+			var bidiStyle = {tagName:"span", bidi:true, style:{unicodeBidi:"embed", direction:"ltr"}};
+			var bidiRange = {text: "\u200E", style: bidiStyle}; // We ensure segments flow from left to right by adding a LRM marker \u200E
 			if (tabSize && tabSize !== 8) {
 				var tabIndex = text.indexOf("\t", start); //$NON-NLS-1$
 				while (tabIndex !== -1 && tabIndex < end) {
 					if (start < tabIndex) {
 						range = {text: text.substring(start, tabIndex), style: style};
 						data.ranges.push(range);
+						if (bidiUtils.isBidiEnabled()) {
+							data.ranges.push(bidiRange);
+						}
 						data.tabOffset += range.text.length;
 					}
 					var spacesCount = tabSize - (data.tabOffset % tabSize);
@@ -869,6 +874,9 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 						}
 						range = {text: spaces, style: style, ignoreChars: spacesCount - 1};
 						data.ranges.push(range);
+						if (bidiUtils.isBidiEnabled()) {
+							data.ranges.push(bidiRange);
+						}
 						data.tabOffset += range.text.length;
 					}
 					start = tabIndex + 1;
@@ -881,6 +889,9 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			if (start <= end) {
 				range = {text: text.substring(start, end), style: style};
 				data.ranges.push(range);
+				if (bidiUtils.isBidiEnabled()) {
+					data.ranges.push(bidiRange);
+				}
 				data.tabOffset += range.text.length;
 			}
 		},
@@ -903,6 +914,8 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				child.ignore = true;
 			} else if (style && style.node) {
 				child.appendChild(style.node);
+				child.ignore = true;
+			} else if (style && style.bidi) {				
 				child.ignore = true;
 			}
 			applyStyle(style, child);
@@ -1574,8 +1587,18 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 					offsetInLine += step;
 					c = lineText.charCodeAt(offsetInLine);
 					// Handle Unicode surrogates
-					if (0xDC00 <= c && c <= 0xDFFF) {
-						if (offsetInLine > 0) {
+					if (offsetInLine > 0) {
+						if (0xDFFB <= c && c <= 0xDFFF) {
+							c = lineText.charCodeAt(offsetInLine - 1);
+							if (0xD83C === c) {
+								offsetInLine += step;
+								continue; // Skip skin tone modifiers
+							}
+						}
+						else if (0xFE00 <= c && c <= 0xFE0F) { // Skip variation selectors
+								continue;
+						}
+						else if (0xDC00 <= c && c <= 0xDFFF) {
 							c = lineText.charCodeAt(offsetInLine - 1);
 							if (0xD800 <= c && c <= 0xDBFF) {
 								offsetInLine += step;
@@ -3623,7 +3646,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 		},
 		_handleDblclick: function (e) {
 			if (this._ignoreEvent(e)) { return; }
-			var time = e.timeStamp ? e.timeStamp : new Date().getTime();
+			var time = e.timeStamp ? e.timeStamp : Date.now();
 			this._lastMouseTime = time;
 			if (this._clickCount !== 2) {
 				this._clickCount = 2;
@@ -4022,7 +4045,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			}
 
 			// For middle click we always need getTime(). See _getClipboardText().
-			var time = button !== 2 && e.timeStamp ? e.timeStamp : new Date().getTime();
+			var time = button !== 2 && e.timeStamp ? e.timeStamp : Date.now();
 			var timeDiff = time - this._lastMouseTime;
 			var deltaX = Math.abs(this._lastMouseX - e.clientX);
 			var deltaY = Math.abs(this._lastMouseY - e.clientY);
@@ -4486,7 +4509,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			}
 		},
 		_handleScroll: function () {
-			this._lastScrollTime = new Date().getTime();
+			this._lastScrollTime = Date.now();
 			var _scroll = this._getScroll(false);
 			var oldX = this._hScroll;
 			var oldY = this._vScroll;
@@ -5257,7 +5280,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			var result = this._getClipboardText(e, function(text) {
 				if (text.length) {
 					if (util.isLinux && that._lastMouseButton === 2) {
-						var timeDiff = new Date().getTime() - that._lastMouseTime;
+						var timeDiff = Date.now() - that._lastMouseTime;
 						if (timeDiff <= that._clickTime) {
 							that._setSelectionTo(that._lastMouseX, that._lastMouseY, true);
 						}
@@ -5332,7 +5355,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			return true;
 		},
 		_doTabMode: function () {
-			this._tabMode = !this._tabMode;
+			this.setOptions({tabMode: !this.getOptions("tabMode")}); //$NON-NLS-1$
 			return true;
 		},
 		_doWrapMode: function () {
@@ -5386,7 +5409,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			if (calculate) {
 				var c = 0;
 				var MAX_TIME = 100;
-				var start = new Date().getTime(), firstLine = 0;
+				var start = Date.now(), firstLine = 0;
 				while (i < lineCount) {
 					if (!this._lineHeight[i]) {
 						c++;
@@ -5394,7 +5417,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 						this._lineHeight[i] = this._calculateLineHeight(i);
 					}
 					i++;
-					if ((new Date().getTime() - start) > MAX_TIME) {
+					if ((Date.now() - start) > MAX_TIME) {
 						break;
 					}
 				}
@@ -5736,6 +5759,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			rootDiv.style.overflow = "hidden"; //$NON-NLS-1$
 			rootDiv.style.WebkitTextSizeAdjust = "100%"; //$NON-NLS-1$
 			rootDiv.setAttribute("role", "application"); //$NON-NLS-1$ //$NON-NLS-2$
+			rootDiv.setAttribute("aria-label", "Text View"); //$NON-NLS-1$
 			_parent.appendChild(rootDiv);
 			
 			var leftDiv = this._createRulerParent(doc, "textviewLeftRuler"); //$NON-NLS-1$
@@ -5862,14 +5886,13 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				(this._clipDiv || rootDiv).appendChild(overlayDiv);
 			}
 			clientDiv.contentEditable = "true"; //$NON-NLS-1$
-			clientDiv.setAttribute("role", "textbox"); //$NON-NLS-1$ //$NON-NLS-2$
-			clientDiv.setAttribute("aria-multiline", "true"); //$NON-NLS-1$ //$NON-NLS-2$
 			this._setWrapMode(this._wrapMode, true);
 			this._setReadOnly(this._readonly);
 			this._setThemeClass(this._themeClass, true);
 			this._setTabSize(this._tabSize, true);
 			this._setMarginOffset(this._marginOffset, true);
 			this._hookEvents();
+			bidiUtils.initInputField(clientDiv);
 			var rulers = this._rulers;
 			for (var i=0; i<rulers.length; i++) {
 				this._createRuler(rulers[i]);
@@ -6087,13 +6110,16 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				clipboardData = evt.clipboardData;
 			}
 			function convert(wholeText) {
-				var clipboadText = [];
-				convertDelimiter(wholeText, function(t) {clipboadText.push(t);}, null);
-				if (handler) { handler(clipboadText); }
-				return clipboadText;
+				var clipboardText = [];
+				convertDelimiter(wholeText, function(t) {clipboardText.push(t);}, null);
+				if (handler) { handler(clipboardText); }
+				return clipboardText;
 			}
 			if (clipboardData) {
 				return convert(clipboardData.getData(util.isIE ? "Text" : "text/plain")); //$NON-NLS-1$"//$NON-NLS-2$
+			}
+			if (util.isElectron && !evt) {
+				return convert(window.__electron.clipboard.readText());
 			}
 			if (util.isFirefox) {
 				this._ignoreFocus = true;
@@ -6358,7 +6384,13 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			handlers.push({target: clientDiv, type: "blur", handler: function(e) { return that._handleBlur(e ? e : win.event);}}); //$NON-NLS-1$
 			handlers.push({target: clientDiv, type: "focus", handler: function(e) { return that._handleFocus(e ? e : win.event);}}); //$NON-NLS-1$
 			handlers.push({target: viewDiv, type: "focus", handler: function() { clientDiv.focus(); }}); //$NON-NLS-1$
-			handlers.push({target: viewDiv, type: "scroll", handler: function(e) { return that._handleScroll(e ? e : win.event);}}); //$NON-NLS-1$
+			var textModel = that.getModel();
+			if(textModel && typeof textModel.deferScroll === "function") {//If textModel is extended to defer the scroll handler for segmental contents
+				var deferredHandler = textModel.deferScroll(that, that._handleScroll.bind(that));
+				handlers.push({target: viewDiv, type: "scroll", handler: function(e) { return deferredHandler(e ? e : win.event);}}); //$NON-NLS-0$
+			} else {
+				handlers.push({target: viewDiv, type: "scroll", handler: function(e) { return that._handleScroll(e ? e : win.event);}}); //$NON-NLS-1$
+			}
 			handlers.push({target: clientDiv, type: "textInput", handler: function(e) { return that._handleTextInput(e ? e : win.event); }}); //$NON-NLS-1$
 			handlers.push({target: clientDiv, type: "keydown", handler: function(e) { return that._handleKeyDown(e ? e : win.event);}}); //$NON-NLS-1$
 			handlers.push({target: clientDiv, type: "keypress", handler: function(e) { return that._handleKeyPress(e ? e : win.event);}}); //$NON-NLS-1$
@@ -6533,7 +6565,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			}	
 		},
 		_isOverOverlayScroll: function() {
-			var scrollShowing = new Date().getTime() - this._lastScrollTime < 200;
+			var scrollShowing = Date.now() - this._lastScrollTime < 200;
 			if (!scrollShowing) {
 				return {};
 			}
@@ -6813,6 +6845,10 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			if (pixelY) { viewDiv.scrollTop += pixelY; }
 		},
 		_setClipboardText: function (text, evt) {
+			if (util.isElectron && !evt) {
+				window.__electron.clipboard.writeText(text);
+				return true;
+			}
 			var clipboardText;
 			// IE
 			var win = this._getWindow();
@@ -6877,7 +6913,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 					return false;
 				}
 			}
-			/* no event and no permission, copy can not be done */
+			/* no event and no permission, copy cannot be done */
 			cleanup();
 			return true;
 		},
@@ -7099,7 +7135,6 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 		},
 		_setReadOnly: function (readOnly) {
 			this._readonly = readOnly;
-			this._clientDiv.setAttribute("aria-readonly", readOnly ? "true" : "false"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
 		},
 		_setSingleMode: function (singleMode, init) {
 			this._singleMode = singleMode;

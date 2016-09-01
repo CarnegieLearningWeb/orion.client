@@ -48,6 +48,7 @@ define({
 	"Paste": "Paste",
 	"Find": "Find...",
 	"noResponse": "No response from server. Check your internet connection and try again.",
+	"noResponseTimeout": "No response from server (timed out after ${0} seconds). Check your internet connection and try again.",
 	"savingFile": "Saving file ${0}",
 	"running": "Running ${0}",
 	"Saving..." : "Saving...",
@@ -84,6 +85,9 @@ define({
 	"Export": "Export",
 	"OpenWith": "Open With",
 	"OpenRelated": "Open Related",
+	"OpenFolder": "Open Folder",
+	"OpenRecent": "Open Recent",
+	"OpenFolderTip": "Change the root folder",
 	"Dependency": "Dependency",
 	"UnnamedCommand": "Unnamed",
 	"searchInFolder": "Folder Search...",
@@ -99,5 +103,9 @@ define({
 	"showProblems": "Show Problems...",
 	"showTooltip": "Show Tooltip",
 	"showTooltipTooltip": "Shows the tooltip immediately based on the caret position",
-	"emptyDeploymentInfoMessage": "Use the Launch Configurations dropdown to deploy this project"
+	"emptyDeploymentInfoMessage": "Use the Launch Configurations dropdown to deploy this project",
+	"Orion": "Orion",
+	"OK": "Ok",
+	"Format" : "Format Code",
+	"FormatTooltip":"Format editor contents"
 });

@@ -10,13 +10,16 @@
  *******************************************************************************/
 /*eslint-env node */
 var api = require('../api'), writeError = api.writeError;
+var args = require('../args');
 var async = require('async');
 var git = require('nodegit');
 var url = require('url');
 var tasks = require('../tasks');
 var clone = require('./clone');
+var mConfig = require('./config');
 var express = require('express');
 var bodyParser = require('body-parser');
+var util = require('./util');
 
 module.exports = {};
 
@@ -32,7 +35,7 @@ module.exports.router = function(options) {
 	.get('/file*', getRemotes)
 	.get('/:remoteName/file*', getRemotes)
 	.get('/:remoteName/:branchName/file*', getRemotes)
-	.delete('/:remoteName*', deleteRemote)
+	.delete('/:remoteName/file*', deleteRemote)
 	.post('/file*', addRemote)
 	.post('/:remoteName/file*', postRemote)
 	.post('/:remoteName/:branchName/file*', postRemote);
@@ -43,16 +46,16 @@ function remoteBranchJSON(remoteBranch, commit, remote, fileDir, branch){
 		fullName = remoteBranch.name();
 		shortName = remoteBranch.shorthand();
 		var branchName = shortName.replace(remote.name() + "/", "");
-		remoteURL = api.join(encodeURIComponent(remote.name()), encodeURIComponent(branchName));
+		remoteURL = api.join(util.encodeURIComponent(remote.name()), util.encodeURIComponent(branchName));
 	} else {// remote branch does not exists
 		shortName = api.join(remote.name(), branch.Name);
 		fullName = "refs/remotes/" + shortName;
-		remoteURL = api.join(encodeURIComponent(remote.name()), encodeURIComponent(branch.Name));
+		remoteURL = api.join(util.encodeURIComponent(remote.name()), util.encodeURIComponent(branch.Name));
 	}
 	return {
 		"CloneLocation": "/gitapi/clone" + fileDir,
-		"CommitLocation": "/gitapi/commit/" + encodeURIComponent(fullName) + fileDir,
-		"DiffLocation": "/gitapi/diff/" + encodeURIComponent(shortName) + fileDir,
+		"CommitLocation": "/gitapi/commit/" + util.encodeURIComponent(fullName) + fileDir,
+		"DiffLocation": "/gitapi/diff/" + util.encodeURIComponent(shortName) + fileDir,
 		"FullName": fullName,
 		"GitUrl": remote.url(),
 		"HeadLocation": "/gitapi/commit/HEAD" + fileDir,
@@ -60,7 +63,7 @@ function remoteBranchJSON(remoteBranch, commit, remote, fileDir, branch){
 		"IndexLocation": "/gitapi/index" + fileDir,
 		"Location": "/gitapi/remote/" + remoteURL + fileDir,
 		"Name": shortName,
-		"TreeLocation": "/gitapi/tree" + fileDir + "/" + encodeURIComponent(shortName),
+		"TreeLocation": "/gitapi/tree" + fileDir + "/" + util.encodeURIComponent(shortName),
 		"Type": "RemoteTrackingBranch"
 	};
 }
@@ -72,15 +75,15 @@ function remoteJSON(remote, fileDir, branches) {
 		"IsGerrit": false, // should check 
 		"GitUrl": remote.url(),
 		"Name": name,
-		"Location": "/gitapi/remote/" + encodeURIComponent(name) + fileDir,
+		"Location": "/gitapi/remote/" + util.encodeURIComponent(name) + fileDir,
 		"Type": "Remote",
 		"Children": branches
 	};
 }
 
 function getRemotes(req, res) {
-	var remoteName = decodeURIComponent(req.params.remoteName || "");
-	var branchName = decodeURIComponent(req.params.branchName || "");
+	var remoteName = util.decodeURIComponent(req.params.remoteName || "");
+	var branchName = util.decodeURIComponent(req.params.branchName || "");
 	var filter = req.query.filter;
 
 	var fileDir, theRepo, theRemote;
@@ -90,7 +93,7 @@ function getRemotes(req, res) {
 		return clone.getRepo(req)
 		.then(function(r) {
 			repo = r;
-			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			fileDir = clone.getfileDir(repo,req); 
 			return git.Remote.list(r);
 		})
 		.then(function(remotes){
@@ -114,36 +117,41 @@ function getRemotes(req, res) {
 		return clone.getRepo(req)
 		.then(function(repo) {
 			theRepo = repo;
-			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			fileDir = clone.getfileDir(repo,req); 
 			return repo.getRemote(remoteName);
 		})
 		.then(function(remote) {
 			theRemote = remote;
-			return theRepo.getReferences(git.Reference.TYPE.OID);
+			return git.Reference.list(theRepo);
 		})
 		.then(function(referenceList) {
-			var branches = [];
-			async.each(referenceList, function(ref,callback) {
-				if (ref.isRemote()) {
-					var rName = ref.shorthand();
-					if (rName.indexOf(remoteName) === 0 && (!filter || rName.indexOf(filter) !== -1)) {
-						theRepo.getBranchCommit(ref)
-						.then(function(commit) {
-							branches.push(remoteBranchJSON(ref, commit, theRemote, fileDir));
-							callback();
-						});
-					} else {
-						callback(); 
+			referenceList = referenceList.filter(function(ref) {
+				if (ref.indexOf("refs/remotes/") === 0) {
+					var shortname = ref.replace("refs/remotes/", "");
+					if (shortname.indexOf(remoteName) === 0 && (!filter || shortname.indexOf(filter) !== -1)) {
+						return true;
 					}
-				} else {
-					callback();
 				}
-
-			}, function(err) {
-				if (err) {
-					return writeError(403, res);
-				}
-				res.status(200).json(remoteJSON(theRemote, fileDir, branches));
+			});
+			return Promise.all(referenceList.map(function(ref) {
+				return git.Reference.lookup(theRepo, ref);
+			}))
+			.then(function(referenceList) {
+				var branches = [];
+				async.each(referenceList, function(ref, callback) {
+					theRepo.getBranchCommit(ref)
+					.then(function(commit) {
+						branches.push(remoteBranchJSON(ref, commit, theRemote, fileDir));
+						callback();
+					}).catch(function(err) {
+						callback(err);
+					});
+				}, function(err) {
+					if (err) {
+						return writeError(403, res);
+					}
+					res.status(200).json(remoteJSON(theRemote, fileDir, branches));
+				});
 			});
 		});
 	} 
@@ -153,7 +161,7 @@ function getRemotes(req, res) {
 		return clone.getRepo(req)
 		.then(function(repo) {
 			theRepo = repo;
-			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			fileDir = clone.getfileDir(repo,req); 
 			return repo.getRemote(remoteName);
 		})
 		.then(function(remote) {
@@ -175,28 +183,58 @@ function getRemotes(req, res) {
 }
 
 function addRemote(req, res) {
-	var fileDir;
+	var fileDir, repo;
 	
 	if (!req.body.Remote || !req.body.RemoteURI) {
 		return writeError(500, res);
 	}
 
-	// It appears that the java server does not let you add a remote if
-	// it doesn't have a protocol (it seems to check for a colon).
-	var parsedUrl = url.parse(req.body.RemoteURI, true);
-
-	if (!parsedUrl.protocol) {
-		writeError(403, res);
-	}
-
 	return clone.getRepo(req)
-	.then(function(repo) {
-		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+	.then(function(_repo) {
+		repo = _repo;
+		fileDir = clone.getfileDir(repo,req); 
 		return git.Remote.create(repo, req.body.Remote, req.body.RemoteURI);
 	})
 	.then(function(remote) {
-		res.status(201).json({
-			"Location": "/gitapi/remote/" + encodeURIComponent(remote.name()) + fileDir
+		var remoteName = remote ? remote.name() : req.body.Remote;
+		var configFile = api.join(repo.path(), "config");
+		function done () {
+			res.status(201).json({
+				"Location": "/gitapi/remote/" + util.encodeURIComponent(remoteName) + fileDir
+			});
+		}
+		args.readConfigFile(configFile, function(err, config) {
+			if (err) {
+				return done();
+			}
+			var remoteConfig = config.remote[remoteName] || (config.remote[remoteName] = {});
+			if (!remoteConfig.url) {
+				remoteConfig.url = req.body.RemoteURI;
+			}
+			if (!remoteConfig.fetch) remoteConfig.fetch = [];
+			if (!Array.isArray(remoteConfig.fetch)) remoteConfig.fetch = [remoteConfig.fetch];
+			if (req.body.IsGerrit) {
+				remoteConfig.fetch.push("+refs/heads/*:refs/remotes/%s/for/*".replace(/%s/g, remoteName));
+				remoteConfig.fetch.push("+refs/changes/*:refs/remotes/%s/*".replace(/%s/g, remoteName));
+			} else {
+				if (req.body.FetchRefSpec) {
+					remoteConfig.fetch.push(req.body.FetchRefSpec);
+				}
+			}
+			if (req.body.PushURI) {
+				remoteConfig.pushurl = req.body.PushURI;
+			}
+			if (!remoteConfig.push) remoteConfig.push = [];
+			if (!Array.isArray(remoteConfig.push)) remoteConfig.push = [remoteConfig.push];
+			if (req.body.PushRefSpec) {
+				remoteConfig.push.push(req.body.PushRefSpec);
+			}
+			args.writeConfigFile(configFile, config, function(err) {
+				if (err) {
+					// ignore errors
+				}
+				done();
+			});
 		});
 	})
 	.catch(function(err) {
@@ -206,41 +244,40 @@ function addRemote(req, res) {
 
 function postRemote(req, res) {
 	if (req.body.Fetch === "true") {
-		fetchRemote(req, res, decodeURIComponent(req.params.remoteName), decodeURIComponent(req.params.branchName || ""), req.body.Force);
-	} else if (req.body.PushSrcRef) {
-		pushRemote(req, res, decodeURIComponent(req.params.remoteName), decodeURIComponent(req.params.branchName || ""), req.body.PushSrcRef, req.body.PushTags, req.body.Force);
+		fetchRemote(req, res, util.decodeURIComponent(req.params.remoteName), util.decodeURIComponent(req.params.branchName || ""), req.body.Force);
+	} else if (typeof req.body.PushSrcRef === "string") {
+		pushRemote(req, res, util.decodeURIComponent(req.params.remoteName), util.decodeURIComponent(req.params.branchName || ""), req.body.PushSrcRef, req.body.PushTags, req.body.Force);
 	} else {
 		writeError(400, res);
 	}
 }
 
 function fetchRemote(req, res, remote, branch, force) {
-	var task = new tasks.Task(res);
+	var remoteObj;
+	var task = new tasks.Task(res, false, true, 0, true);
 	var repo;
 	return clone.getRepo(req)
 	.then(function(r) {
 		repo = r;
 		return git.Remote.lookup(repo, remote);
 	})
-	.then(function(remote) {
+	.then(function(r) {
+		remoteObj = r;
 		var refSpec = null;
 		if (branch) {
 			var remoteBranch = branch;
 			if (branch.indexOf("for/") === 0) {
 				remoteBranch = branch.substr(4);
 			}
-			refSpec = "refs/heads/" + remoteBranch + ":refs/remotes/" + remote.name() + "/" + branch;
+			refSpec = "refs/heads/" + remoteBranch + ":refs/remotes/" + remoteObj.name() + "/" + branch;
 			if (force) refSpec = "+" + refSpec;
 		}
 		
-		return remote.fetch(
+		return remoteObj.fetch(
 			refSpec ? [refSpec] : null,
-			{callbacks:
-				{
-					certificateCheck: function() {
-						return 1;
-					}
-				}
+			{
+				callbacks: clone.getRemoteCallbacks(req.body, task),
+				downloadTags: 3     // 3 = C.GIT_REMOTE_DOWNLOAD_TAGS_ALL (libgit2 const) 
 			},
 			"fetch"	
 		);
@@ -259,77 +296,59 @@ function fetchRemote(req, res, remote, branch, force) {
 		}
 	})
 	.catch(function(err) {
-		task.done({
-			HttpCode: 403,
-			Code: 0,
-			Message: err.message,
-			Severity: "Error"
-		});
+		clone.handleRemoteError(task, err, remoteObj.url());
 	});
 }
 
 function pushRemote(req, res, remote, branch, pushSrcRef, tags, force) {
 	var repo;
 	var remoteObj;
-
-	var task = new tasks.Task(res, false, false, 0);//TODO start task right away to work around bug in client code
-
+	
+	//TODO disable pushing tags
+	tags = false;
+	
+	var task = new tasks.Task(res, false, true, 0 ,true);	
 	return clone.getRepo(req)
 	.then(function(r) {
 		repo = r;
-		return git.Remote.lookup(repo, remote);
+		var work = [git.Remote.lookup(repo, remote)];
+		if (tags) work.push(git.Reference.list(repo));
+		return Promise.all(work);
 	})
 	.then(function(r) {
-		remoteObj = r;
-		return repo.getReference(pushSrcRef);
-	})
-	.then(function(ref) {
-
-		if (!req.body.GitSshUsername || !req.body.GitSshPassword) {
-			throw new Error(remoteObj.url() + ": not authorized");
-		}
-
+		remoteObj = r[0];
 		var pushToGerrit = branch.indexOf("for/") === 0;
-		var refSpec = ref.name() + ":" + (pushToGerrit ? "refs/" : "refs/heads/") + branch;
-
+		var refSpec = pushSrcRef + ":" + (pushToGerrit ? "refs/" : "refs/heads/") + branch;
 		if (force) refSpec = "+" + refSpec;
-
+		var refSpecs = [];
+		refSpecs.push(refSpec);
+		if(tags){
+			r[1].forEach(function(ref) {
+				if (ref.indexOf("refs/tags/") === 0) {
+					refSpecs.push(ref + ":" + ref);
+				}			
+			});
+		}
 		return remoteObj.push(
-			tags && false ? [refSpec, "refs/tags/*:refs/tags/*"] : [refSpec],
-			{callbacks: {
-				certificateCheck: function() {
-					return 1; // Continues connection even if SSL certificate check fails. 
-				},
-				credentials: function() {
-					return git.Cred.userpassPlaintextNew(
-						req.body.GitSshUsername,
-						req.body.GitSshPassword
-					);
-				}
-			}}
+			refSpecs, {callbacks: clone.getRemoteCallbacks(req.body, task)}
 		);
 	})
 	.then(function(err) {
 		if (!err) {
-			var parsedUrl = url.parse(remoteObj.url(), true);
 			task.done({
 				HttpCode: 200,
 				Code: 0,
 				DetailedMessage: "OK",
+				Message: "OK",
 				JsonData: {
-					"Host": parsedUrl.host,
-					"Scheme": parsedUrl.protocol.replace(":", ""),
-					"Url": remoteObj.url(),
-					"HumanishName": parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf("/") + 1).replace(".git", ""),
-					"Message": "",
-					"Severity": "Normal",
+					Message: "",
+					Severity: "Ok",
 					Updates: [{
 						LocalName: req.body.PushSrcRef,
 						RemoteName: remote + "/" + branch,
 						Result: "UP_TO_DATE"
 					}]
 				},
-				Message: "OK",
 				Severity: "Ok"
 			});
 		} else {
@@ -337,36 +356,32 @@ function pushRemote(req, res, remote, branch, pushSrcRef, tags, force) {
 		}
 	})
 	.catch(function(err) {
-		var parsedUrl = url.parse(remoteObj.url(), true);
-		task.done({
-			HttpCode: 401,
-			Code: 0,
-			DetailedMessage: err.message,
-			JsonData: {
-				"Host": parsedUrl.host,
-				"Scheme": parsedUrl.protocol.replace(":", ""),
-				"Url": remoteObj.url(),
-				"HumanishName": parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf("/") + 1).replace(".git", "")
-			},
-			Message: err.message,
-			Severity: "Error"
-		});
+		clone.handleRemoteError(task, err, remoteObj.url());
 	});
 }
 
 function deleteRemote(req, res) {
-	var remoteName = decodeURIComponent(req.params.remoteName);
-	return clone.getRepo(req)
+	var remoteName = util.decodeURIComponent(req.params.remoteName);
+	clone.getRepo(req)
 	.then(function(repo) {
-		return git.Remote.delete(repo, remoteName).then(function(resp) {
-			if (!resp) {
-				res.status(200).end();
-			} else {
-				writeError(403, res);
+		var configFile = api.join(repo.path(), "config");
+		args.readConfigFile(configFile, function(err, config) {
+			if (err) {
+				return writeError(403, res, err.message);
 			}
-		}).catch(function(error) {
-			writeError(500, error);
+			if (config.remote && config.remote[remoteName]) {
+				delete config.remote[remoteName];
+				args.writeConfigFile(configFile, config, function(err) {
+					if (err) {
+						return writeError(403, res, err.message);
+					}
+					res.status(200).end();
+				});
+			}
 		});
+	})
+	.catch(function(err) {
+		return writeError(400, res, err.message);
 	});
 }
 };

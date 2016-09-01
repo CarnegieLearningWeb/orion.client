@@ -391,8 +391,9 @@ var exports = {};
 					remoteLocation = item.Location;
 				}
 				
-				if (data.parameters.valueFor("name") && data.parameters.valueFor("url")) { //$NON-NLS-1$ //$NON-NLS-0$
-					createRemoteFunction(remoteLocation, data.parameters.valueFor("name"), data.parameters.valueFor("url"),  data.parameters.valueFor("isGerrit")); //$NON-NLS-1$ //$NON-NLS-0$
+				var remoteUrl = data.parameters.valueFor("url").replace(/^git clone /, "");
+				if (data.parameters.valueFor("name") && remoteUrl) { //$NON-NLS-1$ //$NON-NLS-0$
+					createRemoteFunction(remoteLocation, data.parameters.valueFor("name"), remoteUrl,  data.parameters.valueFor("isGerrit")); //$NON-NLS-1$ //$NON-NLS-0$
 				}
 			},
 			visibleWhen: function(item) {
@@ -1132,8 +1133,11 @@ var exports = {};
 		});
 		commandService.addCommand(undoCommand);
 		
-		var tagNameParameters = new mCommandRegistry.ParametersDescription([new mCommandRegistry.CommandParameter('name', 'text', messages['Name:'])]); //$NON-NLS-1$ //$NON-NLS-0$
-
+		var tagNameParameters = new mCommandRegistry.ParametersDescription([
+			new mCommandRegistry.CommandParameter('name', 'text', messages['Name:']), //$NON-NLS-1$ //$NON-NLS-0$
+			new mCommandRegistry.CommandParameter('annotated', 'boolean', messages['Annotated'], true) //$NON-NLS-1$ //$NON-NLS-0$
+		]); //$NON-NLS-1$ //$NON-NLS-0$
+			
 		var addTagCommand = new mCommands.Command({
 			name : messages["Tag"],
 			tooltip: messages["Create a tag for the commit"],
@@ -1144,10 +1148,10 @@ var exports = {};
 			callback: function(data) {
 				var item = data.items;
 				
-				var createTagFunction = function(commitLocation, tagName) {
+				var createTagFunction = function(commitLocation, tagName, isAnnotated) {
 					var progress = serviceRegistry.getService("orion.page.progress"); //$NON-NLS-0$
 					var msg = i18nUtil.formatMessage(messages["Adding tag {$0}"], tagName);
-					progress.progress(serviceRegistry.getService("orion.git.provider").doAddTag(commitLocation, tagName), msg).then(function() { //$NON-NLS-0$
+					progress.progress(serviceRegistry.getService("orion.git.provider").doAddTag(commitLocation, tagName, isAnnotated), msg).then(function() { //$NON-NLS-0$
 						dispatchModelEventOn({type: "modelChanged", action: "addTag", commit: item, tag: tagName}); //$NON-NLS-1$ //$NON-NLS-0$
 					}, displayErrorOnStatus);
 				};
@@ -1155,7 +1159,7 @@ var exports = {};
 				var commitLocation = item.Location;
 				
 				if (data.parameters.valueFor("name") && !data.parameters.optionsRequested) { //$NON-NLS-0$
-					createTagFunction(commitLocation, data.parameters.valueFor("name")); //$NON-NLS-0$
+					createTagFunction(commitLocation, data.parameters.valueFor("name"), data.parameters.valueFor("annotated")); //$NON-NLS-0$
 				}
 			},
 			visibleWhen : function(item) {
@@ -1172,7 +1176,7 @@ var exports = {};
 			callback: function(data) {
 				var item = data.items;
 				var itemName = item.Name;
-				if (bidiUtils.isBidiEnabled) {
+				if (bidiUtils.isBidiEnabled()) {
 					itemName = bidiUtils.enforceTextDirWithUcc(itemName);
 				}
 				if (confirm(i18nUtil.formatMessage(messages["Are you sure you want to delete tag ${0}?"], itemName))) {
@@ -1644,13 +1648,14 @@ var exports = {};
 					});
 				});
 			};
-			if (data.parameters.valueFor("url") && !data.parameters.optionsRequested) { //$NON-NLS-0$
-				cloneFunction(data.parameters.valueFor("url")); //$NON-NLS-0$
+			var url = data.parameters.valueFor("url").replace(/^git clone /, ""); //$NON-NLS-0$
+			if (url && !data.parameters.optionsRequested) {
+				cloneFunction(url); //$NON-NLS-0$
 			} else {
 				var dialog = new mCloneGitRepository.CloneGitRepositoryDialog({
 					serviceRegistry: serviceRegistry,
 					fileClient: fileClient,
-					url: data.parameters.valueFor("url"), //$NON-NLS-0$
+					url: url,
 					alwaysShowAdvanced: data.parameters.optionsRequested,
 					func: cloneFunction,
 					showSubmoduleOptions:true

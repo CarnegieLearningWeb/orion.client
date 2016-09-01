@@ -10,7 +10,7 @@
  *******************************************************************************/
 /*eslint-env node*/
 'use strict'
-var debug = require('Debug')('orion:prefs');
+var debug = require('debug')('orion:prefs');
 
 module.exports = Prefs;
 
@@ -53,6 +53,7 @@ Prefs.prototype.set = function(path, node) {
 	var segs = path.substr(1).split('/'); // substr(1) to strip leading slash
 	if (segs[0] === '') {
 		this.json = node;
+		debug('Prefs.set(%s) := %s', path, JSON.stringify(node));
 		return;
 	}
 
@@ -70,6 +71,7 @@ Prefs.prototype.set = function(path, node) {
 	} else {
 		obj[finalSeg] = node;
 	}
+	debug('Prefs.set(%s) := %s', path, JSON.stringify(node));
 	this.isModified = true;
 };
 Prefs.prototype.delete = function(path) {

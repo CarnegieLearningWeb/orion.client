@@ -9,9 +9,8 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-
+var fileUtil = require('./fileUtil');
 var express = require('express');
-var url = require('url');
 
 // Handle optional nodegit dependency
 var hasNodegit = true;
@@ -28,9 +27,15 @@ try {
 	var blame = require('./git/blame');
 	var diff = require('./git/diff');
 	var submodule = require('./git/submodule');
+	var tree = require('./git/tree');
+	var pullrequest = require('./git/pullrequest');
+	var gitFileDecorator = require('./git/gitfiledecorator').gitFileDecorator;
 } catch (e) {
+	hasNodegit = false;
 	if (e.code === "MODULE_NOT_FOUND" && e.message.indexOf("nodegit") >= 0) {
-		hasNodegit = false;
+		console.error("nodegit is not installed. Some features will be unavailable.");
+	} else {
+		console.error("nodegit failed to load. " + e.message);
 	}
 }
 
@@ -41,7 +46,14 @@ if (hasNodegit) {
 }
 
 function Nothing() {
-	return express(); 
+	var router = express.Router();
+	router.use(/* @callback */ function(req, res) {
+		res.status(404).json({
+			Severity: "Error",
+			Message: "Nodegit not installed."
+		});
+	});
+	return router;
 }
 
 function Git(options) {
@@ -64,6 +76,8 @@ function Git(options) {
 	router.use("/stash", stash.router(options));
 	router.use("/diff", diff.router(options));
 	router.use("/submodule", submodule.router(options));
-
+	router.use("/tree", tree.router(options));
+	router.use("/pullRequest", pullrequest.router(options));
+	fileUtil.addDecorator(gitFileDecorator);
 	return router;
 }

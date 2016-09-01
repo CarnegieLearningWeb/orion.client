@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2015 IBM Corporation and others.
+ * Copyright (c) 2010, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -285,6 +285,25 @@ define(["orion/Deferred", "orion/xhr", "orion/URL-shim", "orion/operation", "ori
 			}.bind(this));
 		},
 		
+		changeWorkspace: function(loc) {
+			return _xhr("PUT", this.workspaceBase, {
+				headers: {
+					"Orion-Version": "1",
+					"Content-Type": "application/json;charset=UTF-8"
+				},
+				timeout: 15000,
+				data: JSON.stringify({Location: loc})
+			}).then(function(result) {
+				var jsonData = result.response ? JSON.parse(result.response) : {};
+				return jsonData.Workspaces;
+			}).then(function(result) {
+				if (this.makeAbsolute) {
+					_normalizeLocations(result);
+				}
+				return result;
+			}.bind(this));
+		},
+		
 		/**
 		 * Adds a project to a workspace.
 		 * @param {String} loc The workspace location
@@ -463,31 +482,50 @@ define(["orion/Deferred", "orion/xhr", "orion/URL-shim", "orion/operation", "ori
 		 *   otherwise file contents are returned
 		 * @return A deferred that will be provided with the contents or metadata when available
 		 */
-		read: function(loc, isMetadata, acceptPatch) {
+		read: function(loc, isMetadata, acceptPatch, options) {
 			var url = new URL(loc, self.location);
 			if (isMetadata) {
-				url.query.set("parts", "meta");
+				if (options && options.parts !== undefined) {
+					url.query.set("parts", options.parts);
+				} else {
+					url.query.set("parts", "meta");
+				}
 			}
-			return _xhr("GET", url.href, {
-				timeout: 15000,
-				headers: { "Orion-Version": "1" },
-				log: false
-			}).then(function(result) {
+			if (options && options.startLine !== undefined) {
+				url.query.set("start", options.startLine.toString());
+			}
+			if (options && options.pageSize !== undefined) {
+				url.query.set("count", options.pageSize.toString());
+			}
+			var timeout = options && options.timeout ? options.timeout : 15000,
+				opts = {
+					timeout: timeout,
+					headers: {
+						"Orion-Version": "1",
+						"Accept": "application/json, *.*"
+					},
+					log: false
+				};
+			if(options && typeof options.readIfExists === 'boolean') {
+				opts.headers["read-if-exists"] = Boolean(options.readIfExists).toString();
+			}
+			return _xhr("GET", url.href, opts).then(function(result) {
 				if (isMetadata) {
 					var r = result.response ? JSON.parse(result.response) : null;
 					if (url.query.get("tree") === "compressed") {
 						expandLocations(r);
 					}
 					return r;
-				} else {
-					if (acceptPatch) {
-						return {result: result.response, acceptPatch: result.xhr.getResponseHeader("Accept-Patch")};
-					} else {
-						return result.response;
-					}
 				}
+				if(result.xhr.status === 204) {
+					return null;
+				}
+				if (acceptPatch) {
+					return {result: result.response, acceptPatch: result.xhr.getResponseHeader("Accept-Patch")};
+				} 
+				return result.response;
 			}).then(function(result) {
-				if (this.makeAbsolute) {
+				if (this.makeAbsolute && result) { //can be null on 204
 					_normalizeLocations(acceptPatch ? result.result : result);
 				}
 				return result;
@@ -596,7 +634,25 @@ define(["orion/Deferred", "orion/xhr", "orion/URL-shim", "orion/operation", "ori
 				return result;
 			}.bind(this));
 		},
-		
+		/**
+		 * Find a string inside a file
+		 *
+		 * @param {String} sourceLocation The location of the folder to export from
+		 * @param {String} findStr The string to search
+		 * @public
+		 * @return {Deferred} A deferred for chaining events after the export completes
+		 */		
+		find: function(sourceLocation, findStr, option) {
+			var url = new URL(sourceLocation, self.location);
+			url.query.set("findStr", findStr);
+			return _xhr("GET", url.href,{
+				timeout: 120000,
+				headers: {"Orion-Version": "1"},
+				log: false
+			}).then(function(result) {
+				return result.response ? JSON.parse(result.response) : null;
+			}.bind(this));			
+		},
 		/**
 		 * Performs a search with the given search parameters.
 		 * @param {Object} searchParams The JSON object that describes all the search parameters.
@@ -631,7 +687,7 @@ define(["orion/Deferred", "orion/xhr", "orion/URL-shim", "orion/operation", "ori
 	
 	function _handleError(error) {
 		var errorMessage = "Unknown Error";
-		if(error.status && error.status === 404) {
+		if(error.status && (error.status === 404 || error.status === 410)) {
 			errorMessage = "File not found.";
 		} else if (error.xhr && error.xhr.statusText){
 			errorMessage = error.xhr.statusText;

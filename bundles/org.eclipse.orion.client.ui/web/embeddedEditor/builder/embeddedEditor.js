@@ -16,8 +16,11 @@ define([
 	'orion/editorCommands',
 	'embeddedEditor/helper/bootstrap',
 	'embeddedEditor/helper/editorSetup',
+	'embeddedEditor/helper/memoryFileSysConst',
 	'orion/serviceregistry',
 	'orion/Deferred',
+	'orion/commonPreferences',
+	'orion/defaultEditorPreferences',
 	'orion/objects'
 ], function(
 	mCommandRegistry,
@@ -26,8 +29,11 @@ define([
 	mEditorCommands,
 	mBootstrap,
 	mEditorSetup,
+	memoryFileSysConst,
 	mServiceRegistry, 
 	Deferred,
+	mCommonPreferences,
+	mDefaultEditorPreferences,
 	objects
 ) {
 	function CodeEdit(options) {
@@ -35,6 +41,7 @@ define([
 		this.contentTypeRegistry = new mContentTypes.ContentTypeRegistry(this.serviceRegistry);
 		this._startupOptions = options;
 		this._toolbarId = options && options.toolbarId ? options.toolbarId : "__code__edit__hidden__toolbar";
+		this.Deferred = Deferred;
 	}
 	var once;
 	objects.mixin(CodeEdit.prototype, {
@@ -60,6 +67,8 @@ define([
 				toolbarId: this._toolbarId,
 				navToolbarId: this._toolbarId
 			});
+			this._editorConfig = this._startupOptions && this._startupOptions.editorConfig ? this._startupOptions.editorConfig : {};
+			mCommonPreferences.mergeSettings(mDefaultEditorPreferences.defaults, this._editorConfig);
 			this._progressService = {
 				progress: function(deferred/*, operationName, progressMonitor*/){
 					return deferred;
@@ -86,15 +95,18 @@ define([
 		 * @property {String} [contentType] the type of the content (eg.- application/javascript, text/html, etc.)
 		 */
 		/**
-		 * Creates an editorview instance configured with the given options.
+		 * If options is defined, creates an editorview instance configured with the given options. Otherwise load all the plugins nad initialize the widegt.
 		 * 
 		 * @param {orion.editor.EditOptions} options the editor options.
 		 */
-		create: function(options) {
+		startup: function(options) {
 			return mBootstrap.startup(this.serviceRegistry, this.contentTypeRegistry, this._startupOptions).then(function(core) {
 				var serviceRegistry = core.serviceRegistry;
 				var pluginRegistry = core.pluginRegistry;
 				return this._init(core).then( function () {
+					if(!options) {
+						return new Deferred().resolve(core);
+					}
 					var editorHelper = new mEditorSetup.EditorSetupHelper({
 						serviceRegistry: serviceRegistry,
 						pluginRegistry: pluginRegistry,
@@ -102,6 +114,7 @@ define([
 						fileClient: this._fileClient,
 						contentTypeRegistry: this.contentTypeRegistry,
 						editorCommands: this._editorCommands,
+						editorConfig: this._editorConfig,
 						progressService: this._progressService,
 						toolbarId: this._toolbarId
 					});
@@ -109,7 +122,54 @@ define([
 		 		}.bind(this));
 
 			}.bind(this));
+		},
+		/**
+		 * @class This object describes the options for <code>create</code>.
+		 * @name orion.editor.EditOptions
+		 *
+		 * @property {String|DOMElement} parent the parent element for the view, it can be either a DOM element or an ID for a DOM element.
+		 * @property {String} [contents=""] the editor contents.
+		 * @property {String} [contentType] the type of the content (eg.- application/javascript, text/html, etc.)
+		 */
+		/**
+		 * Creates an editorview instance configured with the given options.
+		 * 
+		 * @param {orion.editor.EditOptions} options the editor options.
+		 */
+		create: function(options) {
+			return this.startup(options);
+		},
+		importFiles: function(files2import) {
+			var fileClient = this.serviceRegistry.getService("orion.core.file.client");
+			var promises = [];
+			if(fileClient) {
+				files2import.forEach(function(file) {
+					var promise = fileClient.createFile(file.parentLocation ? file.parentLocation : memoryFileSysConst.MEMORY_FILE_PROJECT_PATTERN, file.name).then(function(result){
+						return fileClient.write(result.Location, file.contents);
+					});
+					promises.push(promise);			
+				});
+			}
+			return Deferred.all(promises);
+		},
+		exportFiles: function(files2export) {
+			var fileClient = this.serviceRegistry.getService("orion.core.file.client");
+			var promises = [];
+			if(fileClient) {
+				files2export.forEach(function(file) {
+					var promise;
+					if(file.name || file.location) {
+						var readLocation = file.location ? file.location : memoryFileSysConst.MEMORY_FILE_PROJECT_PATTERN + file.name;
+						promise = fileClient.read(readLocation);
+					} else {
+						promise = new Deferred().resolve("");
+					}
+					promises.push(promise);			
+				});
+			}
+			return Deferred.all(promises);
 		}
 	});
+	
 	return CodeEdit;
 });

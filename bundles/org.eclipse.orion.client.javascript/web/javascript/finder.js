@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2015 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -14,11 +14,6 @@ define([
 'estraverse/estraverse',
 'eslint/conf/environments'
 ], function(Estraverse, ESlintEnv) {
-	
-	if(!Estraverse.VisitorKeys.RecoveredNode) {
-		///do not visit the recovered node. If called from the worker this will not be set
-    	Estraverse.VisitorKeys.RecoveredNode = [];
-	}
 	
 	var Finder = {
 		
@@ -88,13 +83,20 @@ define([
 					 * start visiting an AST node
 					 */
 					enter: function(node) {
+						//only check nodes that are typed, we don't care about any others
 						if(node.type && node.range) {
 							if(!next && node.type === Estraverse.Syntax.Program && offset < node.range[0]) {
 								//https://bugs.eclipse.org/bugs/show_bug.cgi?id=447454
 								return Estraverse.VisitorOption.Break;
 							}
-							//only check nodes that are typed, we don't care about any others
-							if(node.range[0] <= offset) {
+							// Class and method declarations count offsets including the curly braces {} Bug 494484
+							// When offset is touching both identifier and body, we want finder to return the identifier
+							var bracesIncluded = false;							
+							if (node.range[0] === offset && found && found.range[1] === offset && node.type === 'ClassBody' || node.type === 'FunctionExpression' && found && found.type === 'Identifier'){
+								bracesIncluded = true;
+							}
+
+							if((!bracesIncluded && node.range[0] <= offset) || (bracesIncluded && node.range[0] < offset) ){
 								found = node;
 								if(parents) {
 									parents.push(node);
@@ -446,7 +448,7 @@ define([
 		 * @description Find the directive comment with the given name in the given AST
 		 * @function
 		 * @param {Object} ast The AST to search
-		 * @param {String} name The name of the fdirective to look for. e.g. eslint-env
+		 * @param {String} name The name of the directive to look for. e.g. eslint-env
 		 * @returns {Object} The AST comment node or <code>null</code>
 		 * @since 8.0
 		 */
@@ -533,7 +535,94 @@ define([
 				}
 			}
 			return null;
-		} 
+		},
+		
+		/**
+		 * @description Computes the kind of context to complete in
+		 * @param {Object} ast The backing AST to visit
+		 * @param {Number} offset The offset into the source
+		 * @return {Object} Returns the deferred node and the completion kind
+		 * @since 12.0
+		 */
+		findCompletionKind: function findCompletionKind(ast, offset) {
+	    	var node = this.findNode(offset, ast, {parents:true});
+	    	if(node) {
+	    		if(node.type === 'Literal') {
+	    			switch(typeof node.value) {
+	    				case 'boolean':
+	    				case 'number': {
+	    					if(offset > node.range[0] && offset <= node.range[1]) {
+		    					return {kind: 'unknown'};
+	    					}
+	    					break;
+	    				}
+	    				case 'string': {
+	    					if(offset > node.range[0] && offset < node.range[1]) {
+		    					return {kind: 'string'};
+	    					}
+	    					break;
+	    				}
+	    				case 'object': {
+	    					if(node.regex && offset > node.range[0] && offset <= node.range[1]) {
+		    					return {kind: 'regex'};
+							}
+							break;
+	    				}
+	    			}
+	    		}
+	    		if(node.parents && node.parents.length > 0) {
+		    		var prent = node.parents.pop();
+		    		switch(prent.type) {
+							case 'MemberExpression':
+								return { kind : 'member'}; //$NON-NLS-1$
+							case 'Program':
+							case 'BlockStatement':
+								break;
+							case 'VariableDeclarator':
+								if(!prent.init || offset < prent.init.range[0]) {
+									return {kind: 'unknown'};
+								}
+								break;
+							case 'FunctionDeclaration':
+							case 'FunctionExpression':
+								if(offset < prent.body.range[0]) {
+									return {kind: 'unknown'};
+								}
+								break;
+							case 'Property':
+								if(offset-1 >= prent.value.range[0] && offset-1 <= prent.value.range[1]) {
+									return { kind : 'prop'}; //$NON-NLS-1$
+								}
+								return {kind: 'unknown'};
+							case 'SwitchStatement':
+								return {kind: 'swtch'}; //$NON-NLS-1$
+						}
+				}
+	    	}
+	    	node = Finder.findComment(offset, ast);
+	    	if(node) {
+	    		return {kind: 'doc', node: node}; //$NON-NLS-1$
+	    	}
+			return {kind:'top'}; //$NON-NLS-1$
+		},
+		/**
+		 * @description Returns the templates that apply to the given completion kind
+		 * @public
+		 * @param {Array.<Object>} templates The array of template objects to search
+		 * @param {String} kind The kind of the completion
+		 * @returns {Array} The array of templates that apply to the given completion kind
+		 * @since 12.0
+		 */
+		findTemplatesForKind: function findTemplatesForKind(templates, kind, ecma) {
+			var tmplates = [];
+			for(var i = 0, len = templates.length; i < len; i++) {
+				var template = templates[i];
+				if(template.nodes && template.nodes[kind] && (template.ecma <= ecma || template.ecma === undefined)) {
+					tmplates.push(template);
+				}
+			}
+			return tmplates;
+		}
 	};
 
 	return Finder;

@@ -52,8 +52,7 @@ function postSubmodule(req, res) {
 			if (req.body.Path) {
 				path = api.join(req.user.workspaceDir, req.body.Path.slice(1)).substring(repo.workdir());
 			} else if (req.body.Location) {
-				//TODO make unique
-				path = url.substring(url.lastIndexOf("/") + 1).replace(".git", "");
+				path = clone.getUniqueFileName(req.user.workspaceDir, url.substring(url.lastIndexOf("/") + 1).replace(".git", ""));
 			}
 		}
 		return git.Submodule.addSetup(repo, url, path, 1)
@@ -117,18 +116,17 @@ function deleteSubmodule(req, res) {
 								fileUtil.rumRuff(subrepo.workdir(), function(err) {
 									if (err) return reject(err);
 									var index;
-									return repo.openIndex()
+									return repo.refreshIndex()
 									.then(function(indexResult) {
 										index = indexResult;
-										return index.read(1);
-									})
-									.then(function() {
+										var work = [];
 										if (Object.keys(config).length) {
-											index.addByPath(".gitmodules");
+											work.push(index.addByPath(".gitmodules"));
 										} else {
-											index.removeByPath(".gitmodules");
+											work.push(index.removeByPath(".gitmodules"));
 										}
-										index.removeByPath(submodulePath);
+										work.push(index.removeByPath(submodulePath));
+										return Promise.all(work);
 									})
 									.then(function() {
 										return index.write();

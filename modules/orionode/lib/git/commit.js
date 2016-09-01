@@ -20,6 +20,10 @@ var crypto = require('crypto');
 var async = require('async');
 var express = require('express');
 var bodyParser = require('body-parser');
+var util = require('./util');
+var remotes = require('./remotes');
+var branches = require('./branches');
+var tasks = require('../tasks');
 
 module.exports = {};
 
@@ -37,7 +41,7 @@ module.exports.router = function(options) {
 	.put('/:commit/file*', putCommit)
 	.post('/:commit/file*', postCommit);
 
-function commitJSON(commit, fileDir, diffs, parents, tags) {
+function commitJSON(commit, fileDir, diffs, parents) {
 	return {
 		"AuthorEmail": commit.author().email(), 
 		"AuthorName": commit.author().name(),
@@ -51,10 +55,10 @@ function commitJSON(commit, fileDir, diffs, parents, tags) {
 		"CloneLocation": "/gitapi/clone" + fileDir,
 		"Diffs": diffs,
 		"Parents": parents,
-		"Tags": tags,
 		"Message": commit.message(),
 		"Name": commit.sha(),
 		"Time": commit.timeMs(),
+		"Id": commit.sha(),
 		"Type": "Commit"
 	};
 }
@@ -68,7 +72,8 @@ function getCommit(req, res) {
 }
 
 function getCommitLog(req, res) {
-	var scope = decodeURIComponent(req.params.scope);
+	var task = new tasks.Task(res,false,false,0,false);
+	var scope = util.decodeURIComponent(req.params.scope);
 	var fileDir;
 
 	var query = req.query;
@@ -82,6 +87,8 @@ function getCommitLog(req, res) {
 	var sha1Filter = query.sha1;
 	var fromDateFilter = query.fromDate ? parseInt(query.fromDate, 10) : 0;
 	var toDateFilter = query.toDate ? parseInt(query.toDate, 10) : 0;
+	var filterPath;
+	var behindCount = 0, aheadCount= 0;
 	function filterCommit(commit) {
 		if (sha1Filter && commit.sha() !== sha1Filter) return true;
 		if (filter && commit.message().toLowerCase().indexOf(filter.toLowerCase()) === -1) return true;
@@ -91,23 +98,37 @@ function getCommitLog(req, res) {
 		if (toDateFilter && commit.timeMs() > toDateFilter) return true;
 		return false;
 	}
-	
-	var commits = [];
+	function filterCommitPath(diff,filterPath){
+		if (!filterPath || !diff) return false;
+		for(var n = 0; n < diff.Children.length; n++){
+			if(diff.Children[n]["NewPath"].startsWith(filterPath)){
+				return false;
+			}
+		}
+		return true;
+	}
+	var commits = []	, repo;
 	function writeResponse(over) {
-		var referenceName = scope;
+		var refs = scope.split("..");
+		var toRef, fromRef; 
+		if(refs.length === 1){
+			toRef = refs[0];
+		} else if(refs.length === 2){
+			toRef = refs[1];
+			fromRef = refs[0];
+		}
+		
 		var resp = {
 			"Children": commits,
-			"RepositoryPath": "",
-			"toRef": {
-				"CloneLocation": "/gitapi/clone" + fileDir,
-				"CommitLocation": "/gitapi/commit/" + encodeURIComponent(referenceName) + fileDir,
-				"Current": true,
-				"HeadLocation": "/gitapi/commit/HEAD" + fileDir,
-				"Location": "/gitapi/branch/" + decodeURIComponent(referenceName) + fileDir,
-				"Name": referenceName,
-				"Type": "Branch"
-			}
+			"RepositoryPath": filterPath,
+			"Type": "Commit",
+			"Location":"/gitapi/commit/"+ util.encodeURIComponent(scope) +"/file" + req.params[0],
+			"CloneLocation": "/gitapi/clone" + fileDir
 		};
+		if(mergeBase){
+			resp["AheadCount"] = aheadCount;
+			resp["BehindCount"] = behindCount;
+		}
 	
 		if (page && !over) {
 			var nextLocation = url.parse(req.originalUrl, true);
@@ -124,25 +145,102 @@ function getCommitLog(req, res) {
 			prevLocation = url.format(prevLocation);
 			resp['PreviousLocation'] = prevLocation;
 		}
-		res.status(200).json(resp);
+		
+		function generateCorrespondingRefJson(refname){
+			return git.Reference.dwim(repo, refname).then(function(reference) {
+				if(reference.isRemote()){
+					var remoteNameCandidate = reference.shorthand();
+					return git.Remote.list(repo)
+					.then(function(array) {
+						var remoteNameCandidateSegments = remoteNameCandidate.split("/");
+						for (var i = 1; i <= remoteNameCandidateSegments.length; i++) {
+							var joinedRemotename = remoteNameCandidateSegments.slice(0, i).join("/");
+							if(array.some(function(item){
+							return item === joinedRemotename;})){
+								return joinedRemotename;
+							}
+						}
+					}).then(function(remoteName){
+						return Promise.all([repo.getRemote(remoteName), repo.getBranchCommit(reference)]);
+					}) 
+					.then(function(results){
+						return remotes.remoteBranchJSON(reference, results[1], results[0], fileDir);
+					});
+				}else if(reference.isBranch()){
+					var branch = branches.branchJSON(repo, reference, fileDir);
+					return branches.getBranchCommit(repo, [branch])
+					.then(function(){
+						return branches.getBranchRemotes(repo, [branch], fileDir);
+					}).then(function(){
+						return branch;
+					});
+				}
+			}).catch(function(){
+				return null;   // when it's a commit, cannot dwim even
+			});
+		}
+		
+		return getCommitRefs(repo, fileDir, commits)
+		.then(function(){
+			if(fromRef){
+				return Promise.resolve(generateCorrespondingRefJson(fromRef))
+				.then(function(resultJson){
+					if(resultJson){
+						resp['fromRef'] = resultJson;
+					}
+				});
+			}
+		})
+		.then(function(){
+			if(toRef){
+				return Promise.resolve(generateCorrespondingRefJson(toRef))
+				.then(function(resultJson){
+					if(resultJson){
+						resp['toRef'] = resultJson;
+					}
+				});
+			}
+		})
+		.then(function() {
+			task.done({
+				HttpCode: 200,
+				Code: 0,
+				DetailedMessage: "OK",
+				JsonData: resp,
+				Message: "OK",
+				Severity: "Ok"
+			});
+		});
 	}
 
-	var tagsMap;
 	function log(repo, ref) {
 		var revWalk = repo.createRevWalk();
 		revWalk.sorting(git.Revwalk.SORT.TOPOLOGICAL);
-		
-		if (ref.indexOf("..") !== -1) {
-			revWalk.pushRange(ref);
-		} else {
-			try {
-				revWalk.push(ref);
-			} catch (ex) {
-				revWalk.pushRef(ref);
+		git.Reference.dwim(repo, ref).then(
+			function(reference) {
+				return ref =  reference.name();
+			},
+			function rejected(){
+				return;
 			}
-		}
+		)
+		.then(function(){
+			if (ref.indexOf("..") !== -1) {
+					revWalk.pushRange(ref);
+			} else {
+				try {
+					revWalk.push(ref);
+				} catch (ex) {
+					revWalk.pushRef( ref );
+				}
+			}
+			return;
+		}).then(function(){
+			walk();
+		});
 
 		var count = 0;
+		filterPath = clone.getfileRelativePath(repo,req); 
 		function walk() {
 			return revWalk.next()
 			.then(function(oid) {
@@ -152,43 +250,51 @@ function getCommitLog(req, res) {
 				}
 				return repo.getCommit(oid)
 				.then(function(commit) {
-					if (filterCommit(commit) || page && count++ < skipCount) {//skip pages
-						return walk();
-					}
-					return Promise.all([getDiff(repo, commit, fileDir), getCommitParents(repo, commit, fileDir)])
-					.then(function(stuff) {
-						commits.push(commitJSON(commit, fileDir, stuff[0], stuff[1], tagsMap[oid.toString()] || []));
-						if (pageSize && commits.length === pageSize) {//page done
-							writeResponse();
-							return;
+					function applyFilter(diff) {
+						if (filterCommit(commit) || filterCommitPath(diff, filterPath) || page && count++ < skipCount) {//skip pages
+							return walk();
 						}
-						walk();
-					});
+						return Promise.all([diff || getDiff(repo, commit, fileDir), getCommitParents(repo, commit, fileDir)])
+						.then(function(stuff) {
+							commits.push(commitJSON(commit, fileDir, stuff[0], stuff[1]));
+							if (pageSize && commits.length === pageSize) {//page done
+								writeResponse();
+								return;
+							}
+							walk();
+						});
+					}
+					// get diff before filtering by path
+					if (filterPath) {
+						return getDiff(repo, commit, fileDir).then(applyFilter);
+					}
+					applyFilter();
 				});
 			})
 			.catch(function(error) {
 				if (error.errno === git.Error.CODE.ITEROVER) {
 					writeResponse(true);
 				} else {
-					writeError(404, res, error.message);
+					task.done({
+						HttpCode: 404,
+						Code: 0,
+						DetailedMessage: error.message,
+						JsonData: {},
+						Message: error.message,
+						Severity: "Error"
+					});
 				}
 			});
 		}
-		walk();
 	}
 	
-	var repo;
 	clone.getRepo(req)
 	.then(function(_repo) {
 		repo = _repo;
-		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
-		return getCommitTagsMap(repo, fileDir);
-	})
-	.then(function(map) {
-		tagsMap = map;
+		fileDir = clone.getfileDir(repo,req);
 		if (mergeBase) {
 			var names = scope.split("..");
-			var commit0;
+			var commit0, commit1,mergeBaseCommitOid;
 			repo.getReferenceCommit(names[0])
 			.then(function(commit) {
 				return commit;
@@ -200,22 +306,52 @@ function getCommitLog(req, res) {
 			}).catch(function() {
 				return repo.getCommit(names[1]);
 			})
-			.then(function(commit1) {
-				git.Merge.base(repo, commit0, commit1).then(function(oid) {
-					if (oid) {
-						log(repo, oid.tostrS());
-					} else {
-						writeResponse(true);
-					}
+			.then(function(commit) {
+				commit1 = commit;
+				return git.Merge.base(repo, commit0, commit1).then(function(oid){
+					return oid;
 				});
-			}).catch(function(err) {
-				writeError(400, res, err.message);
+			})
+			.then(function(oid) {
+				mergeBaseCommitOid = oid;
+				var revWalkForCounting1 = repo.createRevWalk();
+				revWalkForCounting1.sorting(git.Revwalk.SORT.TOPOLOGICAL);
+				revWalkForCounting1.pushRange(mergeBaseCommitOid.tostrS() + ".." + commit0.id().tostrS());	//count for incomings
+				
+				var revWalkForCounting2 = repo.createRevWalk();
+				revWalkForCounting2.sorting(git.Revwalk.SORT.TOPOLOGICAL);
+				revWalkForCounting2.pushRange(mergeBaseCommitOid.tostrS() + ".." + commit1.id().tostrS()); // count for outgoing
+				
+				return Promise.all([countCommit(revWalkForCounting1),countCommit(revWalkForCounting2)]);	
+			}).then(function(results){
+				behindCount = results[0];
+				aheadCount = results[1];
+				if(mergeBaseCommitOid){
+					log(repo, mergeBaseCommitOid.tostrS());
+				} else {
+					writeResponse(true);
+				}
 			});
 		} else {
 			log(repo, scope);
 		}
 	}).catch(function(err) {
-		writeError(400, res, err.message);
+		task.done({
+			HttpCode: 400,
+			Code: 0,
+			DetailedMessage: err.message,
+			JsonData: {},
+			Message: err.message,
+			Severity: "Error"
+		});
+	});
+}
+
+function countCommit(revWalk){
+	var MAX_COMMITS_IN_FASTREVWALK = 30000;
+	return revWalk.fastWalk(MAX_COMMITS_IN_FASTREVWALK)
+	.then(function(commitOids) {
+		return commitOids.length;
 	});
 }
 
@@ -231,31 +367,45 @@ function getCommitParents(repo, commit, fileDir) {
 	});
 }
 
-function getCommitTagsMap(repo, fileDir) {
-	var map = {};
-	//TODO improve performance
-	if (true) return map;
-//	var time = Date.now();
+function getCommitRefs(repo, fileDir, commits) {
 	return new Promise(function (fulfill){
-		repo.getReferences(git.Reference.TYPE.OID)
+		if (!commits.length) return fulfill();
+		var map = {};
+		commits.forEach(function(commit) {
+			map[commit.Id] = commit;
+		});
+		git.Reference.list(repo)
 		.then(function(refList) {
 			async.each(refList, function(ref, cb) {
-				if (ref.isTag()) {
-					repo.getReferenceCommit(ref)
-					.then(function(commit) {
-						var id = commit.id().toString();
-						var tags = map[id] || (map[id] = []);
-						tags.push(mTags.tagJSON(ref, commit, fileDir));
-						cb();
-					})
-					.catch(function() {
-						// ignore errors looking up commits
-						cb();
-					});
-				}
-				cb();
+				return git.Reference.nameToId(repo, ref)
+				.then(function(oid) {
+					var fullName = ref;
+					var id,commit;
+					var shortName = ref.replace("refs/tags/", "").replace("refs/remotes/", "").replace("refs/heads/", "");
+					if (ref.indexOf("refs/tags/") === 0) {
+						return git.Tag.lookup(repo,oid).then(function(tag){
+							id = tag.targetId();
+						}).catch(function(){
+							id = oid.toString();
+						})
+						.then(function(){
+							commit = map[id];
+							var tags = commit.Tags || (commit.Tags = []);
+							tags.push(mTags.tagJSON(fullName, shortName, id, undefined, fileDir));
+							cb();
+						});
+					} 
+					id = oid.toString();
+					commit = map[id];
+					var branches = commit.Branches || (commit.Branches = []);
+					branches.push({FullName: ref});
+					cb();
+				})
+				.catch(function() {
+					// ignore errors looking up commits
+					cb();
+				});
 			}, function() {
-//				console.log("done0=" + (Date.now() - time));
 				fulfill(map);
 			});
 		});
@@ -321,12 +471,12 @@ function getDiff(repo, commit, fileDir) {
 
 function getCommitBody(req, res) {
 	var scope = req.params.scope;
-	var filePath = path.join(req.user.workspaceDir, req.params["0"]);
+	var filePath;
 	var theRepo;
 	clone.getRepo(req)
 	.then(function(repo) {
 		theRepo = repo;
-		filePath = filePath.substring(repo.workdir().length);
+		filePath = clone.getfileRelativePath(repo,req);
 		return repo.getReferenceCommit(scope);
 	})
 	.catch(function() {
@@ -351,7 +501,7 @@ function getCommitBody(req, res) {
 function identifyNewCommitResource(req, res, newCommit) {
 	var originalUrl = url.parse(req.originalUrl, true);
 	var segments = originalUrl.pathname.split("/");
-	segments[3] = segments[3] + ".." + encodeURIComponent(newCommit);
+	segments[3] = segments[3] + ".." + util.encodeURIComponent(newCommit);
 	var location = url.format({pathname: segments.join("/"), query: originalUrl.query});
 	res.status(200).json({
 		"Location": location
@@ -374,7 +524,6 @@ function revert(req, res, commitToRevert) {
 		if (rc) return;
 		var msg = 'Revert "' + theCommit.summary() + '"\n\nThis reverts commit ' + theCommit.sha() + '\n';
 		return createCommit(theRepo, null, null, theCommit.author().name(), theCommit.author().email(), msg);
-		//TODO: Update Reflog to Revert
 	})
 	.then(function() {
 		return theRepo.stateCleanup();
@@ -382,6 +531,11 @@ function revert(req, res, commitToRevert) {
 	.then(function() {
 		res.status(200).json({
 			"Result": theRC ? "FAILURE" : "OK"
+		});
+	})
+	.then(function() {
+		return git.Reflog.read(theRepo, "HEAD").then(function(reflog) {
+			replaceMostRecentRefLogMessageHeaderfromCommit("revert", reflog, theRepo);
 		});
 	})
 	.catch(function(err) {
@@ -408,7 +562,6 @@ function cherryPick(req, res, commitToCherrypick) {
 		theRC = rc;
 		if (rc) return;
 		return createCommit(theRepo, null, null, theCommit.author().name(), theCommit.author().email(), theCommit.message());
-		//TODO: Update Reflog to Cherry-Pick
 	})
 	.then(function() {
 		return theRepo.stateCleanup();
@@ -422,9 +575,28 @@ function cherryPick(req, res, commitToCherrypick) {
 			"HeadUpdated": !theRC && theHead !== newHead
 		});
 	})
+	.then(function() {
+		return git.Reflog.read(theRepo, "HEAD").then(function(reflog) {
+			replaceMostRecentRefLogMessageHeaderfromCommit("cherrypick", reflog, theRepo);
+		});
+	})
 	.catch(function(err) {
 		writeError(400, res, err.message);
 	});
+}
+
+function replaceMostRecentRefLogMessageHeaderfromCommit (toHeader,reflog, repo ){
+	var mostRecentReflog = reflog.entryByIndex(0);
+	if(mostRecentReflog){
+		var targetMessage = mostRecentReflog.message();
+		if(/^commit(:\s)/.test(targetMessage)){
+			var targetOID = mostRecentReflog.idOld();
+			targetMessage = targetMessage.replace(/^commit(:\s)/,  toHeader+"$1");
+			reflog.drop(0, 1);
+			reflog.append(targetOID, clone.getSignature(repo),targetMessage);
+			reflog.write();
+		}
+	}
 }
 
 function rebase(req, res, commitToRebase, rebaseOperation) {
@@ -551,7 +723,7 @@ function merge(req, res, commitToMerge, squash) {
 	});
 }
 
-function createCommit(repo, committerName, committerEmail, authorName, authorEmail, message, amend){
+function createCommit(repo, committerName, committerEmail, authorName, authorEmail, message, amend, insertChangeid){
 	var index, oid, author, committer;
 	return repo.index()
 	.then(function(indexResult) {
@@ -562,44 +734,56 @@ function createCommit(repo, committerName, committerEmail, authorName, authorEma
 		return index.writeTree();
 	})
 	.then(function(oidResult) {
-		oid = oidResult;
-		return git.Reference.nameToId(repo, "HEAD");
-	})
-	.then(function(head) {
-		return repo.getCommit(head);
-	})
-	.then(function(parent) {
+		oid = oidResult;	
 		if (authorEmail) {
 			author = git.Signature.now(authorName, authorEmail);
 		} else {
-			author = git.Signature.default(repo);	
+			author = clone.getSignature(repo);		
 		}
 		if (committerEmail) {
 			committer = git.Signature.now(committerName, committerEmail);
 		} else {
-			committer = git.Signature.default(repo);
+			committer = clone.getSignature(repo);
+		}	
+		if(repo.isEmpty()){
+			if(insertChangeid) {
+				message = insertChangeId(message, oid, null, author, committer);
+			}
+			return repo.createCommit('HEAD', author, committer, message, oid, []);
 		}
-		if (amend) {
-			return parent.amend("HEAD",  author, committer, null, message, oid);
-		}
-		return repo.createCommit("HEAD", author, committer, message, oid, [parent]);
+		return git.Reference.nameToId(repo, "HEAD")
+		.then(function(head) {
+			return repo.getCommit(head);
+		})
+		.then(function(parent) {				
+			if(insertChangeid) {
+				message = insertChangeId(message, oid, parent, author, committer);
+			}
+			if (amend) {
+				return parent.amend("HEAD",  author, committer, null, message, oid);
+			}
+			return repo.createCommit("HEAD", author, committer, message, oid, [parent]);
+		});
 	})
 	.then(function(id) {
 		return git.Commit.lookup(repo, id);
 	});
 }
 
-function tag(req, res, commitId, name) {
+function tag(req, res, commitId, name, isAnnotated, message) {
 	var theRepo, theDiffs, thisCommit, theParents, fileDir;
 	clone.getRepo(req)
 	.then(function(repo) {
 		theRepo = repo;
-		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+		fileDir = clone.getfileDir(repo,req);
 		return git.Commit.lookup(repo, commitId);
 	})
 	.then(function(commit) {
 		thisCommit = commit;
-		return theRepo.createLightweightTag(commit, name);
+		if(isAnnotated) {
+			var tagger = clone.getSignature(theRepo);
+		}
+		return isAnnotated ? theRepo.createTag (commit, name, message, tagger) : theRepo.createLightweightTag(commit, name);
 	})
 	.then(function() {
 		return getDiff(theRepo, thisCommit, fileDir);
@@ -622,10 +806,12 @@ function tag(req, res, commitId, name) {
 }
 
 function putCommit(req, res) {
-	var commit = decodeURIComponent(req.params.commit);
+	var commit = util.decodeURIComponent(req.params.commit);
 	var tagName = req.body.Name;
+	var isAnnotated = req.body.Annotated === undefined || req.body.Annotated;
+	var message = req.body.Message || "";
 	if (tagName) {
-		tag(req, res, commit, tagName);
+		tag(req, res, commit, tagName, isAnnotated, message);
 	}
 }
 
@@ -652,8 +838,7 @@ function postCommit(req, res) {
 		return;
 	}
 	
-	//TODO create commit -> change id
-	var commit = decodeURIComponent(req.params.commit);
+	var commit = util.decodeURIComponent(req.params.commit);
 	if (commit !== "HEAD") {
 		writeError(404, res, "Needs to be HEAD");
 		return;
@@ -664,14 +849,17 @@ function postCommit(req, res) {
 		return;
 	}
 
+	// Since ChangeId messagefoot is not showing in the box, so insert Message after empty Checking.
+	var isInsertChangeId = req.body.ChangeId;	
+
 	var theRepo, thisCommit;
 	var theDiffs = [], theParents;
 	
 	clone.getRepo(req)
 	.then(function(repo) {
 		theRepo = repo;
-		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
-		return createCommit(repo, req.body.CommitterName, req.body.CommitterEmail, req.body.AuthorName, req.body.AuthorEmail, req.body.Message, req.body.Amend);
+		fileDir = clone.getfileDir(repo,req);
+		return createCommit(repo, req.body.CommitterName, req.body.CommitterEmail, req.body.AuthorName, req.body.AuthorEmail, req.body.Message, req.body.Amend, isInsertChangeId);
 	})
 	.then(function(commit) {
 		thisCommit = commit;
@@ -692,5 +880,93 @@ function postCommit(req, res) {
 	.done(function() {
 		res.status(200).json(commitJSON(thisCommit, fileDir, theDiffs, theParents));
 	});
+}
+
+function generateChangeId(oid, firstParentId, authorId, committerId, message){
+	var cleanMessage = clean(message);
+	function clean(fullMessage) {
+		return fullMessage.//
+				replace(/^#.*$\n?/g, "").// //$NON-NLS-1$
+				replace(/\n\n\n+/g, "\n").// //$NON-NLS-1$
+				replace(/\n*$/g, "").// //$NON-NLS-1$
+				replace(/\ndiff --git.*/g, "").// //$NON-NLS-1$
+				trim();
+	}
+	var mergedMessage = ["tree ",oid,"\nparent ",firstParentId,"\nauthor ",authorId,"\ncommitter ",committerId,"\n\n",cleanMessage].join("");	
+	var hash = crypto.createHash("sha1");
+	hash.update(mergedMessage);
+	return hash.digest('hex');
+}
+
+function insertChangeId(originalMessage, oid, parent, author ,committer){
+	var lines = originalMessage.split("\n"); //$NON-NLS-1$
+	// Has ChangeId do nothing, even if changeId is changed, do not replace it.
+	if(!existingOfChangeId(lines)) {
+		var footerFirstLine = indexOfFirstFooterLine(lines);
+		var insertAfter = footerFirstLine;
+		for (var i = footerFirstLine; i < lines.length; ++i) {
+			if (lines[i].match(/^(Bug|Issue)[a-zA-Z0-9-]*:.*$/)) {
+				insertAfter = i + 1;
+				continue;
+			}
+			break;
+		}
+		
+		// Generage ChangeId here only when necessary.
+		var firstParentId = parent? parent.parentId(0) : "";
+		var hashId = generateChangeId(oid, firstParentId, author.toString(), committer.toString(), originalMessage);
+		var changeIdString = "Change-Id: I" + hashId;
+		if ( lines.length === 1 ){
+			lines.splice(1, 0, "\n"+changeIdString);	
+		}else{
+			lines.splice(insertAfter, 0, changeIdString);
+		}
+		originalMessage = lines.join("\n");
+ 	}
+ 	return originalMessage;
+ 	
+ 	
+ 	function existingOfChangeId(alllinesArray){
+		if (alllinesArray.length === 0)
+			return false;
+		var inFooter = false;
+		for (var m = alllinesArray.length - 1; m >= 0; --m) {
+			if (!inFooter && isEmptyLine(alllinesArray[m])){
+				// Fine the last not-empty line, or keep finding.
+				continue;
+			}
+			inFooter = true;
+			if (alllinesArray[m].match(/^\s*Change-Id: *I[a-f0-9]{40}$/)) {
+				return true;
+			}
+		}
+		// Went through all lines but didn't find Change-Id line.
+		return false;
+ 	}
+ 	
+ 	function isEmptyLine(line){
+		return line.trim().length === 0;
+ 	}
+ 		
+ 	function indexOfFirstFooterLine(lines){
+ 		var footerFirstLineNum = lines.length;
+		for (var l = lines.length - 1; l > 1; --l) {
+			if (lines[l].match(/^[a-zA-Z0-9-]+:.*$/)) {
+				footerFirstLineNum = l;
+				continue;
+			}
+			if (footerFirstLineNum !== lines.length && lines[l].length === 0){
+				break;
+			}
+			if (footerFirstLineNum !== lines.length
+					&& lines[l].match(/^[ \\[].*$/)) {
+				footerFirstLineNum = l + 1;
+				continue;
+			}
+			footerFirstLineNum = lines.length;
+			break;
+		}
+		return footerFirstLineNum;
+ 	}
 }
 };

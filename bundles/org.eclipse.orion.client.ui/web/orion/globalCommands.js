@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2011, 2013 IBM Corporation and others.
+ * Copyright (c) 2011, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -11,7 +11,7 @@
  *******************************************************************************/
 /*eslint-env browser, amd*/
 define([
-		'i18n!orion/nls/messages', 'require', 'orion/commonHTMLFragments', 'orion/keyBinding', 'orion/EventTarget', 'orion/commands',
+		'i18n!orion/nls/messages', 'i18n!orion/widgets/nls/messages', 'require', 'orion/commonHTMLFragments', 'orion/keyBinding', 'orion/EventTarget', 'orion/commands',
 		'orion/parameterCollectors', 'orion/extensionCommands', 'orion/breadcrumbs', 'orion/webui/littlelib', 'orion/i18nUtil',
 		'orion/webui/splitter', 'orion/webui/dropdown', 'orion/webui/tooltip', 'orion/contentTypes', 'orion/keyAssist',
 		'orion/widgets/themes/ThemePreferences', 'orion/widgets/themes/container/ThemeData', 'orion/Deferred',
@@ -19,7 +19,7 @@ define([
 		'text!orion/banner/toolbar.html',
 		'orion/util', 'orion/customGlobalCommands', 'orion/fileClient', 'orion/webui/SideMenu', 'orion/objects', "orion/metrics",'orion/bidiUtils'
 	],
-	function (messages, require, commonHTML, KeyBinding, EventTarget, mCommands, mParameterCollectors, mExtensionCommands,
+	function (messages, widgetMessages, require, commonHTML, KeyBinding, EventTarget, mCommands, mParameterCollectors, mExtensionCommands,
 		mBreadcrumbs, lib, i18nUtil, mSplitter, mDropdown, mTooltip, mContentTypes, mKeyAssist, mThemePreferences, mThemeData, Deferred,
 		mUserMenu, PageLinks, openResource, Banner, ToolbarTemplate, util, mCustomGlobalCommands, mFileClient, SideMenu, objects, mMetrics, mBidiUtils) {
 	/**
@@ -37,6 +37,13 @@ define([
 			if (!userMenuPlaceholder) {
 				return;
 			}
+			if (util.isElectron) {
+				lib.$("span", lib.node("userTrigger")).className += " core-sprite-questionmark";
+			}
+			else {
+				lib.$("span", lib.node("userTrigger")).className += " core-sprite-silhouette";
+			}
+			
 			var dropdownNode = lib.node("userDropdown"); //$NON-NLS-0$
 			var userDropdown = new mDropdown.Dropdown({
 				dropdown: dropdownNode,
@@ -47,7 +54,7 @@ define([
 				dropdown: userDropdown,
 				serviceRegistry: serviceRegistry
 			});
-			var optionsLabel = messages['Options'];
+			var optionsLabel = widgetMessages['Help'];
 			var dropdownTrigger = lib.node("userTrigger"); //$NON-NLS-0$
 			dropdownTrigger.setAttribute("aria-label", optionsLabel);
 
@@ -83,15 +90,15 @@ define([
 				if (nav) {
 					new mTooltip.Tooltip({
 						node: nav,
-						text: messages["CentralNavTooltip"], //$NON-NLS-0$
+						text: messages["CentralNavTooltip"],
 						position: ["right"] //$NON-NLS-0$
 					});
-					nav.addEventListener("click", this.sideMenu.toggle.bind(this.sideMenu)); //$NON-NLS-0$
+					nav.addEventListener("click", this.sideMenu.toggle.bind(this.sideMenu));
 				}
 
 				var sideMenuToggle = lib.node("sideMenuToggle"); //$NON-NLS-0$
 				if (sideMenuToggle) {
-					sideMenuToggle.addEventListener("click", this.sideMenu.toggle.bind(this.sideMenu)); //$NON-NLS-0$
+					sideMenuToggle.addEventListener("click", this.sideMenu.toggle.bind(this.sideMenu));
 				}
 			}
 		},
@@ -143,7 +150,7 @@ define([
 					}, function (errorData, jsonData) {
 						menuGenerator.addUserItem(key, authService, label, jsonData);
 					});
-					window.addEventListener("storage", function (e) { //$NON-NLS-0$
+					window.addEventListener("storage", function (e) {
 						if (authRendered[key] === localStorage.getItem(key)) {
 							return;
 						}
@@ -219,7 +226,7 @@ define([
 			if (!command.visibleWhen || command.visibleWhen(item)) {
 				commandItem.invocation = new mCommands.CommandInvocation(item, item, null, command, commandRegistry);
 				return new Deferred().resolve(commandItem);
-			} else if (typeof alternateItem === "function") { //$NON-NLS-0$
+			} else if (typeof alternateItem === "function") {
 				if (!alternateItemDeferred) {
 					alternateItemDeferred = alternateItem();
 				}
@@ -339,11 +346,11 @@ define([
 	 */
 	function setDirtyIndicator(isDirty) {
 		if (title) {
-			if (title.charAt(0) === '*' && !isDirty) { //$NON-NLS-0$
+			if (title.charAt(0) === '*' && !isDirty) {
 				title = title.substring(1);
 			}
-			if (isDirty && title.charAt(0) !== '*') { //$NON-NLS-0$
-				title = '*' + title; //$NON-NLS-0$
+			if (isDirty && title.charAt(0) !== '*') {
+				title = '*' + title;
 			}
 			window.document.title = title;
 		}
@@ -351,9 +358,9 @@ define([
 		var dirty = lib.node("dirty"); //$NON-NLS-0$f
 		if (dirty) {
 			if (isDirty) {
-				dirty.textContent = "*"; //$NON-NLS-0$
+				dirty.textContent = "*";
 			} else {
-				dirty.textContent = ""; //$NON-NLS-0$
+				dirty.textContent = "";
 			}
 		}
 	}
@@ -420,7 +427,7 @@ define([
 		title = options.title;
 		if (!title) {
 			if (name) {
-				title = i18nUtil.formatMessage(messages["PageTitleFormat"], name, options.task); //$NON-NLS-0$
+				title = i18nUtil.formatMessage(messages["PageTitleFormat"], name, options.task);
 			} else {
 				title = options.task;
 			}
@@ -473,7 +480,7 @@ define([
 			return node;
 		}
 		var position = style.getPropertyValue("position"); //$NON-NLS-0$
-		if (position === "absolute" || !node.parentNode || node === document.body) { //$NON-NLS-0$
+		if (position === "absolute" || !node.parentNode || node === document.body) {
 			return node;
 		}
 		return boundingNode(node.parentNode);
@@ -482,7 +489,7 @@ define([
 	function getToolbarElements(toolNode) {
 		var elements = {};
 		var toolbarNode = null;
-		if (typeof toolNode === "string") { //$NON-NLS-0$
+		if (typeof toolNode === "string") {
 			toolNode = lib.node(toolNode);
 		}
 		// no reference node has been given, so use the main toolbar.
@@ -569,13 +576,13 @@ define([
 	 * @param {Boolean} closeSplitter true to make the splitter's initial state "closed".
 	 */
 	function generateBanner(parentId, serviceRegistry, commandRegistry, prefsService, searcher, handler, /* optional */ editor, closeSplitter, fileClient) {
-		var pageLoader = require.defined("orion/splash") && require("orion/splash").getPageLoader();
 		serviceRegistry.registerService("orion.metrics", {
 			/** @callback */
 			logEvent: function(category, action, label, value) {
 			},
 			logTiming: function(timingCategory, timingVar, timingValue, timingLabel) {
 				if (timingCategory === "page" && timingVar === "complete") {
+					var pageLoader = require.defined("orion/splash") && require("orion/splash").getPageLoader();
 					if (pageLoader) pageLoader.takeDown();
 				}
 				if (localStorage.consoleMetrics) {
@@ -586,26 +593,26 @@ define([
 			pageLoad: function(href, page, title, args) {
 			}
 		}, {});
-		mMetrics.initFromRegistry(serviceRegistry);
+		var metrics = new mMetrics.Metrics(serviceRegistry);
 		prefsService.addChangeListener(function(name, value) {
 			if (value.length < METRICS_MAXLENGTH && name.indexOf("/git/credentials/") !== 0) { //$NON-NLS-0$
-				mMetrics.logEvent("preferenceChange", name, value); //$NON-NLS-0$
+				metrics.logEvent("preferenceChange", name, value); //$NON-NLS-0$
 			}
 		});
-		window.addEventListener("error", function(e) { //$NON-NLS-0$
-			var index = e.filename.lastIndexOf("/"); //$NON-NLS-0$
+		window.addEventListener("error", function(e) {
+			var index = e.filename.lastIndexOf("/");
 			var filename = e.filename.substring(index + 1);
 			if (filename) {
 				var errorString = e.message + " (" + filename + ": " + e.lineno + (e.colno ? ", " + e.colno : "") + ")"; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-				mMetrics.logEvent("runtime", "uncaughtError", errorString); //$NON-NLS-1$ //$NON-NLS-0$
+				metrics.logEvent("runtime", "uncaughtError", errorString); //$NON-NLS-1$ //$NON-NLS-0$
 			} else {
 				errorString = e.message + " (" + e.filename + ": " + e.lineno + (e.colno ? ", " + e.colno : "") + ")"; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-				mMetrics.logEvent("runtime", "uncaughtErrorUnknownFile", errorString); //$NON-NLS-1$ //$NON-NLS-0$
+				metrics.logEvent("runtime", "uncaughtErrorUnknownFile", errorString); //$NON-NLS-1$ //$NON-NLS-0$
 			}
 
 			if (e.error) {
-				var stackString = e.error.stack.replace(new RegExp(window.location.origin, "g"), ""); //$NON-NLS-0$
-				mMetrics.logEvent("runtime", "uncaughtErrorStack", stackString); //$NON-NLS-1$ //$NON-NLS-0$
+				var stackString = e.error.stack.replace(new RegExp(window.location.origin, "g"), "");
+				metrics.logEvent("runtime", "uncaughtErrorStack", stackString); //$NON-NLS-1$ //$NON-NLS-0$
 			}
 		});
 
@@ -654,7 +661,7 @@ define([
 		// Set up a custom parameter collector that slides out of adjacent tool areas.
 		commandRegistry.setParameterCollector(new mParameterCollectors.CommandParameterCollector(getToolbarElements, layoutToolbarElements));
 
-		document.addEventListener("keydown", function (e) { //$NON-NLS-0$
+		document.addEventListener("keydown", function (e) {
 			if (e.keyCode === lib.KEY.ESCAPE) {
 				var statusService = serviceRegistry.getService("orion.page.message"); //$NON-NLS-0$
 				if (statusService) {
@@ -850,9 +857,25 @@ define([
 		startProgressService(serviceRegistry);
 
 		// check for commands in the hash
-		window.addEventListener("hashchange", function () { //$NON-NLS-0$
+		window.addEventListener("hashchange", function () {
 			commandRegistry.processURL(window.location.href);
 		}, false);
+		
+	    // System Editor
+		if (util.isElectron) {
+			serviceRegistry.registerService("orion.navigate.command", {
+				run: function(item) {
+					prefsService.get("/workspace").then(function(prefs) {
+						var workspaceDir = prefs.currentWorkspace.replace(/\\/g, "/");
+						window.__electron.shell.openItem(workspaceDir+item[0].Location.slice(5)); // slice off '/file'
+					});
+				}
+			}, {
+				name: messages["Orion System Editor"],
+				id: "orion.system.editor",
+				tooltip: messages["System Editor Tooltip"]
+			});
+		}
 
 		return customGlobalCommands.afterGenerateBanner.apply(this, arguments);
 	}

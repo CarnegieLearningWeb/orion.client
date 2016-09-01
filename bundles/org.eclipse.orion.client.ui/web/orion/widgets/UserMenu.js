@@ -13,8 +13,11 @@ define([
 	'i18n!orion/widgets/nls/messages',
 	'orion/webui/littlelib',
 	'orion/PageLinks',
-	'orion/webui/dropdown'
-], function(messages, lib, PageLinks, Dropdown) {
+	'orion/webui/dropdown',
+	'orion/util',
+	'orion/webui/dialog',
+	'orion/xhr'
+], function(messages, lib, PageLinks, Dropdown, util, dialog, xhr) {
 	
 	function UserMenu(options) {
 		this._displaySignOut = true;
@@ -78,24 +81,26 @@ define([
 			var _self = this;
 			var authService = this.authenticatedServices[key].authService;
 			if (authService && authService.logout && this._displaySignOut){
-				var element = this._makeMenuItem(messages["Sign Out"], function() {
-					authService.logout().then(function(){
-						_self.addUserItem(key, authService, _self.authenticatedServices[key].label);
-						localStorage.removeItem(key);
-						localStorage.removeItem("lastLogin"); //$NON-NLS-0$
-						//TODO: Bug 368481 - Re-examine localStorage caching and lifecycle
-						for (var i = localStorage.length - 1; i >= 0; i--) {
-							var name = localStorage.key(i);
-							if (name && name.indexOf("/orion/preferences/user") === 0) { //$NON-NLS-0$
-								localStorage.removeItem(name);
+				if (!util.isElectron) {
+					var element = this._makeMenuItem(messages["Sign Out"], function() {
+						authService.logout().then(function(){
+							_self.addUserItem(key, authService, _self.authenticatedServices[key].label);
+							localStorage.removeItem(key);
+							localStorage.removeItem("lastLogin"); //$NON-NLS-0$
+							//TODO: Bug 368481 - Re-examine localStorage caching and lifecycle
+							for (var i = localStorage.length - 1; i >= 0; i--) {
+								var name = localStorage.key(i);
+								if (name && name.indexOf("/orion/preferences/user") === 0) { //$NON-NLS-0$
+									localStorage.removeItem(name);
+								}
 							}
-						}
-						authService.getAuthForm(PageLinks.getOrionHome()).then(function(formURL) {
-							window.location = formURL;
+							authService.getAuthForm(PageLinks.getOrionHome()).then(function(formURL) {
+								window.location = formURL;
+							});
 						});
 					});
-				});
-				this._dropdownNode.appendChild(element.parentNode);
+					this._dropdownNode.appendChild(element.parentNode);
+				}
 			}
 		},
 		
@@ -157,6 +162,9 @@ define([
 						link.classList.add("dropdownMenuItem"); //$NON-NLS-0$
 					}
 					link.href = item.href;
+					if (link.hostname !== "localhost" && util.isElectron) {
+						link.target = "_blank";
+					}
 					link.textContent = item.textContent;
 					li.appendChild(link);
 					category.appendChild(li);
@@ -178,6 +186,93 @@ define([
 					}
 					var keyAssist = element.parentNode;
 					getCategory(0).appendChild(keyAssist);
+				}
+
+				if (util.isElectron) {
+					var clearLocalStorage = this._makeMenuItem(messages["Clear Local Storage"], function() { localStorage.clear(); });
+					getCategory(0).appendChild(clearLocalStorage.parentNode);
+					var about = this._makeMenuItem(messages["About"], function() {
+						var newDialog = new dialog.Dialog();
+						newDialog.TEMPLATE =
+							'<div>' +
+								'<div><label id="appVersion">${Version: }<span>' + window.__electron.remote.app.getVersion() + '</span></label></div>' +
+								'<div><label id="buildID">${Build ID: }<span>' + window.__electron.remote.app.buildId + '</span></label></div>' +
+								'<div><label id="updateChannel">${Update Channel: }' + 
+									'<select id="channelOptions"><option id="stable">${Stable}</option><option id="alpha">${Alpha}</option></select>' + 
+								'</label></div>' + 
+								'<div><label id="updateAvailable">${Update available. Download now?}</label></div>' +
+								'<div><label id="updateUnavailable">${No updates available.}</label></div>' +
+								'<div><label id="updateError">${Error occurred while checking for updates.}</label></div>' +
+								'<div><label id="updateDownloading">${Update is downloading in the background.}</label></div>' +
+							'</div>';
+						newDialog.messages = messages;
+						newDialog.title = messages["About"];
+						newDialog.buttons = [
+						{ 
+							text: messages["Download"],
+							callback: function() {
+								xhr("POST", "/update/downloadUpdates")
+									.then(function(result) {
+										document.querySelector("#updateDownloading").style.display = updateDownloading;
+										document.querySelector("#updateChannel").style.display = 
+										document.querySelector("#aboutDownloadUpdates").style.display =
+										document.querySelector("#updateAvailable").style.display = "none";
+									}, function(error) {
+										document.querySelector("#updateError").style.display = updateError;
+										document.querySelector("#aboutDownloadUpdates").style.display =
+										document.querySelector("#updateDownloading").style.display =
+										document.querySelector("#updateAvailable").style.display = "none";
+									});
+							},
+							id: "aboutDownloadUpdates" 
+						},
+						{
+							text: messages["Check for Updates"],
+							callback: function() {
+								var channelOptions = document.getElementById('channelOptions'),
+									updateChannel = channelOptions.options[channelOptions.selectedIndex].id;
+								xhr("GET", '/update/resolveNewVersion?updateChannel=' + updateChannel)
+									.then(function(result) {
+										if (result.response) {
+											document.querySelector("#aboutDownloadUpdates").style.display = aboutDownloadUpdates;
+											document.querySelector("#updateAvailable").style.display = updateAvailable;
+											document.querySelector("#updateUnavailable").style.display = 
+											document.querySelector("#updateChannel").style.display = 
+											document.querySelector("#aboutResolveNewVersion").style.display = 
+											document.querySelector("#updateError").style.display = "none";
+										} else {
+											document.querySelector("#updateUnavailable").style.display = updateUnavailable;
+										}
+									}, function(error) {
+										document.querySelector("#updateError").style.display = updateError;
+										document.querySelector("#aboutResolveNewVersion").style.display = "none";
+									});
+							},
+							id: "aboutResolveNewVersion"
+						},
+						{
+							text: messages["Close"],
+							callback: function() {
+								newDialog.hide();
+							}, 
+							id: "aboutClose" 
+						}
+						];
+						newDialog.modal = true;
+						newDialog._initialize();
+						var aboutDownloadUpdates = document.querySelector("#aboutDownloadUpdates").style.display;
+						var updateUnavailable = document.querySelector("#updateUnavailable").style.display;
+						var updateAvailable = document.querySelector("#updateAvailable").style.display;
+						var updateError = document.querySelector("#updateError").style.display;
+						var updateDownloading = document.querySelector("#updateDownloading").style.display;
+						document.querySelector("#aboutDownloadUpdates").style.display = 
+						document.querySelector("#updateAvailable").style.display = 
+						document.querySelector("#updateUnavailable").style.display = 
+						document.querySelector("#updateError").style.display = 
+						document.querySelector("#updateDownloading").style.display = "none";
+						newDialog.show();
+					});
+					getCategory(0).appendChild(about.parentNode);
 				}
 
 				// Add categories to _dropdownNode

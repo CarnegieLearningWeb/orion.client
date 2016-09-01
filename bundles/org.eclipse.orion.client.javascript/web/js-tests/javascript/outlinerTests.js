@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2015 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -23,8 +23,8 @@ define([
 		describe('Outliner Tests', function() {
 			this.timeout(10000);
 			
-			before('Reset Tern Server', function() {
-				worker.start(); // Reset the tern server state to remove any prior files
+			before('Reset Tern Server', function(done) {
+				worker.start(done); // Reset the tern server state to remove any prior files
 			});
 			
 		    function setup(callback, text, contentType) {
@@ -60,7 +60,9 @@ define([
 			function assertElement(element, label, start, end) {
 				assert(element, "The tested element cannot be null");
 				assert(element.label, "The outlined element must have a label");
-				assert(element.start, "The outlined element must have a start range");
+				if (element.start !== 0) {
+					assert(element.start, "The outlined element must have a start range");
+				}
 				assert(element.end, "The outlined element must have an end range");
 				var fullLabel = element.label;
 				if (element.labelPre){
@@ -97,7 +99,7 @@ define([
 				r.outliner.computeOutline(r.editorContext).then(function(outline) {
 					try {
 						assert(outline && outline.length > 0, "There should be one outline element");
-						assertElement(outline[0], "Foo.bar()", 1, 10);
+						assertElement(outline[0], "Foo.bar()", 0, 10);
 						callback();
 					}
 					catch(err) {
@@ -113,7 +115,7 @@ define([
 				r.outliner.computeOutline(r.editorContext).then(function(outline) {
 					try {
 						assert(outline && outline.length > 0, "There should be one outline element");
-						assertElement(outline[0], "Foo.bar.baz()", 1, 14);
+						assertElement(outline[0], "Foo.bar.baz()", 0, 14);
 						callback();
 					}
 					catch(err) {
@@ -129,7 +131,7 @@ define([
 				r.outliner.computeOutline(r.editorContext).then(function(outline) {
 					try {
 						assert(outline && outline.length > 0, "There should be one outline element");
-						assertElement(outline[0], "Foo.baz.bar()", 1, 14);
+						assertElement(outline[0], "Foo.baz.bar()", 0, 14);
 						callback();
 					}
 					catch(err) {
@@ -151,6 +153,36 @@ define([
 							assert.fail("There should be one child outline element");
 						}
 						assertElement(outline[0].children[0], "item(p1, p2)", 13, 17);
+						callback();
+					}
+					catch(err) {
+						callback(err);
+					}
+				});
+			});
+			it('testLabelledFuncExpr1', function(callback) {
+				var r = setup(callback, "var obj = function foo(p1, p2) {};");
+				r.outliner.computeOutline(r.editorContext).then(function(outline) {
+					try {
+						if(!outline || outline.length < 1) {
+							assert.fail("There should be one outline element");
+						}
+						assertElement(outline[0], "foo(p1, p2)", 19, 22);
+						callback();
+					}
+					catch(err) {
+						callback(err);
+					}
+				});
+			});
+			it('testLabelledFuncExpr2', function(callback) {
+				var r = setup(callback, "console.log(function foo(p1, p2) {});");
+				r.outliner.computeOutline(r.editorContext).then(function(outline) {
+					try {
+						if(!outline || outline.length < 1) {
+							assert.fail("There should be one outline element");
+						}
+						assertElement(outline[0], "foo(p1, p2)", 21, 24);
 						callback();
 					}
 					catch(err) {

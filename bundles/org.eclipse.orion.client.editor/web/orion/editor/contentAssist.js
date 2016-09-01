@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2011, 2014 IBM Corporation and others.
+ * Copyright (c) 2011, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -279,7 +279,7 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			var selectionStart = Math.min(sel.start, sel.end);			
 			this._initialCaretOffset = Math.min(offset, selectionStart);
 			this._computedProposals = null;
-			
+			delete this._autoApply;
 			this._computeProposals(this._initialCaretOffset).then(function(proposals) {
 				if (this.isActive()) {
 					var flatProposalArray = this._flatten(proposals);
@@ -287,7 +287,8 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 					if (flatProposalArray && Array.isArray(flatProposalArray) && (0 < flatProposalArray.length)) {
 						this._computedProposals = proposals;
 					}
-					this.dispatchEvent({type: "ProposalsComputed", data: {proposals: flatProposalArray}, autoApply: !this._autoTriggered}); //$NON-NLS-0$
+					var autoApply = typeof this._autoApply === 'boolean' ? this._autoApply : !this._autoTriggerEnabled;
+					this.dispatchEvent({type: "ProposalsComputed", data: {proposals: flatProposalArray}, autoApply: autoApply}); //$NON-NLS-0$
 					if (this._computedProposals && this._filterText) {
 						// force filtering here because user entered text after
 						// computeProposals() was called but before the plugins
@@ -348,30 +349,73 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			var indentation = line.substring(0, index);
 			var options = textView.getOptions("tabSize", "expandTab"); //$NON-NLS-1$ //$NON-NLS-0$
 			var tab = options.expandTab ? new Array(options.tabSize + 1).join(" ") : "\t"; //$NON-NLS-1$ //$NON-NLS-0$
-			var params = {
-				line: line,
-				offset: mapOffset,
-				prefix: model.getText(this.getPrefixStart(model, mapOffset), mapOffset),
-				selection: sel,
-				delimiter: model.getLineDelimiter(),
-				tab: tab,
-				indentation: indentation
-			};
-			var self = this;
+			var lineDelimiter = model.getLineDelimiter();
+			var _self = this;
 			var promises = providerInfoArray.map(function(providerInfo) {
 				var provider = providerInfo.provider;
+				var computePrefixFunc = provider.computePrefix;
+				var ecProvider;
+				var editorContext;
 				var proposals;
+				var func;
+				var promise;
+				var params;
+				if(typeof providerInfo.autoApply === 'boolean') {
+					_self._autoApply = providerInfo.autoApply;
+				}
+				if (computePrefixFunc) {
+					ecProvider = _self.editorContextProvider;
+					editorContext = ecProvider.getEditorContext();
+					var result = computePrefixFunc.apply(provider, [editorContext, mapOffset]);
+					return result.then(function(prefix) {
+						params = {
+							line: line,
+							offset: mapOffset,
+							prefix: prefix,
+							selection: sel,
+							delimiter: lineDelimiter,
+							tab: tab,
+							indentation: indentation
+						};
+						try {
+							if ((func = provider.computeContentAssist)) {
+								params = objects.mixin(params, ecProvider.getOptions());
+								promise = func.apply(provider, [editorContext, params]);
+							} else if ((func = provider.getProposals || provider.computeProposals)) {
+								// old API
+								promise = func.apply(provider, [model.getText(), mapOffset, params]);
+							}
+							proposals = _self.progress ? _self.progress.progress(promise, "Generating content assist proposal") : promise; //$NON-NLS-0$
+						} catch (e) {
+							return new Deferred().reject(e);
+						}
+						return Deferred.when(proposals);
+					},
+					function(err) {
+						return new Deferred().reject(err);
+					});
+				}
+				// no computePrefix function is defined for the provider. Use the default prefix
+				params = {
+					line: line,
+					offset: mapOffset,
+					prefix: model.getText(_self.getPrefixStart(model, mapOffset), mapOffset),
+					selection: sel,
+					delimiter: lineDelimiter,
+					tab: tab,
+					indentation: indentation
+				};
 				try {
-					var func, promise;
 					if ((func = provider.computeContentAssist)) {
-						var ecProvider = self.editorContextProvider, editorContext = ecProvider.getEditorContext();
+						ecProvider = _self.editorContextProvider;
+						editorContext = ecProvider.getEditorContext();
 						params = objects.mixin(params, ecProvider.getOptions());
 						promise = func.apply(provider, [editorContext, params]);
 					} else if ((func = provider.getProposals || provider.computeProposals)) {
 						// old API
 						promise = func.apply(provider, [model.getText(), mapOffset, params]);
 					}
-					proposals = self.progress ? self.progress.progress(promise, "Generating content assist proposal") : promise; //$NON-NLS-0$
+					proposals = _self.progress ? _self.progress.progress(promise, "Generating content assist proposal") : promise; //$NON-NLS-0$
 				} catch (e) {
 					return new Deferred().reject(e);
 				}
@@ -383,7 +427,7 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 			
 			if (this.pageMessage){
 				allPromises = Deferred.when(allPromises, function(proposals){
-					self.pageMessage.close();					
+					_self.pageMessage.close();
 					var foundProposal = false;
 					if (proposals && proposals.length > 0){
 						for (var i=0; i<proposals.length; i++) {
@@ -394,13 +438,12 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 						}
 					}
 					if (!foundProposal){
-						self.pageMessage.setErrorMessage(messages["noProposals"]);
+						_self.pageMessage.setErrorMessage(messages["noProposals"]);
 					}
 					return proposals;
 				});
-				self.pageMessage.showWhile(allPromises, messages["computingProposals"]);
+				this.pageMessage.showWhile(allPromises, messages["computingProposals"]);
 			}
-			
 			return allPromises;
 		},
 
@@ -418,16 +461,22 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 				this._computedProposals.forEach(function(proposalArray) {
 					if (proposalArray && Array.isArray(proposalArray)) {
 						var includedProposals = proposalArray.filter(function(proposal) {
+							function getRegexp(prefix, filter) {
+								var modifiedFilter = filter.replace(/([.+^=!:${}()|\[\]\/\\])/g, "\\$1"); //add start of line character and escape all special characters except * and ? //$NON-NLS-1$ //$NON-NLS-0$
+								modifiedFilter = modifiedFilter.replace(/([*?])/g, ".$1"); //convert user input * and ? to .* and .? //$NON-NLS-0$
+								return new RegExp("^" + prefix + modifiedFilter, "i");
+							}
+							var pattern;
 							if (!proposal) {
 								return false;
 							}
 							if(typeof proposal.prefix === 'string') {
-							    prefixText = proposal.prefix;
+								prefixText = proposal.prefix;
 							} else {
-							    prefixText = defaultPrefix;
+								prefixText = defaultPrefix;
 							}
-							if ((STYLES[proposal.style] === STYLES.hr)
-								|| (STYLES[proposal.style] === STYLES.noemphasis_title)) {
+							if (STYLES[proposal.style] === STYLES.hr
+								|| STYLES[proposal.style] === STYLES.noemphasis_title) {
 								return true;
 							}
 							
@@ -440,31 +489,32 @@ define("orion/editor/contentAssist", [ //$NON-NLS-0$
 								} else {
 									return false; // unknown format
 								}
-			
-								return (0 === proposalString.indexOf(prefixText + this._filterText));
-								
+								pattern = getRegexp(prefixText, this._filterText);
+								return pattern.test(proposalString);
 							} else if (proposal.name || proposal.proposal) {
 								var activated = false;
 								// try matching name
 								if (proposal.name) {
-									activated = (0 === proposal.name.indexOf(prefixText + this._filterText));	
+									pattern = getRegexp(prefixText, this._filterText);
+									activated = pattern.test(proposal.name);
 								}
 								
 								// try matching proposal text
 								if (!activated && proposal.proposal) {
-									activated = (0 === proposal.proposal.indexOf(this._filterText));
+									pattern = getRegexp("", this._filterText);
+									activated = pattern.test(proposal.proposal);
 								}
 								
 								return activated;
 							} else if (typeof proposal === "string") { //$NON-NLS-0$
-								return 0 === proposal.indexOf(this._filterText);
-							} else {
-								return false;
+								pattern = getRegexp("", this._filterText);
+								return pattern.test(proposal);
 							}
+							return false;
 						}, this);
 						
 						if (includedProposals.length > 0) {
-							proposals.push(includedProposals);	
+							proposals.push(includedProposals);
 						}
 					}
 				}, this);

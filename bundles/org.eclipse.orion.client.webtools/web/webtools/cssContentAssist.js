@@ -313,6 +313,13 @@ define("webtools/cssContentAssist", [
 				}
 				
 				if (0 < proposals.length) {
+					proposals.sort(function(p1, p2) {
+						if (p1.name < p2.name) return -1;
+						if (p1.name > p2.name) return 1;
+						if (p1.description < p2.description) return -1;
+						if (p1.description > p2.description) return 1;
+						return 0;
+					});
 					proposals.splice(0, 0,{
 						proposal: '',
 						description: Messages['keywordsAssistTitle'],
@@ -347,10 +354,11 @@ define("webtools/cssContentAssist", [
 			}
 			
 			if (0 < proposals.length) {
-				//sort the proposals by name
 				proposals.sort(function(p1, p2) {
 					if (p1.name < p2.name) return -1;
 					if (p1.name > p2.name) return 1;
+					if (p1.description < p2.description) return -1;
+					if (p1.description > p2.description) return 1;
 					return 0;
 				});
 				// if any templates were added to the list of 
@@ -370,7 +378,7 @@ define("webtools/cssContentAssist", [
 	/**
 	 * @name orion.editor.CssContentAssistProvider
 	 * @class Provides content assist for CSS keywords.
-	 * @param {CssResultManager} resultManager The backing reult manager
+	 * @param {CssResultManager} resultManager The backing result manager
 	 */
 	function CssContentAssistProvider(resultManager) {
 	    this._resultManager = resultManager;
@@ -378,17 +386,29 @@ define("webtools/cssContentAssist", [
 	var templateAssist = new TemplateProvider();
 	
 	Objects.mixin(CssContentAssistProvider.prototype, {
-	   /**
-	    * @callback
-	    */
-	   getPrefix: function getPrefix(buffer, offset, context) {
-	       var index = offset;
-    		while (index && /[A-Za-z\-\@]/.test(buffer.charAt(index - 1))) {
-    			index--;
-    		}
-    		return index >= 0 ? buffer.substring(index, offset) : "";
-        },
-        
+		/**
+		 * @private
+		 */
+		_getPrefixStart: function(text, offset) {
+			var index = offset;
+			while (index > 0) {
+				var char = text.substring(index - 1, index);
+				if (/[A-Za-z\-\@]/.test(char)) {
+					index--;
+				} else {
+					break;
+				}
+			}
+			return index;
+		},
+		/**
+		 * @callback 
+		 */
+		computePrefix: function(editorContext, offset) {
+			return editorContext.getText().then(function (text) {
+				return text.substring(this._getPrefixStart(text, offset), offset);
+			}.bind(this));
+		},
         /**
          * @callback
          * @since 8.0
@@ -404,11 +424,10 @@ define("webtools/cssContentAssist", [
                          return that._computeProposals(cu.getEditorContext(), text, params);
                      }
                   });
-               } else {
-                   return editorContext.getText().then(function(text) {
-                      return that._computeProposals(editorContext, text, params);
-                   });
                }
+               return editorContext.getText().then(function(text) {
+                  return that._computeProposals(editorContext, text, params);
+               });
             });
         },
         

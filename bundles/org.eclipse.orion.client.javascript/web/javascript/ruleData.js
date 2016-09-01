@@ -18,16 +18,18 @@ define([
 	var rules = {
 		defaults: {
 			"accessor-pairs" : 1,
-			"check-tern-project" : 0,
+			"check-tern-plugin" : 1,
 			"curly" : 0,
 			"eqeqeq": 1,
 			"missing-doc" : 0, 
 			"missing-nls" : 0,
-			"new-parens" : 1,
-			"no-caller": 1,
-			"no-comma-dangle" : 0, 
+			'missing-requirejs': 1,
+			"new-parens" : 2,
+			"no-caller": 2,
+			"no-comma-dangle" : 0,
 			"no-cond-assign" : 2,
-			"no-console" : 0, 
+			"no-console" : 0,
+			"no-const-assign" : 2,
 			"no-constant-condition" : 2,
 			"no-control-regex" : 2,
 			"no-debugger" : 1,
@@ -37,54 +39,70 @@ define([
 			"no-empty-block" : 0,
 			"no-empty-character-class" : 2,
 			"no-empty-label" : 2,
-			"no-eq-null" : 1,
+			"no-eq-null" : 2,
 			"no-eval" : 0,
+			"no-extend-native": [2, {"exceptions" : ""}],
+			"no-extra-bind" : 1,
 			"no-extra-boolean-cast" : 2,
 			"no-extra-parens" : 1,
 			"no-extra-semi": 1,
-			"no-fallthrough" : 2, 
+			"no-fallthrough" : 2,
+			"no-implicit-coercion" : [1, { "boolean": true, "number" : true, "string" : true }],
 			"no-implied-eval" : 0,
 			"no-invalid-regexp": 2,
+			"no-invalid-this" : 1,
 			"no-irregular-whitespace" : 0,
 			"no-iterator": 2, 
-			"no-jslint" : 1, 
+			"no-jslint" : 1,
+			"no-lone-blocks" : 1,
 			"no-mixed-spaces-and-tabs" : 0,
+			"no-native-reassign" : [2, {"exceptions" : ""}],
 			"no-negated-in-lhs" : 2,
 			"no-new-array": 1,
 			"no-new-func" : 1,
 			"no-new-object" : 1,
 			"no-new-wrappers" : 1,
 			"no-obj-calls" : 2,
+			"no-param-reassign" : [1, {props: false}],
 			"no-proto" : 2, 
 			"no-redeclare" : 1,
 			"no-regex-spaces" : 2,
-			"no-reserved-keys" : 2,
-			"no-self-compare" : 2,
+			"no-reserved-keys" : 0,
 			"no-self-assign" : 2,
+			"no-self-compare" : 2,
 			"no-shadow" : 1,
 			"no-shadow-global" : 1,
 			"no-sparse-arrays" : 1, 
 			"no-throw-literal" : 1,
+			"no-trailing-spaces" : [1, { "skipBlankLines": true }],
 			"no-undef" : 2,
-			"no-undef-expression": 0,
+			"no-undef-expression": 1,
 			"no-undef-init" : 1,
-			"no-unreachable" : 1, 
+			"no-unreachable" : 1,
+			"no-unused-expressions" : [2, {allowShortCircuit: false, allowTernary: false}],
 			"no-unused-params" : 1,
 			"no-unused-vars" : 1,
 			"no-use-before-define" : 1,
+			"no-void" : 2,
 			"no-with" : 1,
+			"quotes" : [1, "double", {avoidEscape: false, allowTemplateLiterals: false}],
 			"radix" : 1,
-			"semi" : 1,
+			"semi" : [1, "always", {omitLastInOneLineBlock: false}],
 			"type-checked-consistent-return" : 0,
 			"unnecessary-nls" : 0,
+			"unknown-require": 1,
 			"use-isnan" : 2,
-			"valid-typeof" : 2
+			"valid-typeof" : 2,
+			"yoda" : [0, "never", {exceptRange: false, onlyEquality: false}]
 		},
 
 		metadata: {
 			"accessor-pairs" : {
 				description: Messages['accessor-pairs-description'],
 				url: 'http://eslint.org/docs/rules/accessor-pairs'
+			},
+			"check-tern-plugin" : {
+				description: Messages['check-tern-plugin-description'],
 			},
 			"curly" : {
 				description: Messages['curly-description'],
@@ -94,13 +112,15 @@ define([
 				description: Messages['eqeqeq-description'],
 				url: "http://eslint.org/docs/rules/eqeqeq"
 			},
-	
 			"missing-doc" : {
 				description: Messages['missing-doc-description'],
 				url: 'http://eslint.org/docs/rules/valid-jsdoc'
 			},
 			"missing-nls" : {
 				description: Messages['missing-nls-description']
+			},
+			"missing-requirejs" : {
+				description: Messages['missing-requirejs-description']
 			},
 			"new-parens" : {
 				description: Messages['new-parens-description'],
@@ -125,6 +145,10 @@ define([
 			"no-constant-condition" : {
 				description: Messages['no-constant-condition-description'],
 				url: 'http://eslint.org/docs/rules/no-constant-condition'
+			},
+			"no-const-assign" : {
+				description: Messages['no-const-assign-description'],
+				url: 'http://eslint.org/docs/rules/no-const-assign'
 			},
 			"no-control-regex" : {
 				description: Messages['no-control-regex-description'],
@@ -166,6 +190,14 @@ define([
 				description: Messages['no-eval-description'],
 				url: 'http://eslint.org/docs/rules/no-eval'
 			},
+			"no-extend-native" : {
+				description: Messages['no-extend-native-description'],
+				url: 'http://eslint.org/docs/rules/no-extend-native'
+			},
+			"no-extra-bind" : {
+				description: Messages['no-extra-bind-description'],
+				url: 'http://eslint.org/docs/rules/no-extra-bind'
+			},
 			"no-extra-boolean-cast" : {
 				description: Messages['no-extra-boolean-cast-description'],
 				url: 'http://eslint.org/docs/rules/no-extra-boolean-cast'
@@ -181,7 +213,11 @@ define([
 			"no-fallthrough" : {
 				description: Messages['no-fallthrough-description'],
 				url: 'http://eslint.org/docs/rules/no-fallthrough'
-			}, 
+			},
+			"no-implicit-coercion" : {
+				description: Messages['no-implicit-coercion-description'],
+				url: 'http://eslint.org/docs/rules/no-implicit-coercion'
+			},
 			"no-implied-eval" : {
 				description: Messages['no-implied-eval-description'],
 				url: 'http://eslint.org/docs/rules/no-implied-eval'
@@ -189,6 +225,10 @@ define([
 			"no-invalid-regexp": {
 				description: Messages['no-invalid-regexp-description'],
 				url: 'http://eslint.org/docs/rules/no-invalid-regexp'
+			},
+			"no-invalid-this": {
+				description: Messages['no-invalid-this-description'],
+				url: 'http://eslint.org/docs/rules/no-invalid-this'
 			},
 			"no-irregular-whitespace" : {
 				description: Messages['no-irregular-whitespace-description'],
@@ -200,6 +240,14 @@ define([
 			},
 			"no-jslint" : {
 				description: Messages['no-jslint-description']
+			},
+			"no-native-reassign" : {
+				description: Messages['no-native-reassign-description'],
+				url: 'http://eslint.org/docs/rules/no-native-reassign'
+			},
+			"no-lone-blocks" : {
+				description: Messages['no-lone-blocks-description'],
+				url: 'http://eslint.org/docs/rules/no-lone-blocks'
 			},
 			"no-mixed-spaces-and-tabs" : {
 				description: Messages['no-mixed-spaces-and-tabs-description'],
@@ -228,6 +276,10 @@ define([
 			"no-obj-calls" : {
 				description: Messages['no-obj-calls-description'],
 				url: 'http://eslint.org/docs/rules/no-obj-calls'
+			},
+			"no-param-reassign" : {
+				description: Messages['no-param-reassign-description'],
+				url: 'http://eslint.org/docs/rules/no-param-reassign'
 			},
 			"no-proto" : {
 				description: Messages['no-proto-description'],
@@ -268,9 +320,16 @@ define([
 				description: Messages['no-throw-literal-description'],
 				url: 'http://eslint.org/docs/rules/no-throw-literal'
 			},
+			"no-trailing-spaces" : {
+				description: Messages['no-trailing-spaces-description'],
+				url: 'http://eslint.org/docs/rules/no-trailing-spaces'
+			},
 			"no-undef" : {
 				description: Messages['no-undef-description'],
 				url: 'http://eslint.org/docs/rules/no-undef'
+			},
+			"no-undef-expression" : {
+				description: Messages['no-undef-expression-description']
 			},
 			"no-undef-init" : {
 				description: Messages['no-undef-init-description'],
@@ -279,6 +338,10 @@ define([
 			"no-unreachable" : {
 				description: Messages['no-unreachable-description'],
 				url: 'http://eslint.org/docs/rules/no-unreachable'
+			},
+			"no-unused-expressions" : {
+				description: Messages['no-unused-expressions-description'],
+				url: 'http://eslint.org/docs/rules/no-unused-expressions'
 			},
 			"no-unused-params" : {
 				description: Messages['no-unused-params-description']
@@ -291,9 +354,17 @@ define([
 				description: Messages['no-use-before-define-description'],
 				url: 'http://eslint.org/docs/rules/no-use-before-define'
 			},
+			"no-void" : {
+				description: Messages['no-void-description'],
+				url: 'http://eslint.org/docs/rules/no-void'
+			},
 			"no-with" : {
 				description: Messages['no-with-description'],
 				url: 'http://eslint.org/docs/rules/no-with'
+			},
+			"quotes" : {
+				description: Messages['quotes-description'],
+				url: 'http://eslint.org/docs/rules/quotes'
 			},
 			"radix" : {
 				description: Messages['radix-description'],
@@ -302,6 +373,9 @@ define([
 			"semi" : {
 				description: Messages['semi-description'],
 				url: 'http://eslint.org/docs/rules/semi'
+			},
+			"unknown-require" : {
+				description: Messages['unknown-require-description'],
 			},
 			"unnecessary-nls" : {
 				description: Messages['unnecessary-nls-description']
@@ -316,6 +390,10 @@ define([
 			},
 			"type-checked-consistent-return" : {
 				description: Messages['type-checked-consistent-return-description']
+			},
+			"yoda" : {
+				description: Messages['yoda-description'],
+				url: 'http://eslint.org/docs/rules/yoda'
 			}
 		}
 	};

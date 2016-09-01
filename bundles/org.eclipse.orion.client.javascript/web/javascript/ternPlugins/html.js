@@ -61,7 +61,7 @@ define([
 					for(var i = 0; i < ast.dependencies.length; i++) {
 						var dep = ast.dependencies[i];
 						var _f = resolver.getResolved(dep);
-						if(_f) {
+						if(_f && _f.file) {
 							server.addFile(_f.file, _f.contents, server._htmlDeps.file);
 						}
 					}
@@ -78,9 +78,10 @@ define([
 				var blocks = Finder.findScriptBlocks(text);
 				if(Array.isArray(blocks)) {
 					var cu = new CU(blocks, {location: f});
+					var source = cu.getSource(); // this also sets the dependencies from the blocks
 					server._htmlDeps.file = f;
 					server._htmlDeps.map[f] = cu.getDependencies(); 
-					return cu.getSource();
+					return source;
 				}
 			}
 		}

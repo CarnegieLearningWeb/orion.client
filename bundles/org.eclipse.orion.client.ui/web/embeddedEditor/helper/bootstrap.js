@@ -39,17 +39,19 @@ if (_all_script && _all_script.length && _all_script.length > 0) {
 }
 define([
 	'embeddedEditor/helper/embeddedFileImpl',
+	'embeddedEditor/helper/memoryFileSysConst',
 	'orion/pluginregistry',
 	'orion/Deferred',
 	'orion/URL-shim'
 ], function(
 	EmbeddedFileImpl,
+	memoryFileSysConst,
 	mPluginRegistry,
 	Deferred
 ) {
 
 	var once; // Deferred
-	var fPattern = "/__embed/";
+	var inMemoryFilePattern = memoryFileSysConst.MEMORY_FILE_PATTERN;
 	var defaultPluginURLs = [
 		"../javascript/plugins/javascriptPlugin.html",
 		"../webtools/plugins/webToolsPlugin.html",
@@ -84,11 +86,11 @@ define([
 		}
 		
 		once = new Deferred();
-		var fService = new EmbeddedFileImpl(fPattern);
+		var fService = new EmbeddedFileImpl(inMemoryFilePattern);
 		serviceRegistry.registerService("orion.core.file", fService, {
 			Name: 'Embedded File System',
-			top: fPattern,
-			pattern: fPattern
+			top: inMemoryFilePattern,
+			pattern: inMemoryFilePattern
 		});
 		var plugins = {};
 		pluginsToLoad.forEach(function(pluginURLString){

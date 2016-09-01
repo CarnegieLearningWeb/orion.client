@@ -1,5 +1,5 @@
 /*******************************************************************************
- * @license Copyright (c) 2014 IBM Corporation and others. All rights
+ * @license Copyright (c) 2016 IBM Corporation and others. All rights
  *          reserved. This program and the accompanying materials are made
  *          available under the terms of the Eclipse Public License v1.0
  *          (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse
@@ -14,6 +14,7 @@
 define([
 	'i18n!git/nls/gitmessages',
 	'orion/i18nUtil',
+	'orion/bidiUtils',
 	'orion/Deferred',
 	'orion/explorers/explorer',
 	'orion/git/uiUtil',
@@ -27,7 +28,7 @@ define([
 	'orion/git/logic/gitCommit',
 	'orion/git/gitConfigPreference',
 	'orion/objects'
-], function(messages, i18nUtil, Deferred, mExplorer, mGitUIUtil, mGitUtil, mTooltip, mSelection , lib, mGitCommands, mCommands, mCommandRegistry, gitCommit, gitConfigPreference, objects) {
+], function(messages, i18nUtil, bidiUtils, Deferred, mExplorer, mGitUIUtil, mGitUtil, mTooltip, mSelection , lib, mGitCommands, mCommands, mCommandRegistry, gitCommit, gitConfigPreference, objects) {
 	
 	var pageQuery = "?pageSize=100&page=1"; //$NON-NLS-0$
 	
@@ -157,6 +158,7 @@ define([
 				progress = this.section.createProgressMonitor();
 				progress.begin(messages["Getting changes"]);
 				thelocation = repository.StatusLocation;
+				// The status maybe an object in this case, if nothing changed but getChildren get called. Or it will be undefined or Deferred when something changed.
 				Deferred.when(repository.status || (repository.status = progressService.progress(gitClient.getGitStatus(thelocation), messages["Getting changes"])), function(resp) {//$NON-NLS-0$
 					var status = that.status = that.items = resp;
 					Deferred.when(that.repository || progressService.progress(gitClient.getGitClone(status.CloneLocation), messages["Getting git repository details"]), function(resp) {
@@ -399,8 +401,9 @@ define([
 	GitChangeListExplorer.prototype = Object.create(mExplorer.Explorer.prototype);
 	objects.mixin(GitChangeListExplorer.prototype, /** @lends orion.git.GitChangeListExplorer.prototype */ {
 		changedItem: function(items) {
-			if(this.model && this.model.repository) {
-				this.model.repository.status = "";
+			// We only allow Deferred status to stay if something changed. The Deferred status maybe received from gitCommitList.js.
+			if(this.model && this.model.repository && !(this.model.repository.status instanceof Deferred)) {
+				 delete this.model.repository.status;
 			}
 			var deferred = new Deferred();
 			var that = this;
@@ -665,6 +668,43 @@ define([
 			this.explorerSelectionStatus.textContent = msg;
 		},
 		createCommands: function(){
+			var toggleMaximizeCommand = new mCommands.Command({
+				name: messages['MaximizeCmd'],
+				tooltip: messages["MaximizeTip"],
+				id: "eclipse.orion.git.toggleMaximizeCommand", //$NON-NLS-0$
+				imageClass: "git-sprite-open", //$NON-NLS-0$
+				spriteClass: "gitCommandSprite", //$NON-NLS-0$
+				type: "toggle", //$NON-NLS-0$
+				callback: function(data) {
+					var diffContainer = lib.node(data.handler.options.parentDivId);
+					diffContainer.style.height = ""; //$NON-NLS-0$
+					var maximized = false;
+					var div = diffContainer.parentNode;
+					if (div.classList.contains("gitChangeListCompareMaximized")) { //$NON-NLS-0$
+						div.classList.remove("gitChangeListCompareMaximized"); //$NON-NLS-0$
+						diffContainer.classList.remove("gitChangeListCompareContainerMaximized"); //$NON-NLS-0$
+					} else {
+						div.classList.add("gitChangeListCompareMaximized"); //$NON-NLS-0$
+						diffContainer.classList.add("gitChangeListCompareContainerMaximized"); //$NON-NLS-0$
+						maximized = true;
+					}
+					data.handler.options.maximized = maximized;
+					if(data.handler.options.titleIds && data.handler.options.titleIds.length === 2) {
+						var dirtyIndicator = lib.node(data.handler.options.titleIds[1]); //$NON-NLS-0$
+						if ( dirtyIndicator) {
+							dirtyIndicator.textContent = data.handler.isDirty() && maximized ? "*" : "";
+						}
+					}
+					(data.handler._editors || [data.handler._editor]).forEach(function(editor) {
+						editor.resize();
+					});
+				},
+				visibleWhen: function() {
+					return true;
+				}
+			});
+			this.commandService.addCommand(toggleMaximizeCommand);
+			
 			if (this.prefix !== "all") { //$NON-NLS-0$
 				return;
 			}
@@ -725,42 +765,6 @@ define([
 				}
 			});
 			
-			var toggleMaximizeCommand = new mCommands.Command({
-				name: messages['MaximizeCmd'],
-				tooltip: messages["MaximizeTip"],
-				id: "eclipse.orion.git.toggleMaximizeCommand", //$NON-NLS-0$
-				imageClass: "git-sprite-open", //$NON-NLS-0$
-				spriteClass: "gitCommandSprite", //$NON-NLS-0$
-				type: "toggle", //$NON-NLS-0$
-				callback: function(data) {
-					var diffContainer = lib.node(data.handler.options.parentDivId);
-					diffContainer.style.height = ""; //$NON-NLS-0$
-					var maximized = false;
-					var div = diffContainer.parentNode;
-					if (div.classList.contains("gitChangeListCompareMaximized")) { //$NON-NLS-0$
-						div.classList.remove("gitChangeListCompareMaximized"); //$NON-NLS-0$
-						diffContainer.classList.remove("gitChangeListCompareContainerMaximized"); //$NON-NLS-0$
-					} else {
-						div.classList.add("gitChangeListCompareMaximized"); //$NON-NLS-0$
-						diffContainer.classList.add("gitChangeListCompareContainerMaximized"); //$NON-NLS-0$
-						maximized = true;
-					}
-					data.handler.options.maximized = maximized;
-					if(data.handler.options.titleIds && data.handler.options.titleIds.length === 2) {
-						var dirtyIndicator = lib.node(data.handler.options.titleIds[1]); //$NON-NLS-0$
-						if ( dirtyIndicator) {
-							dirtyIndicator.textContent = data.handler.isDirty() && maximized ? "*" : "";
-						}
-					}
-					(data.handler._editors || [data.handler._editor]).forEach(function(editor) {
-						editor.resize();
-					});
-				},
-				visibleWhen: function() {
-					return true;
-				}
-			});
-			
 			var okCancelOptions = {getSubmitName: function(){return messages.OK;}, getCancelName: function(){return messages.Cancel;}};
 			var listener = new mCommandRegistry.CommandEventListener("click", function(event, commandInvocation){ //$NON-NLS-0$
 				var gitConfigPref = new gitConfigPreference(that.registry);
@@ -779,8 +783,6 @@ define([
 							}
 					});
 				});
-				
-				
 			});
 			var precommitParameters = new mCommandRegistry.ParametersDescription([new mCommandRegistry.CommandParameter("alwaysSelect", "boolean", messages.AlwaysSelectFiles, null, null, listener)], objects.mixin({}, okCancelOptions)); //$NON-NLS-1$ //$NON-NLS-0$
 			precommitParameters.message = messages.EmptyCommitConfirm;
@@ -837,7 +839,6 @@ define([
 			this.commandService.addCommand(precommitCommand);
 			this.commandService.addCommand(selectAllCommand);
 			this.commandService.addCommand(deselectAllCommand);
-			this.commandService.addCommand(toggleMaximizeCommand);
 			this.commandService.addCommand(precommitAndPushCommand);
 			this.commandService.addCommand(precreateStashCommand);
 		},
@@ -933,6 +934,7 @@ define([
 							textArea.parentNode.classList.remove("invalidParam"); //$NON-NLS-0$
 							explorer.updateSelectionStatus();
 						});
+						bidiUtils.initInputField(textArea);
 						topRow.appendChild(textArea);
 
 						var bottomRow = document.createElement("div"); //$NON-NLS-0$
@@ -1018,12 +1020,21 @@ define([
 						moreDiv.appendChild(signedOffDiv);
 						explorer.signedOffByCheck = createInput(signedOffDiv, "signedOfByCheck", 'SmartSignedOffById', null, null, true); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 						explorer.signedOffByCheck.addEventListener("click", function() { //$NON-NLS-0$
-							var repository = explorer.model.repository;
-							var msg = mGitUtil.changeSignedOffByCommitMessage(explorer.authorNameInput.value, 
-								explorer.authorEmailInput.value, textArea.value, explorer.signedOffByCheck.checked);
-							textArea.value = msg;
-							textArea.parentNode.classList.remove("invalidParam"); //$NON-NLS-0$
-							explorer.updateSelectionStatus();
+							function filledAuthor(check){
+								if (!checkParam(check,explorer.authorNameInput, null, true)) return false;
+								if (!checkParam(check,explorer.authorEmailInput, null, true)) return false;
+								return true;
+							}
+							if(!filledAuthor(true)){
+								this.checked = false;
+							}else{
+								var repository = explorer.model.repository;
+								var msg = mGitUtil.changeSignedOffByCommitMessage(explorer.authorNameInput.value, 
+									explorer.authorEmailInput.value, textArea.value, explorer.signedOffByCheck.checked);
+								textArea.value = msg;
+								textArea.parentNode.classList.remove("invalidParam"); //$NON-NLS-0$
+								explorer.updateSelectionStatus();
+							}
 						});
 							
 						var div1Content = createGroup(moreDiv, "Author:"); //$NON-NLS-0$
@@ -1059,23 +1070,23 @@ define([
 						explorer.getMoreVisible = function() {
 							return moreDiv.style.display !== "none"; //$NON-NLS-0$
 						};
-						explorer.getCommitInfo = function (check) {
-							function checkParam (node, invalidNode, show) {
-								if (!check) return true;
-								if (!node.value.trim()) {
-									(invalidNode || node).classList.add("invalidParam"); //$NON-NLS-0$
-									if (show) explorer.setMoreVisible(true);
-									node.select();
-									return false;
-								}
-								(invalidNode || node).classList.remove("invalidParam"); //$NON-NLS-0$
-								return true;
+						function checkParam (check, node, invalidNode, show) {
+							if (!check) return true;
+							if (!node.value.trim()) {
+								(invalidNode || node).classList.add("invalidParam"); //$NON-NLS-0$
+								if (show) explorer.setMoreVisible(true);
+								node.select();
+								return false;
 							}
-							if (!checkParam(explorer.messageTextArea, explorer.messageTextArea.parentNode)) return null;
-							if (!checkParam(explorer.authorNameInput, null, true)) return null;
-							if (!checkParam(explorer.authorEmailInput, null, true)) return null;
-							if (!checkParam(explorer.committerNameInput, null, true)) return null;
-							if (!checkParam(explorer.committerEmailInput, null, true)) return null;
+							(invalidNode || node).classList.remove("invalidParam"); //$NON-NLS-0$
+							return true;
+						}
+						explorer.getCommitInfo = function (check) {
+							if (!checkParam(check,explorer.messageTextArea, explorer.messageTextArea.parentNode)) return null;
+							if (!checkParam(check,explorer.authorNameInput, null, true)) return null;
+							if (!checkParam(check,explorer.authorEmailInput, null, true)) return null;
+							if (!checkParam(check,explorer.committerNameInput, null, true)) return null;
+							if (!checkParam(check,explorer.committerEmailInput, null, true)) return null;
 							return {
 								Message: explorer.messageTextArea.value.trim(),
 								Amend: explorer.amendCheck.checked,

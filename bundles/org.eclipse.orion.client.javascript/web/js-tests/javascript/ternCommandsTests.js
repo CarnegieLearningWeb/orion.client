@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -16,17 +16,16 @@ define([
 'javascript/commands/openDeclaration',
 'javascript/commands/openImplementation',
 'javascript/cuProvider',
-'esprima/esprima',
 'chai/chai',
 'orion/Deferred',
 'mocha/mocha' //must stay at the end, not a module
-], function(ASTManager, OpenDeclaration, OpenImplementation, CUProvider, Esprima, chai, Deferred) {
+], function(ASTManager, OpenDeclaration, OpenImplementation, CUProvider, chai, Deferred) {
 	var assert = chai.assert;
 
 	return function(worker) {
 		var openImplCommand;
 		var openDeclCommand;
-		var astManager = new ASTManager.ASTManager(Esprima);
+		var astManager = new ASTManager.ASTManager();
 		var jsFile = 'tern_content_assist_test_script.js';
 		var htmlFile = 'tern_content_assist_test_script.html';
 		var timeoutReturn = ['Content assist timed out'];
@@ -38,10 +37,10 @@ define([
 		 */
 		function setup(options) {
 			var state = Object.create(null);
-			var buffer = state.buffer = typeof(options.buffer) === 'undefined' ? '' : options.buffer;
-			var offset = state.offset = typeof(options.offset) === 'undefined' ? 0 : options.offset;
-			var line = state.line = typeof(options.line) === 'undefined' ? '' : options.line;
-			var prefix = state.prefix = typeof(options.prefix) === 'undefined' ? '' : options.prefix;
+			var buffer = state.buffer = typeof options.buffer === 'undefined' ? '' : options.buffer;
+			var offset = state.offset = typeof options.offset === 'undefined' ? 0 : options.offset;
+			var line = state.line = typeof options.line === 'undefined' ? '' : options.line;
+			var prefix = state.prefix = typeof options.prefix === 'undefined' ? '' : options.prefix;
 			var contentType = options.contenttype ? options.contenttype : 'application/javascript';
 			var	file = state.file = jsFile;				
 			if (contentType === 'text/html'){
@@ -124,9 +123,34 @@ define([
 						worker.getTestState().callback();
 						return;
 					}
+				} else if (typeof expected === 'string'){
+					if (error.Message.indexOf(expected) >= 0){
+						worker.getTestState().callback();
+						return;
+					}
+				} else if (Array.isArray(expected)){
+					for (var i=0; i<expected.length; i++) {
+						var current = expected[i];
+						var currentString = 'start='+current.start+',end='+current.end+')';
+						if (error.Message.indexOf(currentString) < 0){
+							worker.getTestState().callback(new Error('Expected potential match not found.\nExpected: ' + currentString + '\nMessage: ' + error.Message));
+							return;
+						}
+					}
+					var results = error.Message.split("\n*");
+					if (results.length -1 > expected.length){
+						worker.getTestState().callback(new Error('Expected fewer potential matches.\nExpected length: ' + expected.length + '\nMessage: ' + error.Message));
+						return;
+					}
+					worker.getTestState().callback();
+					return;
 				}
 				if(error instanceof Error || toString.call(error) === '[object Error]') {
 					worker.getTestState().callback(error);
+				} else if (expected){
+					worker.getTestState().callback(new Error('Did not return a result when expected result was: ' + expected));
+				} else if (error && error.Message) {
+					worker.getTestState().callback(new Error('Unknown error.  Message: ' + error.Message));
 				} else {
 					worker.getTestState().callback(new Error('Unknown error'));
 				}
@@ -134,11 +158,11 @@ define([
 		}
 		
 		describe('Tern based commands tests', function() {
-			before('Message the server for warm up', function() {
+			before('Message the server for warm up', function(done) {
 				CUProvider.setUseCache(false);
 				openImplCommand = new OpenImplementation.OpenImplementationCommand(worker);
 				openDeclCommand = new OpenDeclaration.OpenDeclarationCommand(worker);
-				worker.start(); // Reset the tern server state to remove any prior files
+				worker.start(done, {options:{plugins:{node:{}, express:{}}}}); // Reset the tern server state to remove any prior files
 			});
 			this.timeout(10000);
 			
@@ -446,7 +470,6 @@ define([
 					offset: 63,
 					callback: done
 				};
-				// TODO This should take us to the implementation of the function
 				testOpenImpl(options, {start: 9, end: 10});
 			});
 			it('Open Declaration - Simple object property', function(done) {
@@ -530,22 +553,86 @@ define([
 				};
 				testOpenImpl(options, {start: 19, end: 20});
 			});
-			// TODO Do we want Tern to guess in this case?
-			it.skip('Open Declaration - Tern didGuess() === true', function(done) {
+			it('Open Declaration - Indexed declaration', function(done) {
 				var options = {
-					buffer: "var a = {x: function() {}}; var b = {x: function() {}}; function test(z){ return z.x() }",
-					offset: 84,
+					buffer: "/* eslint-env express */\nvar app = new express(); express.static(); app.use();",
+					offset: 62,
 					callback: done
 				};
-				testOpenDecl(options, null);
+				testOpenDecl(options, 'express');
 			});
-			it.skip('Open Implementation - Tern didGuess() === true', function(done) {
+			it('Open Implementation - Indexed declaration', function(done) {
+				var options = {
+					buffer: "/* eslint-env express */\nvar app = new express(); express.static(); app.use();",
+					offset: 62,
+					callback: done
+				};
+				testOpenImpl(options, 'express');
+			});
+			it('Open Declaration - Indexed declaration 2', function(done) {
+				var options = {
+					buffer: "/* eslint-env express */\nvar app = new express(); express.static(); app.use();",
+					offset: 75,
+					callback: done
+				};
+				testOpenDecl(options, 'express');
+			});
+			it('Open Implementation - Indexed declaration 2', function(done) {
+				var options = {
+					buffer: "/* eslint-env express */\nvar app = new express(); express.static(); app.use();",
+					offset: 75,
+					callback: done
+				};
+				testOpenImpl(options, 'express');
+			});
+			it('Open Declaration - Bogus function expression', function(done) {
+				var options = {
+					buffer: "bogusFcnExp();",
+					offset: 6,
+					callback: done
+				};
+				testOpenDecl(options, 'Could not find declaration');
+			});
+			it('Open Implementation - Bogus function expression', function(done) {
+				var options = {
+					buffer: "bogusFcnExp();",
+					offset: 6,
+					callback: done
+				};
+				testOpenImpl(options, 'No implementation was found');
+			});
+			it('Open Declaration - Declaring node selected', function(done) {
+				var options = {
+					buffer: "var a = function(){};",
+					offset: 5,
+					callback: done
+				};
+				testOpenDecl(options, {start: 4, end: 5});
+			});
+			it('Open Implementation - Declaring node selected', function(done) {
+				var options = {
+					buffer: "var a = function(){};",
+					offset: 5,
+					callback: done
+				};
+				testOpenImpl(options, {start: 4, end: 5});
+			});
+			it('Open Declaration - Multiple matches with Tern didGuess() === true', function(done) {
 				var options = {
 					buffer: "var a = {x: function() {}}; var b = {x: function() {}}; function test(z){ return z.x() }",
 					offset: 84,
 					callback: done
 				};
-				testOpenImpl(options, null);
+				testOpenDecl(options, [{start: 9, end: 10}, {start: 37, end: 38}]);
+			});
+			// TODO Open implementation does not handle guessing, it chooses the first result
+			it.skip('Open Implementation -  Multiple matches with Tern didGuess() === true', function(done) {
+				var options = {
+					buffer: "var a = {x: function() {}}; var b = {x: function() {}}; function test(z){ return z.x() }",
+					offset: 84,
+					callback: done
+				};
+				testOpenImpl(options, [{start: 9, end: 10}, {start: 37, end: 38}]);
 			});
 		});
 	};

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012, 2014 IBM Corporation and others.
+ * Copyright (c) 2012, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -20,17 +20,20 @@ define([
 	'orion/widgets/input/SettingsSelect',
 	'i18n!orion/settings/nls/messages',
 	'orion/i18nUtil',
-	'orion/metrics',
-	'orion/commands'
+	'orion/commands',
+	'orion/PageUtil',
+	'orion/webui/littlelib',
+	'orion/URITemplate'
 ], function(mExplorer, mSection, Deferred, objects, mConfirmDialog, SettingsCheckbox, SettingsTextfield, 
-		SettingsSelect, messages, i18nUtil, mMetrics, Commands) {
+		SettingsSelect, messages, i18nUtil, Commands, PageUtil, lib, URITemplate) {
 	var Explorer = mExplorer.Explorer,
 	    SelectionRenderer = mExplorer.SelectionRenderer,
 	    Section = mSection.Section,
 	    Command = Commands.Command,
 	    ConfirmDialog = mConfirmDialog.ConfirmDialog;
 
-	var METRICS_MAXLENGTH = 256;
+	var SECTION_HIDE = '/settings/sectionExpand'; //$NON-NLS-1$
+	var editTemplate = new URITemplate("/edit/edit.html#{,resource,params*}"); //$NON-NLS-0$
 
 	/**
 	 * @name orion.settings.ui.PropertyWidget
@@ -50,12 +53,12 @@ define([
 		postCreate: function() {
 			var property = this.property, config = this.config, properties = config.getProperties();
 			var value;
-			if (properties && typeof properties[property.getId()] !== 'undefined') { //$NON-NLS-0$
+			if (properties && typeof properties[property.getId()] !== 'undefined') {
 				value = properties[property.getId()];
 			} else {
 				value = property.getDefaultValue();
 			}
-			if (typeof this.updateField === 'function') { //$NON-NLS-0$
+			if (typeof this.updateField === 'function') {
 				this.updateField(value);
 			}
 		},
@@ -73,22 +76,38 @@ define([
 
 	/**
 	 * Widget displaying a string-typed plugin setting. Mixes in SettingsTextfield and PropertyWidget.
+	 * @callback
 	 */
 	var PropertyTextField = function(options) {
 		PropertyWidget.apply(this, arguments);
 		SettingsTextfield.apply(this, arguments);
+		if (this.node && options.indent) {
+			var spans = this.node.getElementsByTagName('span');
+			if (spans) {
+				var span = spans[0];
+				var existingClassName = span.className;
+				if (existingClassName) {
+					span.className += " setting-indent";
+				} else {
+					span.className = "setting-indent";
+				}
+			}
+		}
 	};
 	objects.mixin(PropertyTextField.prototype, SettingsTextfield.prototype, PropertyWidget.prototype, {
 		postCreate: function() {
 			SettingsTextfield.prototype.postCreate.apply(this, arguments);
 			PropertyWidget.prototype.postCreate.apply(this, arguments);
 			var type = this.property.getType();
-			if (type === 'number') { //$NON-NLS-0$
+			if (type === 'number') {
 				this.textfield.type = 'number'; //$NON-NLS-0$
 			} else {
 				this.textfield.type = 'text'; //$NON-NLS-0$
 			}
 		},
+		/**
+		 * @callback
+		 */
 		change: function(event) {
 			this.changeProperty(this.textfield.value);
 		},
@@ -103,10 +122,22 @@ define([
 	var PropertyCheckbox = function(options) {
 		PropertyWidget.apply(this, arguments);
 		SettingsCheckbox.apply(this, arguments);
+		if (this.node && options.indent) {
+			var spans = this.node.getElementsByTagName('span');
+			if (spans) {
+				var span = spans[0];
+				var existingClassName = span.className;
+				if (existingClassName) {
+					span.className += " setting-indent";
+				} else {
+					span.className = "setting-indent";
+				}
+			}
+		}
 	};
 	objects.mixin(PropertyCheckbox.prototype, SettingsCheckbox.prototype, PropertyWidget.prototype, {
 		change: function(event) {
-			this.changeProperty(event.target.checked); //$NON-NLS-0$
+			this.changeProperty(event.target.checked);
 		},
 		postCreate: function() {
 			PropertyWidget.prototype.postCreate.call(this);
@@ -119,26 +150,42 @@ define([
 
 	/**
 	 * Widget displaying a plugin setting whose value is restricted to an enumerated set (options). Mixes in SettingsSelect and PropertyWidget.
+	 * @callback
 	 */
 	var PropertySelect = function(options) {
 		PropertyWidget.apply(this, arguments);
 		SettingsSelect.apply(this, arguments);
+		if (this.node && options.indent) {
+			var spans = this.node.getElementsByTagName('span');
+			if (spans) {
+				var span = spans[0];
+				var existingClassName = span.className;
+				if (existingClassName) {
+					span.className += " setting-indent";
+				} else {
+					span.className = "setting-indent";
+				}
+			}
+		}
 	};
 	objects.mixin(PropertySelect.prototype, SettingsSelect.prototype, PropertyWidget.prototype, {
 		postCreate: function() {
 			var values = this.property.getOptionValues();
 			var labels = this.property.getOptionLabels(); // TODO nls
 			this.options = values.map(function(value, i) {
-				var label = (typeof labels[i] === 'string' ? labels[i] : value); //$NON-NLS-0$
+				var label = typeof labels[i] === 'string' ? labels[i] : value;
 				return {value: label, label: label};
 			});
 			SettingsSelect.prototype.postCreate.apply(this, arguments);
 			PropertyWidget.prototype.postCreate.apply(this, arguments);
 		},
+		/**
+		 * @callback
+		 */
 		change: function(event) {
 			SettingsSelect.prototype.change.apply(this, arguments);
 			var selectedOptionValue = this.property.getOptionValues()[this.getSelectedIndex()];
-			if (typeof selectedOptionValue !== 'undefined') { //$NON-NLS-0$
+			if (typeof selectedOptionValue !== 'undefined') {
 				this.changeProperty(selectedOptionValue);
 			}
 		},
@@ -164,13 +211,12 @@ define([
 		var preferences = this.serviceRegistry.getService('orion.core.preference'); //$NON-NLS-0$
 		this.controller = new ConfigController(preferences, configAdmin, this.setting.getPid());
 	};
-	objects.mixin(PropertiesWidget.prototype, { //$NON-NLS-0$
+	objects.mixin(PropertiesWidget.prototype, {
 		createElements: function() {
-			var self = this;
 			this.children = [];
 			this.initConfiguration().then(function(configuration) {
-				self.createChildren(configuration);
-			});
+				this.createChildren(configuration);
+			}.bind(this));
 		},
 		startup: function() {
 			this.createElements();
@@ -187,32 +233,37 @@ define([
 			this.node.appendChild(childWidget.node);
 			childWidget.show();
 		},
-		createChildren: function(configuration) {
-			var self = this;
-			this.setting.getAttributeDefinitions().forEach(function(property) {
-				var options = {
-					config: configuration,
-					property: property,
-					changeProperty: self.changeProperty.bind(self, property) ,
-					serviceRegistry: self.serviceRegistry
-				};
-				var widget;
+		createChildren: function(configuration, parentAttribute) {
+			var root = parentAttribute ? parentAttribute : this.setting;
+			root.getAttributeDefinitions().forEach(function(property) {
+				var dependsOn = property.getDependsOn(), 
+					options = {
+						indent: typeof dependsOn === 'string',
+						config: configuration,
+						property: property,
+						changeProperty: this.changeProperty.bind(this, property) ,
+						serviceRegistry: this.serviceRegistry
+					},
+					widget;
 				if (property.getOptionValues()) {
 					// Enumeration
 					widget = new PropertySelect(options);
 				} else {
 					switch (property.getType()) {
-						case 'boolean': //$NON-NLS-0$
+						case 'boolean':
 							widget = new PropertyCheckbox(options);
 							break;
-						case 'number': //$NON-NLS-0$
-						case 'string': //$NON-NLS-0$
+						case 'number':
+						case 'string':
 							widget = new PropertyTextField(options);
 							break;
 					}
 				}
-				self.addChild(widget);
-			});
+				this.addChild(widget);
+				if(Array.isArray(property.children) && property.children.length > 0) {
+					this.createChildren(configuration, property);
+				}
+			}.bind(this));
 		},
 		initConfiguration: function() {
 			return this.controller.initConfiguration();
@@ -307,10 +358,10 @@ define([
 	SettingsRenderer.prototype.getCellElement = function(col_no, /*Setting*/ setting, rowElement) {
 		var sectionId = setting.getPid(), headerId = sectionId + 'header'; //$NON-NLS-0$
 		
-		var settingSection = document.createElement('section'); //$NON-NLS-0$
+		var settingSection = document.createElement('section');
 		settingSection.id = sectionId;
 		settingSection.className = 'setting-row'; //$NON-NLS-0$
-		settingSection.setAttribute('role', 'region'); //$NON-NLS-0$ //$NON-NLS-1$
+		settingSection.setAttribute('role', 'region'); //$NON-NLS-0$ //$NON-NLS-1$ //$NON-NLS-2$
 		settingSection.setAttribute('aria-label', setting.getName()); //$NON-NLS-0$ // currently there's only one section, so just use setting name
 //		settingSection.setAttribute('aria-labelledby', headerId); //$NON-NLS-0$ // if there are ever multiple sections, use section header
 
@@ -320,7 +371,7 @@ define([
 		sectionHeader.className = 'setting-header setting-header-generated'; //$NON-NLS-0$
 //		sectionHeader.textContent = setting.getName(); // if there are ever multiple sections, use section header
 
-		var propertiesElement = document.createElement('div'); //$NON-NLS-0$
+		var propertiesElement = document.createElement('div');
 		propertiesElement.className = 'setting-content'; //$NON-NLS-0$
 		var propertiesWidget = this.createPropertiesWidget(propertiesElement, setting);
 		this.childWidgets.push(propertiesWidget);
@@ -331,12 +382,12 @@ define([
 		rowElement.appendChild(settingSection);
 //		mNavUtils.addNavGrid(this.explorer.getNavDict(), setting, link);
 	};
-	SettingsRenderer.prototype.createPropertiesWidget = function(parent, setting, serviceRegistry) {
+	SettingsRenderer.prototype.createPropertiesWidget = function(parent, setting) {
 		return new PropertiesWidget({serviceRegistry: this.serviceRegistry, setting: setting, categoryTitle: this.explorer.categoryTitle}, parent);
 	};
 	/** @callback */
 	SettingsRenderer.prototype.renderTableHeader = function(tableNode) {
-		return document.createElement('div'); //$NON-NLS-0$
+		return document.createElement('div');
 	};
 	SettingsRenderer.prototype.destroy = function() {
 		if (this.childWidgets) {
@@ -369,9 +420,11 @@ define([
 	 */
 	function SettingsList(options) {
 		this.serviceRegistry = options.serviceRegistry;
+		this.prefService = this.serviceRegistry.getService('orion.core.preference'); //$NON-NLS-1$
 		var commandRegistry = this.commandRegistry = options.commandRegistry;
 		this.settings = options.settings;
 		this.title = options.title;
+		this.fileClient = options.fileClient;
 		if (!options.parent || !options.serviceRegistry || !options.settings || !options.title) {
 			throw new Error('Missing required option'); //$NON-NLS-0$
 		}
@@ -379,15 +432,15 @@ define([
 
 		var restoreCommand = new Command({
 			id: "orion.pluginsettings.restore", //$NON-NLS-0$
-			name: messages["Restore"], //$NON-NLS-0$
+			name: messages["Restore"],
 			callback: function(data) {
 				var dialog = new ConfirmDialog({
-					confirmMessage: messages["ConfirmRestore"], //$NON-NLS-0$
-					title: messages["Restore"] //$NON-NLS-0$
+					confirmMessage: messages["ConfirmRestore"],
+					title: messages["Restore"]
 				});
 				dialog.show();
 				var _self = this;
-				dialog.addEventListener("dismiss", function(event) { //$NON-NLS-0$
+				dialog.addEventListener("dismiss", function(event) {
 					if (event.value) {
 					    if(data.items) {
 						    _self.restore(data.items.pid);
@@ -395,7 +448,7 @@ define([
 						    _self.restore();
 						}
 					}
-				}); //$NON-NLS-0$
+				});
 			}.bind(this)
 		});
 		commandRegistry.addCommand(restoreCommand);
@@ -403,46 +456,222 @@ define([
 
 		this.render(this.parent, this.serviceRegistry, this.settings, this.title);
 	}
+
+	function getEslintSettings(fileClient, projectPath, callback) {
+		var eslintrcjs = projectPath + SettingsList.prototype.ESLINTRC_JS;
+		return fileClient.read(eslintrcjs, false, false, {readIfExists: true}).then(function(contents) {
+			if (contents !== null) {
+				callback({contents: contents, name: SettingsList.prototype.ESLINTRC_JS, location: eslintrcjs});
+				return;
+			}
+			var eslintrcjson = projectPath + SettingsList.prototype.ESLINTRC_JSON;
+			return fileClient.read(eslintrcjson, false, false, {readIfExists: true}).then(function(contents) {
+				if (contents !== null) {
+					callback({contents: contents, name: SettingsList.prototype.ESLINTRC_JSON, location: eslintrcjson});
+					return;
+				}
+				var eslintrc = projectPath + SettingsList.prototype.ESLINTRC;
+				return fileClient.read(eslintrc, false, false, {readIfExists: true}).then(function(contents) {
+					if (contents !== null) {
+						callback({contents: contents, name: SettingsList.prototype.ESLINTRC, location: eslintrc});
+						return;
+					}
+					var eslintrcYaml = projectPath + SettingsList.prototype.ESLINTRC_YAML;
+					return fileClient.read(eslintrcYaml, false, false, {readIfExists: true}).then(function(contents) {
+						if (contents !== null) {
+							callback({contents: contents, name: SettingsList.prototype.ESLINTRC_YAML, location: eslintrcYaml});
+							return;
+						}
+						var eslintrcYml = projectPath + SettingsList.prototype.ESLINTRC_YML;
+						return fileClient.read(eslintrcYml, false, false, {readIfExists: true}).then(function(contents) {
+							if (contents !== null) {
+								callback({contents: contents, name: SettingsList.prototype.ESLINTRC_YML, location: eslintrcYml});
+								return;
+							}
+							var packageJson = projectPath + SettingsList.prototype.PACKAGE_JSON;
+							return fileClient.read(packageJson, false, false, {readIfExists: true}).then(function(contents) {
+								if(contents !== null) {
+									var vals = JSON.parse(contents);
+									if(vals.eslintConfig !== null && typeof vals.eslintConfig === 'object' && Object.keys(vals.eslintConfig).length > 0) {
+										callback({contents: contents, name: SettingsList.prototype.PACKAGE_JSON, location: packageJson});
+									}
+								}
+								return;
+							});
+						});
+					});
+				});
+			});
+		});
+	}
+	
+	function getFormattingSettings(fileClient, projectPath, callback) {
+		var jsbeautifyrc = projectPath + SettingsList.prototype.JSBEAUTIFYRC;
+		return fileClient.read(jsbeautifyrc, false, false, {readIfExists: true}).then(function(contents) {
+			if (contents !== null) {
+				callback({contents: contents, name: SettingsList.prototype.JSBEAUTIFYRC, location: jsbeautifyrc});
+				return;
+			}
+		}.bind(this));
+	}
+
 	SettingsList.prototype = {
-		_makeSection: function(parent, sectionId, setting, title, hasMultipleSections) {
-			var section = new Section(parent, { id: sectionId, title: title, useAuxStyle: true,
-				canHide: hasMultipleSections, onExpandCollapse: true});
+		/**
+		 * The .eslintrc file name
+		 * @see http://eslint.org/docs/user-guide/configuring#configuration-file-formats
+		 */
+		ESLINTRC : '.eslintrc',
+		/**
+		 * The .eslintrc.js file name
+		 * @see http://eslint.org/docs/user-guide/configuring#configuration-file-formats
+		 */
+		ESLINTRC_JS : '.eslintrc.js',
+		/**
+		 * The .eslintrc.yaml file name
+		 * @see http://eslint.org/docs/user-guide/configuring#configuration-file-formats
+		 */
+		ESLINTRC_YAML : '.eslintrc.yaml',
+		/**
+		 * The .eslintrc.yml file name
+		 * @see http://eslint.org/docs/user-guide/configuring#configuration-file-formats
+		 */
+		ESLINTRC_YML : '.eslintrc.yml',
+		/**
+		 * The .eslintrc.json file name
+		 * @see http://eslint.org/docs/user-guide/configuring#configuration-file-formats
+		 */
+		ESLINTRC_JSON : '.eslintrc.json',
+		/**
+		 * The package.json file name
+		 */
+		PACKAGE_JSON : 'package.json',
+		/**
+		 * The .jsbeautifyrc file name
+		 * @see https://github.com/beautify-web/js-beautify/blob/master/README.md
+		 */
+		JSBEAUTIFYRC : '.jsbeautifyrc',
+		
+		_makeSection: function(parent, sectionId, title, hasMultipleSections) {
+			var that = this;
+			function updateHideSetting(newValue){
+				if (that.prefService){
+					that.prefService.get(SECTION_HIDE).then(function(prefs) {
+						prefs[sectionId] = !newValue;
+						that.prefService.put(SECTION_HIDE, prefs);
+					});
+				}
+			}
+			var section = new Section(parent, { id: sectionId, title: title, useAuxStyle: true, canHide: hasMultipleSections, onExpandCollapse: updateHideSetting});
 			return section;
 		},
 		destroy: function() {
 			this.explorer.destroy();
+			this.destroyed = true;
 		},
 		restore: function(pid) {
 			var deferreds = [];
 			for(var i = 0; i < this.settings.length; i++) {
-			    var setting = this.settings[i];
-	        	    var preferences = this.serviceRegistry.getService('orion.core.preferences'); //$NON-NLS-1$
-			    if(pid) {
-			        if(setting.getPid() === pid) {
-				        deferreds.push(new ConfigController(preferences, this.serviceRegistry.getService('orion.cm.configadmin'), setting.getPid()).reset()); //$NON-NLS-1$
-				    }
+				var setting = this.settings[i];
+				var preferences = this.serviceRegistry.getService('orion.core.preferences'); //$NON-NLS-1$
+				if(pid) {
+					if(setting.getPid() === pid) {
+						deferreds.push(new ConfigController(preferences, this.serviceRegistry.getService('orion.cm.configadmin'), setting.getPid()).reset()); //$NON-NLS-1$
+						deferreds.push(new ConfigController(this.prefService, this.serviceRegistry.getService('orion.cm.configadmin'), setting.getPid()).reset()); //$NON-NLS-1$
+					}
 				} else {
-				    deferreds.push(new ConfigController(preferences, this.serviceRegistry.getService('orion.cm.configadmin'), setting.getPid()).reset()); //$NON-NLS-1$
+					deferreds.push(new ConfigController(preferences, this.serviceRegistry.getService('orion.cm.configadmin'), setting.getPid()).reset()); //$NON-NLS-1$
+					deferreds.push(new ConfigController(this.prefService, this.serviceRegistry.getService('orion.cm.configadmin'), setting.getPid()).reset()); //$NON-NLS-1$
 				}
 			}
 			if(deferreds.length > 0) { 
-    			Deferred.all(deferreds, function(err) { return err; }).then(function() {
-    				this.parent.innerHTML = ""; // empty
-    				
-    				this.render(this.parent, this.serviceRegistry, this.settings, this.title);
-    				this.serviceRegistry.getService("orion.page.message").setProgressResult(messages["settingsRestored"]); //$NON-NLS-1$
-    			}.bind(this));
+				Deferred.all(deferreds, function(err) { return err; }).then(function() {
+					this.parent.innerHTML = ""; // empty
+
+					this.render(this.parent, this.serviceRegistry, this.settings, this.title);
+					this.serviceRegistry.getService("orion.page.message").setProgressResult(messages["settingsRestored"]); //$NON-NLS-1$
+				}.bind(this));
 			}
 		},
 		render: function(parent, serviceRegistry, settings, categoryTitle) {
-			// FIXME Section forces a singleton id, bad
-			var idPrefix = 'pluginsettings-'; //$NON-NLS-0$
-			
+			var pageParams = PageUtil.matchResourceParameters();
+			var projectName;
+			switch(pageParams.category) {
+				case "javascript" : {
+					if (pageParams.resource && pageParams.resource.length !== 0) {
+						// resource name starts with /file/ and ends with '/'
+						projectName = pageParams.resource.substring(6, pageParams.resource.length - 1);
+						getEslintSettings(
+							this.fileClient,
+							pageParams.resource,
+							function(file) {
+								if (!this.destroyed) {
+									var infoText = document.createElement("div"); //$NON-NLS-0$
+									infoText.classList.add("setting-info"); //$NON-NLS-0$
+									infoText.textContent = messages.SettingWarning;
+									var icon = document.createElement("span"); //$NON-NLS-0$
+									icon.classList.add("core-sprite-warning"); //$NON-NLS-0$
+									icon.classList.add("icon-inline"); //$NON-NLS-0$
+									icon.classList.add("imageSprite"); //$NON-NLS-0$
+									var link = document.createElement("a"); //$NON-NLS-0$
+									link.href = editTemplate.expand({resource: file.location});
+									link.appendChild(document.createTextNode(file.name));
+									var projectText = document.createElement("span"); //$NON-NLS-0$
+									projectText.textContent = projectName;
+									lib.processDOMNodes(infoText, [icon, link, projectText]);
+									if (parent.firstChild) {
+										parent.insertBefore(infoText, parent.firstChild);
+									} else {
+										parent.appendChild(infoText);
+									}
+									return true;
+								}
+						}.bind(this));
+					}
+					break;
+				}
+				case "javascriptFormatting" : {
+					if (pageParams.resource && pageParams.resource.length !== 0) {
+						// resource name starts with /file/ and ends with '/'
+						projectName = pageParams.resource.substring(6, pageParams.resource.length - 1);
+						getFormattingSettings(
+							this.fileClient,
+							pageParams.resource,
+							function(file) {
+								if (!this.destroyed) {
+									var infoText = document.createElement("div"); //$NON-NLS-0$
+									infoText.classList.add("setting-info"); //$NON-NLS-0$
+									infoText.textContent = messages.SettingWarning;
+									var icon = document.createElement("span"); //$NON-NLS-0$
+									icon.classList.add("core-sprite-warning"); //$NON-NLS-0$
+									icon.classList.add("icon-inline"); //$NON-NLS-0$
+									icon.classList.add("imageSprite"); //$NON-NLS-0$
+									var link = document.createElement("a"); //$NON-NLS-0$
+									link.href = editTemplate.expand({resource: file.location});
+									link.appendChild(document.createTextNode(file.name));
+									var projectText = document.createElement("span"); //$NON-NLS-0$
+									projectText.textContent = projectName;
+									lib.processDOMNodes(infoText, [icon, link, projectText]);
+									if (parent.firstChild) {
+										parent.insertBefore(infoText, parent.firstChild);
+									} else {
+										parent.appendChild(infoText);
+									}
+									return true;
+								}
+							}.bind(this));
+					}
+				}
+			}
 			for (var i=0; i<settings.length; i++) {
-				var sectionId = idPrefix + 'section' + i; //$NON-NLS-0$
 				var setting = settings[i];
-				var section = this._makeSection(parent, sectionId, setting, setting.getName() || "Unnamed", settings.length > 1); //$NON-NLS-0$
-				this.commandRegistry.renderCommands("restoreDefaults", section.getActionElement(), settings[i], this, "button"); //$NON-NLS-1$ //$NON-NLS-0$
+				var sectionId = 'settings.section.'; //$NON-NLS-1$
+				if (setting.pid){
+					sectionId += setting.pid;
+				} else {
+					sectionId += i;
+				}
+				var section = this._makeSection(parent, sectionId, setting.getName() || "Unnamed", settings.length > 1); //$NON-NLS-0$
+				this.commandRegistry.renderCommands("restoreDefaults", section.getActionElement(), settings[i], this, "button"); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
 				
 				// Add a class name based on the category (all settings on the page have the same category currently)
 				if(setting.category){
@@ -461,6 +690,18 @@ define([
 						tableRowElement: 'div', //$NON-NLS-0$
 						noSelection: true // Until we support selection based commands, don't allow selection
 					});
+				
+				if (this.prefService && setting.pid && settings.length > 1){
+					this.prefService.get(SECTION_HIDE).then(function(theSection, prefs) {
+						if (typeof prefs[theSection.id] === 'boolean'){
+							theSection.setHidden(prefs[theSection.id]);
+						} else {
+							theSection.setHidden(true);
+						}
+					}.bind(null, section));
+				} else if (settings.length > 1) {
+					section.setHidden(true);
+				}
 			}
 		}
 	};

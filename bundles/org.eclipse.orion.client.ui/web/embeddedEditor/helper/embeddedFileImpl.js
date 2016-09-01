@@ -11,11 +11,11 @@
 
 /*eslint-env browser, amd*/
 /*global URL*/
-define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Deferred) {
-	
+define(["orion/Deferred", 'embeddedEditor/helper/memoryFileSysConst', "orion/encoding-shim", "orion/URL-shim"], function(Deferred, memoryFileSysConst) {
 	function EmbeddedFileImpl(fileBase) {
 		this.fileBase = fileBase;
 		this.fileRoot = {};
+		this.fileRoot[memoryFileSysConst.MEMORY_FILE_PROJECT_PATTERN] = {Location: memoryFileSysConst.MEMORY_FILE_PROJECT_PATTERN, Directory: true};
 	}
 	
 	EmbeddedFileImpl.prototype = {
@@ -34,8 +34,10 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 		createFolder: function(/*parentLocation, folderName*/) {
 			throw new Error("Not supported"); //$NON-NLS-0$ 
 		},
-		createFile: function(/*parentLocation, fileName*/) {
-			throw new Error("Not supported"); //$NON-NLS-0$ 
+		createFile: function(parentLocation, fileName) {
+			var fileLocation = parentLocation + fileName;
+			this._getFile(fileLocation, true);
+			return this.read(fileLocation, true);
 		},
 		moveFile: function(/*sourceLocation, targetLocation, name*/) {
 			throw new Error("Not supported"); //$NON-NLS-0$ 
@@ -58,7 +60,7 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 		_getFile: function(fLocation, create) {
 			var locationURL = new URL(fLocation);
 			var filePath = locationURL.pathname;
-			if (!this.fileRoot[filePath] && create) {
+			if (this.fileRoot[filePath] === undefined && create) {
 				this.fileRoot[filePath] = {
 					Name: locationURL.pathname.split("/").pop(),
 					Location: filePath,
@@ -78,8 +80,11 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 		 */
 		read: function(fLocation, isMetadata) {
 			var file = this._getFile(fLocation);
-			if (!file) return new Deferred().reject();
+			if (file === undefined) {
+				return new Deferred().resolve(isMetadata ? {} : "");
+			} 
 			if(isMetadata){
+				var parents = fLocation === memoryFileSysConst.MEMORY_FILE_PROJECT_PATTERN ? [] : [this.fileRoot[memoryFileSysConst.MEMORY_FILE_PROJECT_PATTERN]];
 				var meta = {
 					Length: file.length,
 					Directory: !!file.Directory,
@@ -87,7 +92,7 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 					ETag: file.ETag,
 					Location: file.Location,
 					Name: file.Name,
-					Parents: []
+					Parents: parents
 				};
 				return new Deferred().resolve(meta);
 			}
@@ -108,7 +113,7 @@ define(["orion/Deferred", "orion/encoding-shim", "orion/URL-shim"], function(Def
 				file.LocalTimeStamp = Date.now();
 				file.contents = contents;
 			}
-			return new Deferred().resolve(contents);
+			return this.read(fLocation, true);
 		},
 		/**
 		 * Deletes a file, directory, or project.

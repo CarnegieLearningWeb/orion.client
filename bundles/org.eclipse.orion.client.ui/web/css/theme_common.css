@@ -299,9 +299,9 @@ a.breadcrumb.currentLocation {
 .filesystemName {
 	display: inline-block;
 	font-weight: normal;
-	margin-left: 10px;
-	margin-top: 8px;
-	margin-bottom: 8px;
+	margin-left: 4px;
+	margin-top: 6px;
+	margin-bottom: 4px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -670,6 +670,14 @@ a.breadcrumb.currentLocation {
  	border-color: transparent;
 }
 
+.dialogContent .dropdownTrigger:not(.dropdownDefaultButton) {
+	border: 1px solid #00AED1 !important;
+}
+
+.dialogContent .dropdownTrigger:not(.dropdownDefaultButton):not(:hover) {
+	color: #00AED1 !important;
+}
+
 .dropdownTrigger a {
 	text-decoration: none;
 }
@@ -709,6 +717,7 @@ a.breadcrumb.currentLocation {
 .dropdownSubMenu > ul {
 	top: 0;
 	left: 100%;
+	max-height: 316px;
 }
 
 .dropdownMenu > li {
@@ -1044,6 +1053,7 @@ a.breadcrumb.currentLocation {
 	visibility: hidden;
 	z-index: 175;  /* less than tooltips, more than the rest */
 	position: absolute;
+	color: #222;
 	background-color: #fbfbfb;
 	border-radius: 2px;
 	border: 1px solid #BBB;
@@ -1140,7 +1150,7 @@ a.breadcrumb.currentLocation {
 }
 
 .textviewTooltip {
-	background-color: #158d7a;
+	background-color: #3B4B54;
 }
 
 .textviewTooltip .commandButton {

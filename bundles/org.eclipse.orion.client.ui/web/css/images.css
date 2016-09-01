@@ -172,7 +172,7 @@
 }
 
 .core-sprite-questionmark {
-	font-weight: bold;
+	padding-bottom: 3px;
 }
 
 .core-sprite-hamburger {
@@ -188,6 +188,7 @@
 	font-size: 14px;
 	line-height:16px;
 	padding: 2px;
+	vertical-align: bottom;
 }
 
 .core-sprite-folder {
@@ -329,7 +330,7 @@
 .core-sprite-horizontal:before{ content:'\E042'; }
 .core-sprite-vertical:before{ content:'\E041'; }
 .core-sprite-pip:before{ content:'\E067'; }
-.core-sprite-questionmark:before{ content:'?'; }
+.core-sprite-questionmark:before{ content:'\E043'; }
 
 /* icons for file types - possibly more to come - at least one for images */ 
 
@@ -348,3 +349,11 @@
 
 .core-sprite-openarrow:before{ content:'\25BE'; }
 .core-sprite-closedarrow:before{ content:'\25B8'; } */
+
+.setting-local-indicator.on::before {
+	content: '\2605';
+}
+
+.setting-local-indicator.off::before {
+	content: '\2606';
+}

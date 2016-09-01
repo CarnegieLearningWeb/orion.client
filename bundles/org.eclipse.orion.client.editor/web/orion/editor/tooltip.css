@@ -2,7 +2,7 @@
 .textviewTooltip {
 	font-family: "Consolas", "Monaco", "Vera Mono", monospace;
 	font-size: 12px;
-	background-color: #325C80; /* Must match the quickfix command button border color */
+	background-color: #3B4B54; /* Must match the quickfix command button border color */
 	color: #FAFAFA;
 	padding: 8px;
 	/* The tooltip initial size explicitly counts for padding size, border-box sizing breaks this */
@@ -75,13 +75,16 @@
 .textviewTooltip .hoverTooltipTitle {
 	font-weight: normal;
 }
+.textviewTooltip .quickFixList { /* Styling quickfixes */
+	margin-top: 5px;
+}
 .textviewTooltip .commandButton { /* Styling quickfixes */
 	border: 1px solid #325C80;
 	background-color: inherit;
 	color: white;
 }
 .textviewTooltip .commandButton:not(.dropdownTrigger){ /* In certain themes command buttons are set to all caps */
-  text-transform: initial; 
+	text-transform: initial; 
 }
 .textviewTooltip .commandList > li {
 	margin: 0;

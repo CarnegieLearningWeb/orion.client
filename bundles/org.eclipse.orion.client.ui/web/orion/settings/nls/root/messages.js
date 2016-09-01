@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -32,6 +32,9 @@ define({//Default message bundle
 	"Editor Theme":"Editor Styles:",
 	"Theme Settings": "Theme Settings",
 	"General": "General",
+	"fileNavigation": "File Navigation",
+	"desktopSelectionPolicy": "Desktop selection policy (Ctrl+Click, Shift+Click, Cmd+Click)",
+	"desktopSelectionPolicyTooltip": "The policy applies to the cases when a file or folder link is clicked while Ctrl, Shift or Cmd keys are pressed. The file or folder will be selected if this policy is checked. Otherwise the file or folder link will be opened in a new tab or window as the normal web behavior.",
 	"Navigation": "Navigation",
 	"Font": "Font",
 	"Family": "Family",
@@ -160,6 +163,7 @@ define({//Default message bundle
 	"autoLoad": "Auto Load:",
 	"saveDiffs": "Save file as diffs:",
 	"trimTrailingWhiteSpace": "Trim Trailing Whitespace on Save:",
+	"formatOnSave": "Format code on save",
 	"Restore": "Restore Defaults",
 	"Default": "Default",
 	"keys": "Keys",
@@ -283,6 +287,6 @@ define({//Default message bundle
     "editorTheme tag attribute": "Tag attribute",
     "editorTheme selection background": "Selection background",
     'customizeTheme': 'Custom Style...',
-    'moreEditorSettings': 'Editor Settings...'
-    
+    'moreEditorSettings': 'Editor Settings...',
+    'SettingWarning' : '${0} Warning: Global settings for \'${2}\' are overriden by the settings defined in: ${1}'
 });

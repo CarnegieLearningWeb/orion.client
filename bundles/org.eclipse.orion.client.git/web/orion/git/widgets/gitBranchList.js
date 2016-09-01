@@ -269,7 +269,7 @@ define([
 				this.section.filterBox.destroy();
 			}
 			this.section.filterBox = uiUtil.createFilter(this.section, messages["Filter references"],  function(value) {
-				this.model.filterQuery = "filter=" + encodeURIComponent(value); //$NON-NLS-0$
+				this.model.filterQuery = "filter=" + encodeURIComponent(value.trim()); //$NON-NLS-0$
 				this.changedItem().then(function () {
 					if (this.model.filterQuery)
 					for (var i=0; i<this.model.root.children.length; i++) {
@@ -424,7 +424,9 @@ define([
 					} else if (item.parent.Type === "PullRequestRoot") { //$NON-NLS-0$
 						var head = item.PullRequest.head;
 						var base = item.PullRequest.base;
-						item.GitUrl = head.repo.clone_url;
+						if(head.repo){
+							item.GitUrl = head.repo.clone_url;
+						}
 						var baseRoot = (head.user.login !== base.user.login)?head.user.login:"origin";//$NON-NLS-0$
 						title = i18nUtil.formatMessage(messages["PullRequestTreeItem"], baseRoot, head.ref, "origin", base.ref); //$NON-NLS-0$
 						description = i18nUtil.formatMessage(messages["PullRequestDescription"], item.PullRequest.number, item.PullRequest.title);

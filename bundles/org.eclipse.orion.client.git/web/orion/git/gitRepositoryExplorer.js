@@ -202,7 +202,7 @@ define([
 		}
 		this.statusService.setProgressResult(display);
 		
-		if (error.status === 404) {
+		if (error.status === 404 || error.status === 410) {
 			this.initTitleBar();
 			this.displayRepositories();
 		}
@@ -452,13 +452,12 @@ define([
 	
 	GitRepositoryExplorer.prototype.initTitleBar = function(resource) {
 		var item = {};
-		var task = messages.Repo;
 		var repository = resource;
 		item.Name = messages["Git"];
 		item.Parents = [];
 		mGitCommands.updateNavTools(this.registry, this.commandService, this, "pageActions", "selectionTools", this.repository, this.pageNavId); //$NON-NLS-1$ //$NON-NLS-0$
 		mGlobalCommands.setPageTarget({
-			task: task,
+			task: messages["Git"],
 			target: repository,
 			breadcrumbTarget: item,
 			makeBreadcrumbLink: function(seg, location) {
@@ -470,7 +469,7 @@ define([
 	};
 	
 	GitRepositoryExplorer.prototype.createLabel = function(parent, str, sibling) {
-		var label = document.createElement("div"); //$NON-NLS-0$
+		var label = document.createElement("label"); //$NON-NLS-0$
 		label.className = "gitSectionLabel"; //$NON-NLS-0$
 		label.textContent = str;
 		if (sibling) {
@@ -486,10 +485,12 @@ define([
 		var parent = lib.node('pageToolbar'); //$NON-NLS-0$
 		var sibling = lib.node('pageActions'); //$NON-NLS-0$
 		
+		var id = "repoSection"; //$NON-NLS-0$
 		this.repositoriesLabel = this.createLabel(parent, messages["Repository:"], sibling);
+		this.repositoriesLabel.id = id + "Label"; //$NON-NLS-0$
 		
 		var section = this.repositoriesSection = new mSection.Section(parent, {
-			id: "repoSection", //$NON-NLS-0$
+			id: id, //$NON-NLS-0$
 			title: messages["Repo"],
 			sibling: sibling,
 //			iconClass: ["gitImageSprite", "git-sprite-repository"], //$NON-NLS-1$ //$NON-NLS-0$
@@ -501,6 +502,7 @@ define([
 			noTwistie: true,
 			preferenceService: this.preferencesService
 		});
+		section.getHeaderElement().setAttribute("aria-labelledby", id + "Label " + id + "Title"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 		
 		var selection = this.repositoriesSelection = new mSelection.Selection(this.registry, "orion.selection.repo"); //$NON-NLS-0$
 		selection.addEventListener("selectionChanged", function(e) { //$NON-NLS-0$
@@ -542,10 +544,12 @@ define([
 		var parent = lib.node('pageToolbar'); //$NON-NLS-0$
 		var sibling = lib.node('pageActions'); //$NON-NLS-0$
 		
+		var id = "branchSection"; //$NON-NLS-0$
 		this.branchesLabel = this.createLabel(parent, messages["Reference:"], sibling);
+		this.branchesLabel.id = id + "Label"; //$NON-NLS-0$
 		
 		var section = this.branchesSection = new mSection.Section(parent, {
-			id: "branchSection", //$NON-NLS-0$
+			id: id, //$NON-NLS-0$
 			title: this.previousBranchTitle || "\u00A0", //$NON-NLS-0$
 			sibling: sibling,
 //			iconClass: ["gitImageSprite", "git-sprite-branch"], //$NON-NLS-1$ //$NON-NLS-0$
@@ -557,6 +561,7 @@ define([
 			noTwistie: true,
 			preferenceService: this.preferencesService
 		});
+		section.getHeaderElement().setAttribute("aria-labelledby", id + "Label " + id + "Title"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 
 		var selection = this.branchesSelection = new mSelection.Selection(this.registry, "orion.selection.ref"); //$NON-NLS-0$
 		selection.addEventListener("selectionChanged", function(e) { //$NON-NLS-0$

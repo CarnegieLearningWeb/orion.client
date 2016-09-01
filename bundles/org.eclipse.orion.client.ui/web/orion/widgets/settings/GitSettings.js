@@ -10,8 +10,8 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 define(['i18n!orion/settings/nls/messages', 'require', 'orion/commands', 'orion/git/gitPreferenceStorage', 'orion/git/gitConfigPreference', 'orion/webui/littlelib', 'orion/objects', 'orion/i18nUtil',
-		'orion/widgets/settings/Subsection', 'orion/widgets/input/SettingsTextfield', 'orion/widgets/input/SettingsCheckbox', 'orion/widgets/input/SettingsCommand'
-		], function(messages, require, mCommands, GitPreferenceStorage, GitConfigPreference, lib, objects, i18nUtil, Subsection, SettingsTextfield, SettingsCheckbox, SettingsCommand) {
+		'orion/widgets/settings/Subsection', 'orion/widgets/input/SettingsTextfield', 'orion/widgets/input/SettingsCheckbox', 'orion/widgets/input/SettingsCommand', 'orion/util'
+		], function(messages, require, mCommands, GitPreferenceStorage, GitConfigPreference, lib, objects, i18nUtil, Subsection, SettingsTextfield, SettingsCheckbox, SettingsCommand, util) {
 
 	function GitSettings(options, node) {
 		objects.mixin(this, options);
@@ -84,11 +84,18 @@ define(['i18n!orion/settings/nls/messages', 'require', 'orion/commands', 'orion/
 			gitSection2.show();
 			
 			//--------- git credentials -------------------------------
-			this.gitCredentialsFields = [ new SettingsCheckbox( 
-				{	fieldlabel:messages["Enable Storage"], 
-					postChange: this.updateGitCredentials.bind(this)
-				} 
-			) ];
+			this.gitCredentialsFields = [];
+			var gitCredentialsFieldsDefaultLength;
+			if(!util.isElectron){
+				this.gitCredentialsFields = [ new SettingsCheckbox( 
+					{	fieldlabel:messages["Enable Storage"], 
+						postChange: this.updateGitCredentials.bind(this)
+					} 
+				) ];
+				gitCredentialsFieldsDefaultLength = 1;
+			}else{
+				gitCredentialsFieldsDefaultLength= 0;
+			}
 			var gitCredentialsSection;
 			var that = this;
 			
@@ -106,7 +113,7 @@ define(['i18n!orion/settings/nls/messages', 'require', 'orion/commands', 'orion/
 					gitPreferenceStorage.remove(repository).then(
 						function(){
 							messageService.setProgressResult(i18nUtil.formatMessage(messages["DeletedGitMsg"], [repository]));
-							that.gitCredentialsFields[keyIndex+1].destroy();
+							that.gitCredentialsFields[keyIndex + gitCredentialsFieldsDefaultLength].destroy();
 						}
 					);
 				},
@@ -129,7 +136,6 @@ define(['i18n!orion/settings/nls/messages', 'require', 'orion/commands', 'orion/
 					gitCredentialsSection.show();		
 				}
 			);
-			
 		},
 		
 		update: function(){

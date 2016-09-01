@@ -9,10 +9,10 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var apiPath = require('./middleware/api_path');
 var express = require('express');
 var bodyParser = require('body-parser');
 var fs = require('fs');
+var path = require('path');
 var util = require('util');
 var api = require('./api');
 var fileUtil = require('./fileUtil');
@@ -26,39 +26,38 @@ module.exports = function(options) {
 	}
 
 	var workspaceId = 'orionode';
-	var workspaceName = 'Orionode Workspace';
 
 	/**
 	 * @returns {String} The URL of the workspace middleware, with context path.
 	 */
 	function originalWorkspaceRoot(req) {
-		return req.contextPath + workspaceRoot;
+		return workspaceRoot;
 	}
 	function originalFileRoot(req) {
-		return req.contextPath + fileRoot;
+		return fileRoot;
 	}
 	function makeProjectContentLocation(req, projectName) {
 		return api.join(originalFileRoot(req), projectName);
 	}
 	function makeProjectLocation(req, projectName) {
-		return api.join(req.contextPath, 'project', projectName);
+		return api.join(fileRoot, projectName);
 	}
 
-	var router = express.Router();
+	var router = express.Router({mergeParams: true});
 	router.use(bodyParser.json());
-	router.use(apiPath(workspaceRoot));
 
-	router.get('*', function(req, res, next) {
-		var rest = req.pathSuffix;
+	router.get('*', function(req, res) {
+		var rest = req.params["0"].substring(1);
 		var workspaceRootUrl = originalWorkspaceRoot(req);
-		//var workspaceRootUrl = req.pathPrefix;
+		var workspaceName = path.basename(req.user.workspaceDir);
 		if (rest === '') {
 			// http://wiki.eclipse.org/Orion/Server_API/Workspace_API#Getting_the_list_of_available_workspaces
 			fileUtil.withStats(req.user.workspaceDir, function(err, stats) {
 				if (err) {
-					throw err;
+					api.writeError(500, res, "Could not open the workspace directory");
+					return;
 				}
-				var ws = JSON.stringify({
+				api.write(null, res, null, {
 					Id: 'anonymous',
 					Name: 'anonymous',
 					UserName: 'anonymous',
@@ -69,93 +68,98 @@ module.exports = function(options) {
 						Name: workspaceName
 					}]
 				});
-				res.setHeader('Content-Type', 'application/json');
-				res.setHeader('Content-Length', ws.length);
-				res.end(ws);
 			});
 		} else if (rest === workspaceId) {
-			// http://wiki.eclipse.org/Orion/Server_API/Workspace_API#Getting_workspace_metadata
 			var parentFileLocation = originalFileRoot(req);
-			fileUtil.getChildren(req.user.workspaceDir, parentFileLocation, function(children) {
+			var workspaceJson;
+			fileUtil.getChildren(fileRoot, req.user.workspaceDir, req.user.workspaceDir, 1)
+			.then(function(children) {
 				// TODO this is basically a File object with 1 more field. Should unify the JSON between workspace.js and file.js
-				var ws = JSON.stringify({
+				var location = api.join(workspaceRootUrl, workspaceId);
+				children.forEach(function(child) {
+					child.Id = child.Name;
+				});
+				workspaceJson = {
 					Directory: true,
 					Id: workspaceId,
 					Name: workspaceName,
-					Location: api.join(workspaceRootUrl, workspaceId),
-					ChildrenLocation: api.join(workspaceRootUrl, workspaceId), // ?? // api.join(fileRoot, workspaceId, '?depth=1'),
-					Children: children
-//					Projects: [] // TODO projects -- does anything care about these?
-				});
-				res.setHeader('Content-Type', 'application/json');
-				res.setHeader('Content-Length', ws.length);
-				res.end(ws);
-			});
+					Location: location,
+					ChildrenLocation: location,
+					Children: children,
+					Projects: children.map(function(c) {
+						return {
+							Id: c.Name,
+							Location:  api.join(parentFileLocation, c.Name),
+						};
+					})
+				};
+				return Promise.all(fileUtil.getDecorators().map(function(decorator){
+					return decorator(workspaceRoot, req, "", workspaceJson);			
+					})
+				);
+			})
+			.then(function(){
+				api.write(null, res, null, workspaceJson);
+			})
+			.catch(api.writeError.bind(null, 500, res));
 		} else {
 			res.statusCode = 400;
 			res.end(util.format('workspace not found: %s', rest));
 		}
 	});
 
-	router.post('*', function(req, res, next) {
-			var rest = req.pathSuffix;
-			var err;
-			if (rest === '') {
-				// Create workspace. unsupported
-				err = {Message: 'Unsupported operation: create workspace'};
-				res.statusCode = 403;
-				res.end(JSON.stringify(err));
-			} else if (rest === workspaceId) {
-				var projectName = req.headers.slug || (req.body && req.body.Name);
-				if (!projectName) {
-					err = {Message: 'Missing "Slug" header or "Name" parameter'};
-					res.statusCode = 400;
-					res.setHeader('Content-Type', 'application/json');
-					res.end(JSON.stringify(err));
-					return;
-				}
-				// Move/Rename a project
-				var location = req.body && req.body.Location;
-				if (location) {
-					var wwwpath = api.rest(fileRoot, location.substr(req.contextPath.length)),
-					    filepath = fileUtil.safeFilePath(req.user.workspaceDir, projectName);
-
-					// Call the File POST helper to handle the filesystem operation. We inject the Project-specific metadata
-					// into the resulting File object.
-					fileUtil.handleFilePOST(req.user.workspaceDir, fileRoot, req, res, wwwpath, filepath, {
-						Id: projectName,
-						ContentLocation: makeProjectContentLocation(req, projectName),
-						Location: makeProjectLocation(req, projectName)
-					}, /*renaming a project is always 200 status*/ 200);
-					return;
-				}
-				// Create a project
-				fs.mkdir(fileUtil.safeFilePath(req.user.workspaceDir, projectName), parseInt('0755', 8), function(error) {
-					if (error) {
-						err = {Message: error};
-						res.statusCode = 400;
-						res.end(JSON.stringify(error));
-					} else {
-						var newProject = JSON.stringify({
-							Id: projectName,
-							ContentLocation: makeProjectContentLocation(req, projectName), // Important
-							Location: makeProjectLocation(req, projectName) // not important
-						});
-						res.statusCode = 201;
-						res.setHeader('Content-Type', 'application/json');
-						res.setHeader('Content-Length', newProject.length);
-						res.end(newProject);
-					}
-				});
+	router.post('*', function(req, res) {
+		var rest = req.params["0"].substring(1);
+		var err;
+		if (rest === '') {
+			// Create workspace. unsupported
+			err = {Message: 'Unsupported operation: create workspace'};
+			res.status(403).json(err);
+		} else if (rest === workspaceId) {
+			var projectName = fileUtil.decodeSlug(req.headers.slug) || req.body && req.body.Name;
+			if (!projectName) {
+				err = {Message: 'Missing "Slug" header or "Name" parameter'};
+				res.status(400).json(err);
+				return;
 			}
+			// Move/Rename a project
+			var location = req.body && req.body.Location;
+			if (location) {
+				var filepath = fileUtil.safeFilePath(req.user.workspaceDir, projectName);
+				// Call the File POST helper to handle the filesystem operation. We inject the Project-specific metadata
+				// into the resulting File object.
+				fileUtil.handleFilePOST(fileRoot, req, res, filepath, {
+					Id: projectName,
+					ContentLocation: makeProjectContentLocation(req, projectName),
+					Location: makeProjectLocation(req, projectName)
+				}, /*renaming a project is always 200 status*/ 200);
+				return;
+			}
+			// Create a project
+			fs.mkdir(fileUtil.safeFilePath(req.user.workspaceDir, projectName), parseInt('0755', 8), function(error) {
+				if (error) {
+					err = {Message: error};
+					res.status(400).json(err);
+				} else {
+					api.write(201, res, null, {
+						Id: projectName,
+						ContentLocation: makeProjectContentLocation(req, projectName), // Important
+						Location: makeProjectLocation(req, projectName) // not important
+					});
+				}
+			});
+		}
 	});
 
-	router.put('*', function(req, res, next) {
-		// Would 501 be more appropriate?
+	router.put('*', function(req, res) {
+		if (req.body.Location && options.options.configParams["orion.single.user"]) {
+			options.options.workspaceDir = req.body.Location;
+			return res.status(200).end();
+		}
 		writeError(403, res);
 	});
 
-	router.delete('*', function(req, res) {
+	router.delete('*', /* @callback */ function(req, res) {
 		// Would 501 be more appropriate?
 		writeError(403, res);
 	});

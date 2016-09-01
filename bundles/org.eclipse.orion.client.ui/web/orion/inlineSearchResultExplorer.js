@@ -14,12 +14,13 @@ define(['i18n!orion/search/nls/messages', 'orion/Deferred', 'orion/webui/littlel
 	'orion/highlight', 'orion/webui/tooltip', 'orion/explorers/navigatorRenderer', 'orion/extensionCommands',
 	'orion/searchModel', 'orion/explorers/fileDetailRenderer',
 	'orion/extensionCommands',
-	'orion/objects'
+	'orion/objects',
+	'orion/bidiUtils'
 ],
 function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands, 
 	mSearchUtils, mCompareView, mHighlight, mTooltip, 
 	navigatorRenderer, extensionCommands, mSearchModel, mFileDetailRenderer,
-	mExtensionCommands, objects
+	mExtensionCommands, objects, bidiUtils
 ) {
 	var isMac = window.navigator.platform.indexOf("Mac") !== -1; //$NON-NLS-0$
     /* Internal wrapper functions*/
@@ -210,7 +211,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
         }
 		var loc = item.location;
 		if(!loc) {
-			item.parent.location ? item.parent.location : '#';
+			loc = item.parent.location ? item.parent.location : '#';
 		}
 //      var params;
 //      if(typeof item.start === "number" && typeof item.end === "number") {
@@ -271,8 +272,10 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
 		if(item.totalMatches) {
 			var fileNameElement = this._getFileNameElement(item);
 			var linkDiv = lib.node(this.getItemLinkId(item));
-			linkDiv.removeChild(linkDiv.lastElementChild);
-			linkDiv.appendChild(fileNameElement);
+			if(linkDiv) {//In category mode, there is no file item rendered, so there is no linkDiv
+				linkDiv.removeChild(linkDiv.lastElementChild);
+				linkDiv.appendChild(fileNameElement);
+			}
 	    }    
 	};
 
@@ -703,6 +706,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
         this._reporting = true;
         this.initCommands();
         this.reportStatus(messages["Writing files..."]);
+		this.fileClient.freezeChangeEvents();
         this.model.writeReplacedContents(reportList).then(function(/*modellist*/) {
             _empty(this.getParentDivId());
             var reporter = new SearchReportExplorer(
@@ -716,21 +720,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
             reporter.report();
             this._inlineSearchPane.hideReplacePreview();
             this.reportStatus("");
-            //reportList is the result after all files are writen to hte file service. Prepare a "FileContentChanged" event from here
-            var files = [];
-            reportList.forEach(function(fileItem){
-            	var contentType = this._contentTypeService.getFilenameContentType(fileItem.model.name);
-            	var fileObj = Object.create(null);
-            	var metadata = Object.create(null);
-            	metadata.contentType =  contentType ? contentType.id : "";
-            	fileObj.name = fileItem.model.name;
-            	fileObj.location = fileItem.model.location;
-            	fileObj.metadata = metadata;
-            	files.push(fileObj);
-            }.bind(this));
-            if(files.length > 0) {
-				this.fileClient.dispatchEvent({ type: "FileContentChanged", files: files}); //$NON-NLS-0$
-			}
+            this.fileClient.thawChangeEvents();
         }.bind(this));
     };
 
@@ -1073,15 +1063,18 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
 	        	// Figure out change index. Unchecked elements are 
 	        	// removed from diffs and must therefore be skipped.
 				var changeIndex = 0;
-				currentModel.parent.children.some(function(element){
-					if (this.model.getId(currentModel) === this.model.getId(element)) {
-						return true;
-					} else if (element.checked) {
-						changeIndex++;
-					}
-					return false;
-				}, this);
-			    this.compareView.gotoDiff(changeIndex);
+				var fileItem = _getFileModel(currentModel);
+				if(fileItem && fileItem.children) {
+					fileItem.children.some(function(element){
+						if (this.model.getId(currentModel) === this.model.getId(element)) {
+							return true;
+						} else if (element.checked) {
+							changeIndex++;
+						}
+						return false;
+					}, this);
+				    this.compareView.gotoDiff(changeIndex);
+				}
 			} else if (currentModel.lineNumber !== undefined) {//If the change is unchecked, scroll to the line and select the match
 				var startIndex = currentModel.matches[currentModel.matchNumber - 1].startIndex;
 				var endIndex = startIndex + currentModel.matches[currentModel.matchNumber - 1].length;
@@ -1126,7 +1119,7 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
 		if (pagingParams.numberOnPage === 0) {
 			var message = messages["No matches"];
 			if(this.model._provideSearchHelper){
-				message = i18nUtil.formatMessage(messages["NoMatchFound"], this.model._provideSearchHelper().displayedSearchTerm);
+				message = i18nUtil.formatMessage(messages["NoMatchFound"], bidiUtils.enforceTextDirWithUcc(this.model._provideSearchHelper().displayedSearchTerm));
 			}
 		    this.parentNode.textContent = "";
 		    var textBold = _createElement('b', null, null, this.parentNode); //$NON-NLS-1$ //$NON-NLS-1$
@@ -1268,7 +1261,16 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
 		lib.empty(node);
 		node.focus();
 		var that = this;
-        var searchModel = new mSearchModel.SearchResultModel(this.registry, this.fileClient, searchResult, searchResult.length, searchParams, {
+		var totalSearchResults = 0;
+		if (searchResult.refResult) {
+        	searchResult.refResult.forEach(function(file) {
+        		totalSearchResults += file.totalMatches;
+        	});
+		}
+		else {
+			totalSearchResults = searchResult.length;
+		}
+        var searchModel = new mSearchModel.SearchResultModel(this.registry, this.fileClient, searchResult, totalSearchResults, searchParams, {
             onMatchNumberChanged: function(fileItem) {
                 that.renderer.replaceFileElement(fileItem);
             },

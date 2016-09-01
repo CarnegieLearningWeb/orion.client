@@ -12,8 +12,9 @@
 /*eslint-env browser, amd*/
 define([
 	'orion/plugin',
+	'orion/util',
 	'i18n!orion/nls/messages'
-], function(PluginProvider, messages) {
+], function(PluginProvider, util, messages) {
 
 	function connect() {
 		var headers = {
@@ -51,7 +52,7 @@ define([
 					name: "Conf",
 					extension: ["conf"]
 				},
-				{	id: "text/sh",
+				{	id: "application/x-sh",
 					"extends": "text/plain",
 					name: "sh",
 					extension: ["sh"]
@@ -147,15 +148,17 @@ define([
 				contentType: ["text/x-markdown"]});
 	
 		// open file with browser, no associated orion.navigate.openWith command means that any content type is valid
-		provider.registerService("orion.edit.editor", {}, {
-			id: "orion.viewer.raw",
-			name: messages["Browser"],
-			nls: "orion/nls/messages",
-			uriTemplate:  "{+Location}",
-			validationProperties: [{
-				source: "!Projects" // Filter out workspace; Raw only applies to regular files and folders.
-			}]
-		});
+		if (!util.isElectron) {
+			provider.registerService("orion.edit.editor", {}, {
+				id: "orion.viewer.raw",
+				name: messages["Browser"],
+				nls: "orion/nls/messages",
+				uriTemplate:  "{+Location}",
+				validationProperties: [{
+					source: "!Projects" // Filter out workspace; Raw only applies to regular files and folders.
+				}]
+			});
+		}
 
 		var HTML_EDITOR_ID = "orion.editor.html";
 		provider.registerService("orion.edit.editor", {}, {

@@ -223,6 +223,9 @@ define([
 		this._contentParent.setAttribute("role", "region"); //$NON-NLS-2$ //$NON-NLS-1$
 		this._contentParent.classList.add("sectionTable"); //$NON-NLS-0$
 		this._contentParent.setAttribute("aria-labelledby", this.titleNode.id); //$NON-NLS-0$
+		if (options.dropdown) {
+			this._contentParent.classList.add("sectionDropdown");
+		}
 		// initially style as hidden until we determine what needs to happen
 		this._collapse();
 		if (options.sibling) {
@@ -314,7 +317,7 @@ define([
 		 * Get the header DOM node
 		 * @returns {DomNode} The dom node that holds the section header.
 		 */
-		getHeaderElement: function(title){
+		getHeaderElement: function(){
 			return this.domNode;
 		},
 		
@@ -322,7 +325,7 @@ define([
 		 * Get the title DOM node
 		 * @returns {DomNode} The dom node that holds the section title.
 		 */
-		getTitleElement: function(title){
+		getTitleElement: function(){
 			return this.titleNode;
 		},
 		
@@ -330,7 +333,7 @@ define([
 		 * Get the title DOM node
 		 * @returns {DomNode} The dom node that holds the section title.
 		 */
-		getActionElement: function(title){
+		getActionElement: function(){
 			return this._toolActionsNode;
 		},
 		
@@ -458,7 +461,7 @@ define([
 							var firstHeader = Object.getPrototypeOf(this).getCellHeaderElement.call(this, col_no);
 							if(firstHeader){
 								var sectionTitle = firstHeader.innerHTML;
-								if (bidiUtils.isBidiEnabled) {
+								if (bidiUtils.isBidiEnabled()) {
 									sectionTitle = bidiUtils.enforceTextDirWithUcc(sectionTitle);
 								}
 								this.section.setTitle(sectionTitle);

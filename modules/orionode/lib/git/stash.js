@@ -40,7 +40,7 @@ function getStash(req, res) {
 	var stashesPromises = [];
 	return clone.getRepo(req)
 	.then(function(repo) {
-		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+		fileDir = clone.getfileDir(repo,req);
 		return git.Stash.foreach(repo, function(index, message, oid) {
 			if (filter && message.indexOf(filter) === -1) return;
 			stashesPromises.push(repo.getCommit(oid)
@@ -98,6 +98,9 @@ function putStash(req, res) {
 		res.status(200).end();
 	})
 	.catch(function(err) {
+		if (err.message === "Reference 'refs/stash' not found"){
+			writeError(400, res, "Failed to apply stashed changes due to an empty stash.");
+		}
 		writeError(404, res, err.message);
 	});
 }
@@ -115,12 +118,12 @@ function deleteStash(req, res) {
 					index = i;
 				}
 			} else {
-				all.push(git.Stash.drop(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX));				
+				all.push(git.Stash.drop(repo, index));				
 			} 
 		})
 		.then(function() {
 			if (all.length) return Promise.all(all);
-			return git.Stash.drop(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX);
+			return git.Stash.drop(repo, index);
 		});
 	})
 	.then(function() {
@@ -140,7 +143,7 @@ function postStash(req, res) {
 	return clone.getRepo(req)
 	.then(function(_repo) {
 		repo = _repo;
-		return git.Stash.save(repo, git.Signature.default(repo), message, flags);
+		return git.Stash.save(repo, clone.getSignature(repo), message, flags);
 	})
 	.then(function() {
 		res.status(200).end();

@@ -1,10 +1,15 @@
 {
 	"plugins": {
-		"requirejs": {}
+		"node": {},
+		"requirejs": {},
+		"express": {}
 	},
 	"ecmaVersion": 5,
 	"libs": [
 		"ecma5",
-		"browser"
+		"browser",
+		"chai",
+		".definitions/compression",
+		".definitions/nodegit"
 	]
 }

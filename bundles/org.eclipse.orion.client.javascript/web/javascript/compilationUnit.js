@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation and others.
+ * Copyright (c) 2015, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -28,6 +28,10 @@ define([
     function CompilationUnit(sourceblocks, metadata, editorContext) {
         this._blocks = sourceblocks;
         this._metadata = metadata;
+        if (metadata){
+        	// The context returned by getEditorContext only contains javascript text so set the content type to match
+        	this._metadata.contentType = {id: 'application/javascript'}; //$NON-NLS-1$
+        }
         this._ec = editorContext;
         this._deps = [];
     }
@@ -136,6 +140,7 @@ define([
 	        	proxy.getSelections = that._ec.getSelections;
 	        	proxy.setSelection = that._ec.setSelection;
 	        	proxy.syntaxCheck = that._ec.syntaxCheck;
+	        	proxy.setCaretOffset = that._ec.setCaretOffset;
 	    	}
         return proxy;
     };

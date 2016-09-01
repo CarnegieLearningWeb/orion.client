@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -19,6 +19,7 @@ define([
 	var worker, //the backing worker
 		_state, //the mutable testing state
 		callbacks, //the object of callback functions per request ID 
+		testFiles = Object.create(null), //list of xhr requests we should ignore
 		messageID = 0; //the message ID counter
 	
 	/**
@@ -53,14 +54,7 @@ define([
 	 * @param {Function} f The callback function to call when the Tern server responds
 	 */
 	WrappedWorker.prototype.postMessage = function(msg, f) {
-		if(msg !== null && typeof(msg) === 'object') {
-			if(typeof(msg.messageID) !== 'number') {
-				//don't overwrite an id from a tern-side request
-				msg.messageID = messageID++;
-				callbacks[msg.messageID] = f;
-			}
-		}
-		worker.postMessage(msg);
+		message(msg, f);
 	};
 	
 	/**
@@ -72,19 +66,38 @@ define([
 		worker.terminate();
 	};
 	
+	function message(msg, f) {
+		if(msg !== null && typeof msg === 'object') {
+			if(typeof msg.messageID !== 'number') {
+				//don't overwrite an id from a tern-side request
+				msg.messageID = messageID++;
+				callbacks[msg.messageID] = f;
+			}
+		}
+		worker.postMessage(msg);	
+	}
+	
 	/**
 	 * @description Starts the worker
 	 * @function
 	 * @param {Function} callback The callback to call when done starting worker and server
 	 * @since 11.0
 	 */
-	WrappedWorker.prototype.start = function(callback) {
-		if (callback){
+	WrappedWorker.prototype.start = function(callback, json, fn) {
+		if(callback) {
+			//tests can pass in null here to avoid having the test "complete" once the server starts
 			_state.callback = callback;
 		}
-		worker.postMessage({request: 'start_server', args: {}});
+		var j = json ? json : {};
+		message({request: 'start_server', args: j}, function() {
+			if(typeof fn === "function") {
+				fn();
+			}
+			if(callback) {
+				callback();
+			}
+		});
 	};
-	
 	/**
 	 * @name WrappedWorker.prototype.setTestState
 	 * @description Sets the test state, must be called per test to ensure the correct state is being tested
@@ -105,12 +118,22 @@ define([
 		return _state;
 	};
 	
+	/**
+	 * @description Adds a fake file that will return the given contents when requested rather than perform an xhr
+	 * only be ignored once.
+	 * @function
+	 * @param {String} fileName the file name to ignore
+	 */
+	WrappedWorker.prototype.createTestFile = function(fileName, text) {
+		testFiles[fileName] = text;
+	};
+	
 	function onmessage(ev) {
-		if(typeof(ev.data) === 'object') {
+		if(typeof ev.data === 'object') {
 			var _d = ev.data;
 			var id  = _d.messageID;
 			var f = callbacks[id];
-			if(typeof(f) === 'function') {
+			if(typeof f === 'function') {
 				if(_d.error) {
 					f(_d, _d.error);
 				} else {
@@ -118,7 +141,7 @@ define([
 				}
 				delete callbacks[id];
 			} else if(_d.request === "worker_ready") {
-    			if(typeof(_state.workerReady) === 'function') {
+    			if(typeof _state.workerReady === 'function') {
 					_state.workerReady();
 				} else {
 					this.postMessage({request: 'start_server', args: {}}, 
@@ -132,9 +155,20 @@ define([
 			} else if(_d.request === 'read') {
 				var url, filePath;
 				if(_d.args && _d.args.file) {
-					if(typeof(_d.args.file) === 'object') {
+					if(typeof _d.args.file === 'object') {
 						filePath = _d.args.file.logical ? _d.args.file.logical : _d.args.file;
 						url = getFileURL(filePath);
+						
+						if (typeof testFiles[filePath] === 'string'){
+							if (testFiles[filePath].length > 0){
+								this.postMessage({request: 'read', ternID: _d.ternID, args: {contents: testFiles[filePath], file: filePath, logical: _d.args.file.logical}});
+							} else {
+								this.postMessage({request: 'read', ternID: _d.ternID, args: {error: "Empty test file ignored", logical: _d.args.file.logical}});
+							}
+							testFiles[filePath] = undefined;
+							return;
+						}
+						
 						_xhr('GET', url.href, {log: true, timeout: 2000}).then(function(response) {
 							this.postMessage({request: 'read', ternID: _d.ternID, args: {contents: response.response, file: response.url, logical: _d.args.file.logical}});
 						}.bind(this), function(rejection){
@@ -142,9 +176,20 @@ define([
 							_state.callback(new Error(error));
 							this.postMessage({request: 'read', ternID: _d.ternID, args: {error: error, logical: _d.args.file.logical, file: rejection.url}});
 						}.bind(this));
-					} else if(typeof(_d.args.file) === 'string') {
+					} else if(typeof _d.args.file === 'string') {
 						filePath = _d.args.file;
 						url = getFileURL(filePath);
+						
+						if (typeof testFiles[filePath] === 'string'){
+							if (testFiles[filePath].length > 0){
+								this.postMessage({request: 'read', ternID: _d.ternID, args: {contents: testFiles[filePath], file: filePath, logical: _d.args.file.logical}});
+							} else {
+								this.postMessage({request: 'read', ternID: _d.ternID, args: {error: "Empty test file ignored", logical: _d.args.file.logical}});
+							}
+							testFiles[filePath] = undefined;
+							return;
+						}
+						
 						_xhr('GET', url.href, {log: true, timeout: 2000}).then(function(response) {
 							this.postMessage({request: 'read', ternID: _d.ternID, args: {contents: response.target.response, file: response.target.responseURL}});
 						}.bind(this), function(rejection){
@@ -158,21 +203,25 @@ define([
 				}
 			} else if(_d.request === 'delFile' || _d.request === 'addFile') {
 				return;
-			} else if(typeof(_d.request) === 'string') {
+			} else if(typeof _d.request === 'string') {
 				//don't process requests other than the ones we want
 				_state.callback(new Error('Got message I don\'t know: '+_d.request));
 			} else if(_d.error) {
 				var err = _d.error;
 				if(err instanceof Error) {
+					_state.testErr = err;
 					_state.callback(err);
-				} else if(typeof(err) === 'string') {
-					if(typeof(_d.message) === 'string') {
+				} else if(typeof err === 'string') {
+					if(typeof _d.message === 'string') {
+						_state.testErr = new Error(err+": "+_d.message);
 						_state.callback(new Error(err+": "+_d.message));
 					} else {
 						//wrap it
+						_state.testErr = new Error(err);
 						_state.callback(new Error(err));
 					}
-				} else if(err && typeof(err.message) === 'string') {
+				} else if(err && typeof err.message === 'string') {
+					_state.testErr = new Error(err.message);
 					_state.callback(new Error(err.message));
 				}
 			} else if(_d.__isError && _d.xhr) {
@@ -189,10 +238,10 @@ define([
 	function onerror(err) {
 		if(err instanceof Error) {
 			_state.callback(err);
-		} else if(typeof(err) === 'string') {
+		} else if(typeof err === 'string') {
 			//wrap it
 			_state.callback(new Error(err));
-		} else if(err && typeof(err.message) === 'string') {
+		} else if(err && typeof err.message === 'string') {
 			_state.callback(new Error(err.message));
 		}
 	}
@@ -223,7 +272,7 @@ define([
 	return {
 		instance:  function(state) {
 			var path = "../../javascript/plugins/ternWorker.js";
-			if(typeof(state.path) === 'string') {
+			if(typeof state.path === 'string') {
 				path = state.path;
 			}
 			return new WrappedWorker(path, state);

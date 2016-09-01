@@ -19,8 +19,9 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 		'orion/keyBinding',
 		'orion/problems/problemsView',
 		'orion/keyBinding',
+		'orion/util',
 		'orion/webui/Slideout'],
-		function(objects, mCommands, mOutliner, lib, MiniNavViewMode, ProjectNavViewMode, mGlobalCommands, messages, InlineSearchPane, mKeyBinding, mProblemsView, KeyBinding, mSlideout) {
+		function(objects, mCommands, mOutliner, lib, MiniNavViewMode, ProjectNavViewMode, mGlobalCommands, messages, InlineSearchPane, mKeyBinding, mProblemsView, KeyBinding, util, mSlideout) {
 
 	/**
 	 * @name orion.sidebar.Sidebar
@@ -209,7 +210,9 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 				choiceCallback: this.viewModeMenuCallback.bind(this)
 			});
 			this.commandRegistry.addCommand(changeViewModeCommand);
-			this.commandRegistry.registerCommandContribution(this.switcherNode.id, "orion.sidebar.viewmode", 2, "orion.menuBarViewGroup"); //$NON-NLS-1$ //$NON-NLS-0$
+			if (!util.isElectron) {
+				this.commandRegistry.registerCommandContribution(this.switcherNode.id, "orion.sidebar.viewmode", 2, "orion.menuBarViewGroup"); //$NON-NLS-1$ //$NON-NLS-0$
+			}
 		},
 		_createNavigationViewMode: function() {
 			this._navigationViewMode = new MiniNavViewMode({
@@ -312,13 +315,15 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 			this.commandRegistry.addCommand(problemsInFolderCommand);
 			this.commandRegistry.registerCommandContribution(this.toolsScope, "orion.problemsInFolder", 2, "orion.menuBarToolsGroup", false, new KeyBinding.KeyBinding('p', true, false, true));  //$NON-NLS-1$ //$NON-NLS-0$
  		},
- 		fillSearchPane: function(searchText, searchScope, searchResult) {
+ 		fillSearchPane: function(searchParams, searchResult) {
  			var mainSplitter = mGlobalCommands.getMainSplitter();
 			if (mainSplitter.splitter.isClosed()) {
 				mainSplitter.splitter.toggleSidePanel();
 			}
-			this._inlineSearchPane.setSearchText(searchText);
-			this._inlineSearchPane.setSearchScope(searchScope); //reset search scope
+			this._inlineSearchPane.setSearchText(searchParams.keyword);
+			this._inlineSearchPane.setSearchScope(searchParams.resource);
+			this._inlineSearchPane.setCheckBox(searchParams);
+			this._inlineSearchPane.setFileNamePatterns(searchParams.fileNamePatterns);
 			this._inlineSearchPane.show();
 			this._inlineSearchPane.showSearchOptions();
 			if(!searchResult) {
@@ -409,7 +414,6 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 						if (mainSplitter.splitter.isClosed()) {
 							mainSplitter.splitter.toggleSidePanel();
 						}
-						recordDefaultSearchResource(data);
 						this._inlineSearchPane.setSearchText(getSearchText());
 						this._inlineSearchPane.setSearchScope(this._lastSearchRoot); //reset search scope
 						this._inlineSearchPane.show();
@@ -426,7 +430,14 @@ define(['orion/objects', 'orion/commands', 'orion/outliner', 'orion/webui/little
 					return true;
 				},
 				callback: function(data) {
-					this.fillSearchPane(getSearchText(), recordDefaultSearchResource(data));
+					if(this.editorInputManager) {
+						var metadata = this.editorInputManager.getFileMetadata();
+						if(metadata) {
+							var resource = recordDefaultSearchResource({items: [metadata]});
+							var keyword = getSearchText();
+							this.fillSearchPane({keyword: keyword, resource: resource});
+						}
+					}
 				}.bind(this)
 			});
 			

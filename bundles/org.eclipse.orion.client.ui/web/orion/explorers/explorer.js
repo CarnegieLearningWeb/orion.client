@@ -15,9 +15,10 @@ define([
 	'orion/webui/littlelib',
 	'orion/webui/treetable',
 	'orion/explorers/explorerNavHandler',
+	'orion/Deferred',
 	'orion/uiUtils',
 	'orion/commands'
-], function(messages, lib, mTreeTable, mNavHandler, UiUtils, mCommands){
+], function(messages, lib, mTreeTable, mNavHandler, Deferred, UiUtils, mCommands){
 
 var exports = {};
 
@@ -64,7 +65,22 @@ exports.Explorer = (function() {
 			}
 			this.destroyed = true;
 		},
-		
+		isDesktopSelectionMode: function() {
+			return new Deferred().resolve(false);
+		},
+		handleLinkDoubleClick: function(linkNode, doubleClickEvt) {
+            this.isDesktopSelectionMode().then(function(desktopMode){
+            	if(desktopMode) {
+            		doubleClickEvt.preventDefault();
+					var evt = document.createEvent("MouseEvents");
+				    evt.initMouseEvent("click", true, true, window,
+				        3, 0, 0, 0, 0,
+				        true, false, evt.shiftKey, true,
+				        0, null);
+				    linkNode.dispatchEvent(evt); 
+            	}
+            });
+		},
 		// we have changed an item on the server at the specified parent node
 		changedItem: function(parent, children) {
 			if (this.myTree) {
@@ -294,7 +310,9 @@ exports.Explorer = (function() {
 					this._navHandler = options.navHandlerFactory.createNavHandler(this, this._navDict, options);
 				} else {
 					var getChildrenFunc = options ? options.getChildrenFunc : null;
-					this._navHandler = new mNavHandler.ExplorerNavHandler(this, this._navDict, {getChildrenFunc: getChildrenFunc, setFocus: options && options.setFocus, selectionPolicy: (options ? options.selectionPolicy : null)});
+					this._navHandler = new mNavHandler.ExplorerNavHandler(this, this._navDict, {getChildrenFunc: getChildrenFunc, setFocus: options && options.setFocus, 
+														selectionPolicy: (options ? options.selectionPolicy : null),
+														gridClickSelectionPolicy: (options ? options.gridClickSelectionPolicy : null)});
 				}
 			}
 			var that = this;
@@ -865,10 +883,17 @@ exports.SelectionRenderer = (function(){
 	};
 	
 	SelectionRenderer.prototype.initSelectableRow = function(item, tableRow) {
-		var self = this;
+		var _self = this;
 		tableRow.addEventListener("click", function(evt) { //$NON-NLS-0$
-			if(self.explorer.getNavHandler()){
-				self.explorer.getNavHandler().onClick(item, evt);
+			var navHandler = _self.explorer.getNavHandler();
+			if(navHandler){
+				navHandler.onClick(item, evt);
+				if(navHandler.gridClickSelectionPolicy === "true") {
+                    var link = lib.$("a", tableRow);
+                    if (link && link !== evt.target) {
+                    		link.click();
+                    }
+				}
 			}
 		}, false);
 	};

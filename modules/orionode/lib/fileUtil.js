@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,11 +9,12 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
+/*eslint-disable consistent-return*/
 var ETag = require('./util/etag');
 var path = require('path');
 var Promise = require('bluebird');
 var rimraf = require('rimraf');
-var url = require('url');
+var fse = require('fs-extra');
 var api = require('./api');
 
 var fs = Promise.promisifyAll(require('fs'));
@@ -26,49 +27,29 @@ var fs = Promise.promisifyAll(require('fs'));
 /**
  * Builds up an array of a directory's children, as File objects.
  * @param {String} parentLocation Parent location in the file api for child items (ugh)
- * @param {Array} [exclude] Filenames of children to hide. If omitted, everything is included.
- * @param {Function} callback
- * @returns {Array}
+ * @param {Array} [exclude] Filenames of children to hide. If `null`, everything is included.
+ * @param {Function} callback Invoked as func(error?, children)
+ * @returns A promise
  */
-// TODO depth
-var getChildren = exports.getChildren = function(directory, parentLocation, excludes, callback) {
-	// If 'excludes' is omitted, the callback can be given as the 3rd argument
-	callback = excludes || callback;
-	fs.readdirAsync(directory).then(function(files) {
-		// stat each file to find if it's a Directory -- ugh
-		var childStatPromises = files.map(function(file) {
+var getChildren = exports.getChildren = function(fileRoot, workspaceDir, directory, depth, excludes) {
+	return fs.readdirAsync(directory)
+	.then(function(files) {
+		return Promise.map(files, function(file) {
 			if (Array.isArray(excludes) && excludes.indexOf(file) !== -1) {
 				return null; // omit
 			}
 			var filepath = path.join(directory, file);
-			return fs.statAsync(filepath).then(function(stat) {
-				return [filepath, stat];
+			return fs.statAsync(filepath)
+			.then(function(stats) {
+				return fileJSON(fileRoot, workspaceDir, filepath, stats, depth ? depth - 1 : 0);
+			})
+			.catch(function() {
+				return null; // suppress rejection
 			});
-		}).filter(function(f) { return f; }); // skip omitted stuff
-		Promise.all(childStatPromises).then(function(childStats) {
-			var children = childStats.map(function(cs) {
-				var childname = path.basename(cs[0]);
-				var isDirectory = cs[1].isDirectory();
-				var timeStamp = cs[1].mtime.getTime();
-				var size = cs[1].size;
-				var location = api.join(parentLocation, encodeURIComponent(childname));
-				if(isDirectory && location[location.length-1] !== "/"){
-					location = location +"/";
-				}
-				var child = {
-					Name: childname,
-					Id: childname,
-					Length: size,
-					LocalTimeStamp: timeStamp,
-					Directory: isDirectory,
-					Location: location
-				};
-				if (isDirectory)
-					child.ChildrenLocation = api.join(parentLocation, childname) + '?depth=1';
-				return child;
-			});
-			callback(children); //yay
 		});
+	})
+	.then(function(results) {
+		return results.filter(function(r) { return r; });
 	});
 };
 
@@ -93,25 +74,7 @@ var safePath = exports.safePath = function(workspaceDir, p) {
  * @throws {Error} If rest is outside of the workspaceDir (and thus is unsafe)
  */
 var safeFilePath = exports.safeFilePath = function(workspaceDir, filepath) {
-	return safePath(workspaceDir, path.join(workspaceDir, decodeURIComponent(filepath)));
-};
-
-/**
- * @param {Object} debugMeta The meta data of the debug URL
- * @param {String} hostName Optional If not defined use the debugMeta.hostname
- * @returns {String} The debug URL enclosed with "[" and "]".
- * The returned value is URL-decoded.
- * @throws {Error} If rest is outside of the workspaceDir (and thus is unsafe)
- */
-exports.generateDebugURL = function(debugMeta, hostName) {
-	var hName = hostName ? hostName : debugMeta.hostname;
-	return url.format({
-			protocol: debugMeta.protocol,
-			hostname: hName,
-			port:  debugMeta.port,
-			pathname: debugMeta.pathname,
-			query: debugMeta.query
-		});
+	return safePath(workspaceDir, path.join(workspaceDir, filepath));
 };
 
 var getParents = exports.getParents = function(fileRoot, relativePath) {
@@ -125,10 +88,11 @@ var getParents = exports.getParents = function(fileRoot, relativePath) {
 	for (var i=0; i < segs.length; i++) {
 		var seg = segs[i];
 		loc = api.join(loc, seg);
+		var location = loc + "/";
 		parents.push({
-			Name: decodeURIComponent(seg),
-			ChildrenLocation: loc + '?depth=1', 
-			Location: loc
+			Name: seg,
+			ChildrenLocation: {pathname: location, query: {depth:1}}, 
+			Location: location
 		});
 	}
 	return parents.reverse();
@@ -142,119 +106,42 @@ exports.rumRuff = function(dirpath, callback) {
 	rimraf(dirpath, callback);
 };
 
-function _copyDir(srcPath, destPath, callback) {
-	var _copyRecursive, processDir, cpDir, cpFile;
-	destPath = destPath[destPath.length-1] === path.sep ? destPath : destPath + path.sep;
-
-	/** @returns A promise that resolves once all directories in the tree rooted at 'root' have been copied.
-	 * @param {Array} List of the mix of files and directories, in the top down order, that will be copied first for all folders then files.
-	 */
-	_copyRecursive = function(root, dirlist) {
-		var stack = [{path: root, dir: true}];
-		return new Promise(function(resolve) {
-			(function handleNextDir() {
-				if (!stack.length) {
-					resolve();
-					return;
-				}
-				var dir = stack.shift();
-				dirlist.push(dir);
-				processDir(stack, dir, dirlist).then(handleNextDir);
-			}());
-		});
-	};
-	/** @returns A promise that resolves once all items in 'dir' have been either: deleted (if simple file) or 
-	 * pushed to 'stack' for later handling (if directory).
-	 * @param {Array} stack
-	 * @param {String} dir
-	 * @param {Array} List of the mix of files and directories, in the top down order, that will be copied first for all folders then files.
-	 */
-	processDir = function(stack, dir, dirlist) {
-		return fs.readdirAsync(dir.path).then(function(files) {
-			return Promise.all(files.map(function(filename) {
-				var fullpath = path.join(dir.path, filename);
-				return fs.statAsync(fullpath).then(function(stat) {
-					if (stat.isDirectory()) {
-						stack.push({path: fullpath, dir: true});
-					} else {
-						dirlist.push({path: fullpath, dir: false});
-					}
-					return Promise.resolve();
-				});
-			}));
-		});
-	};
-	cpDir = function(dirlist) {
-		return Promise.each(dirlist, function(d) {
-			var currentDestFolderPath = d.path.replace(srcPath, destPath)
-			if (d.dir) {
-				return fs.mkdirAsync(currentDestFolderPath);
-			}
-			// file
-			var rs = fs.createReadStream(d.path);
-			var ws = fs.createWriteStream(currentDestFolderPath);
-			rs.pipe(ws);
-			// TODO resolve once writing has finished?
-			// return new Promise((resolve) => rs.on('end', resolve))
-			return Promise.resolve();
-		});
-	};
-	cpFile = function(dirlist) {
-		dirlist.forEach(function(item) {
-			if(!item.dir){
-				var currentDestFolderPath = item.path.replace(srcPath, destPath);
-				var rs = fs.createReadStream(item.path);
-				var ws = fs.createWriteStream(currentDestFolderPath);
-				rs.pipe(ws);
-			}
-		});
-	};
-	// recursively copy directories, then copy all the files cached
-	var dirlist = [];
-	_copyRecursive(srcPath, dirlist).then(function() {
-		return cpDir(dirlist);
-	}).then(function() {
-		cpFile(dirlist);
-		callback();
-	}, function(error) {
-		callback(error);
-	});
-}
-
-
 /**
  * Copy srcPath to destPath
  * @param {String} srcPath
  * @param {String} destPath
- * @param {Function} callback Invoked as callback(error, destPath)
+ * @param {Function} callback Invoked as callback(error?, destPath)
+ * @returns promise
  */
 var copy = exports.copy = function(srcPath, destPath, callback) {
-	fs.stat(srcPath, function(error, stats) {
-		if (error) { callback(error); }
-		else {
-			if (stats.isDirectory()) {
-				_copyDir( srcPath, destPath, callback);
-			} else if (stats.isFile()) {
-				var rs = fs.createReadStream(srcPath);
-				var ws = fs.createWriteStream(destPath);
-				rs.pipe(ws);
-				rs.on('error', callback);
-				rs.on('end', callback.bind(null, null, destPath));
+	return new Promise(function(fulfill, reject) {
+		return fse.copy(srcPath, destPath, {clobber: true, limit: 32}, function(err) {
+			if (err) {
+				if (callback) callback(err);
+				return reject(err);
 			}
-		}
+			if (callback) callback(null, destPath);
+			fulfill(destPath);
+		});
 	});
 };
 
 /**
  * @param {Function} callback Invoked as callback(error, stats)
+ * @deprecated just use Promise.promisify(fs).statAsync() instead
  */
-var withStats = exports.withStats = function(filepath, callback) {
+exports.withStats = function(filepath, callback) {
 	fs.stat(filepath, function(error, stats) {
 		if (error) { callback(error); }
 		else {
 			callback(null, stats);
 		}
 	});
+};
+
+exports.decodeSlug = function(slug) {
+	if (typeof slug === "string") return decodeURIComponent(slug);
+	return slug;
 };
 
 /**
@@ -281,6 +168,15 @@ exports.withStatsAndETag = function(filepath, callback) {
 		});
 	});
 };
+exports.withETag = function(filepath, callback) {
+	var etag = ETag();
+	var stream = fs.createReadStream(filepath);
+	stream.pipe(etag);
+	stream.on('error', callback);
+	stream.on('end', function() {
+		callback(null, etag.read());
+	});
+};
 
 /**
  * @returns {String} The Location of for a file resource.
@@ -301,27 +197,61 @@ function getBoolean(obj, key) {
 	return Object.prototype.hasOwnProperty.call(obj, key) && (val === true || val === 'true');
 }
 
+var decorators = [];
+/**
+ * Shared decorator, used by workspace as well.
+ */
+exports.getDecorators = function(){
+	return decorators;
+};
+/**
+ * Used to add different decorators to generate respond json.
+ * @param {func} decorator functions to be added;
+ */
+exports.addDecorator = function(func) {
+	decorators.push(func);
+};
+
 /**
  * Helper for fulfilling a file metadata GET request.
  * @param {String} fileRoot The "/file" prefix or equivalent.
+ * @param {Object} req HTTP request object
  * @param {Object} res HTTP response object
- * @param {String} wwwpath The WWW path of the file relative to the fileRoot.
  * @param {String} filepath The physical path to the file on the server.
  * @param {Object} stats
  * @param {String} etag
  * @param {Boolean} [includeChildren=false]
  * @param {Object} [metadataMixins] Additional metadata to mix in to the response object.
  */
-var writeFileMetadata = exports.writeFileMetadata = function(fileRoot, res, wwwpath, filepath, stats, etag, includeChildren, metadataMixins) {
-	includeChildren = includeChildren || false;
+var writeFileMetadata = exports.writeFileMetadata = function(fileRoot, req, res, filepath, stats, etag, depth, metadataMixins) {
+	var result;
+	return fileJSON(fileRoot, req.user.workspaceDir, filepath, stats, depth, metadataMixins)
+	.then(function(originalJson) {
+		result = originalJson;
+		return Promise.map(decorators, function(decorator){
+			return decorator(fileRoot, req, filepath, result);			
+		});
+	})
+	.then(function(){
+		if (etag) {
+			result.ETag = etag;
+			res.setHeader('ETag', etag);
+		}
+		res.setHeader("Cache-Control", "no-cache");
+		api.write(null, res, null, result);
+	})
+	.catch(api.writeError.bind(null, 500, res));
+};
+function fileJSON(fileRoot, workspaceDir, filepath, stats, depth, metadataMixins) {
+	depth = depth || 0;
 	var isDir = stats.isDirectory();
-	var metaObj = {
-		Name: decodeURIComponent(path.basename(filepath)),
+	var wwwpath = api.toURLPath(filepath.substring(workspaceDir.length + 1));
+	var result = {
+		Name: path.basename(filepath),
 		Location: getFileLocation(fileRoot, wwwpath, isDir),
 		Directory: isDir,
 		LocalTimeStamp: stats.mtime.getTime(),
 		Parents: getParents(fileRoot, wwwpath),
-		//Charset: "UTF-8",
 		Attributes: {
 			// TODO fix this
 			ReadOnly: false, //!(stats.mode & USER_WRITE_FLAG === USER_WRITE_FLAG),
@@ -330,41 +260,25 @@ var writeFileMetadata = exports.writeFileMetadata = function(fileRoot, res, wwwp
 	};
 	if (metadataMixins) {
 		Object.keys(metadataMixins).forEach(function(property) {
-			metaObj[property] = metadataMixins[property];
+			result[property] = metadataMixins[property];
 		});
 	}
-	if (etag) {
-		metaObj.ETag = etag;
-		res.setHeader('ETag', etag);
-	}
 	if (!isDir) {
-		api.write(null, res, null, metaObj);
-	} else {
-		// Orion's File Client expects ChildrenLocation to always be present
-		metaObj.ChildrenLocation = api.join(fileRoot, wwwpath) + '?depth=1';
-		if (!includeChildren) {
-			api.write(null, res, null, metaObj);
-		} else {
-			getChildren(filepath, api.join(fileRoot, wwwpath)/*this dir*/, null/*omit nothing*/, function(children) {
-				var name = path.basename(filepath);
-				if (name[name.length-1] === path.sep) {
-					name = name.substring(0, name.length-1);
-				}
-				metaObj.Children = children;
-//				var childrenJSON = JSON.stringify(children);
-//				var folder = JSON.stringify({
-//					ChildrenLocation: api.join(fileRoot, rest) + '?depth=1',
-//					LocalTimeStamp: stats.mtime.getTime(),
-//					Location: api.join(fileRoot, rest),
-//					Name: decodeURIComponent(name),
-//					Parents: getParents(filepath, rest)
-//				});
-//				api.write(200, res, null, folder)
-				api.write(null, res, null, metaObj);
-			});
-		}
+		return Promise.resolve(result);
 	}
-};
+	// Orion's File Client expects ChildrenLocation to always be present
+	result.ChildrenLocation = {pathname: result.Location, query: {depth:1}};
+	result.ImportLocation = result.Location.replace(/\/file/, "/xfer/import").replace(/\/$/, "");
+	result.ExportLocation = result.Location.replace(/\/file/, "/xfer/export").replace(/\/$/, "") + ".zip";
+	if (depth <= 0) {
+		return Promise.resolve(result);
+	}
+	return getChildren(fileRoot, workspaceDir, filepath, depth)
+	.then(function(children) {
+		result.Children = children;
+		return result;
+	});
+}
 
 /**
  * Helper for fulfilling a file POST request (for example, copy, move, or create).
@@ -377,88 +291,66 @@ var writeFileMetadata = exports.writeFileMetadata = function(fileRoot, res, wwwp
  * @param {Number} [statusCode] Status code to send on a successful response. By default, `201 Created` is sent if
  * a new resource was created, and and `200 OK` if an existing resource was overwritten.
  */
-exports.handleFilePOST = function(workspaceDir, fileRoot, req, res, wwwpath, destFilepath, metadataMixins, statusCode) {
-	var getSafeFilePath = safeFilePath.bind(null, workspaceDir);
+exports.handleFilePOST = function(fileRoot, req, res, destFilepath, metadataMixins, statusCode) {
 	var isDirectory = req.body && getBoolean(req.body, 'Directory');
-	if (typeof req.contextPath !== "string") {
-		throw new Error("Missing context path");
-	}
-	var fileRootUrl = req.contextPath + fileRoot;
-
-	fs.exists(destFilepath, function(destExists) {
-		function checkXCreateOptions(opts) {
-			// Can't have both copy and move
-			return opts.indexOf('copy') === -1 || opts.indexOf('move') === -1;
+	var writeResponse = function(isOverwrite) {
+		// TODO: maybe set ReadOnly and Executable based on fileAtts
+		if (typeof statusCode === 'number') {
+			res.status(statusCode);
+		} else {
+			// Status code 200 indicates that an existing resource was replaced, or we're POSTing to a URL
+			res.status(isOverwrite ? 200 : 201);
 		}
-		function writeCreatedFile(error) {
-			if (error) {
-				api.writeError(500, res, error);
-				return;
-			} else if (req.body) {
-				// var fileAtts = req.body.Attributes;
-				// TODO: maybe set ReadOnly and Executable based on fileAtts
-			}
-			if (typeof statusCode === 'number') {
-				res.statusCode = statusCode;
-			} else {
-				// Status code 200 indicates that an existing resource was replaced, or we're POSTing to a URL
-				res.statusCode = destExists ? 200 : 201;
-			}
-			withStats(destFilepath, function(error, stats) {
-				if (error) {
-					api.writeError(500, res, error);
-					return;
-				}
-				writeFileMetadata(fileRootUrl, res, wwwpath, destFilepath, stats, /*etag*/null, /*includeChildren*/false, metadataMixins);
-			});
-		}
-		function createFile() {
-			if (isDirectory) {
-				fs.mkdir(destFilepath, writeCreatedFile);
-			} else {
-				fs.writeFile(destFilepath, '', writeCreatedFile);
-			}
-		}
-		function doCopyOrMove(isCopy) {
-			var sourceUrl = req.body.Location;
-			if (!sourceUrl) {
-				api.writeError(400, res, 'Missing Location property in request body');
-				return;
-			}
-			var sourceFilepath = getSafeFilePath(api.rest(fileRootUrl, api.matchHost(req, sourceUrl)));
-			fs.exists(sourceFilepath, function(sourceExists) {
-				if (!sourceExists) {
-					api.write(404, res, null, 'File not found: ' + sourceUrl);
-					return;
-				}
-				if (isCopy) {
-					copy(sourceFilepath, destFilepath, writeCreatedFile);
-				} else {
-					fs.rename(sourceFilepath, destFilepath, writeCreatedFile);
-				}
-			});
-		}
-
+		return fs.statAsync(destFilepath)
+		.then(function(stats) {
+			return writeFileMetadata(fileRoot, req, res, destFilepath, stats, /*etag*/null, /*depth*/0, metadataMixins);
+		})
+		.catch(function(err) {
+			api.writeError(500, res, err.message);
+		});
+	};
+	fs.statAsync(destFilepath)
+	.catchReturn({ code: 'ENOENT' }, null) // suppress reject when file does not exist
+	.then(function(stats) {
+		return !!stats; // just return whether the file existed
+	})
+	.then(function(destExists) {
 		var xCreateOptions = (req.headers['x-create-options'] || "").split(",");
-		if (!checkXCreateOptions(xCreateOptions)) {
-			api.write(400, res, null, 'Illegal combination of X-Create-Options.');
-			return;
+		var isCopy = xCreateOptions.indexOf('copy') !== -1, isMove = xCreateOptions.indexOf('move') !== -1;
+		if (isCopy && isMove) {
+			return api.write(400, res, null, 'Illegal combination of X-Create-Options.');
 		}
 		if (xCreateOptions.indexOf('no-overwrite') !== -1 && destExists) {
-			res.setHeader('Content-Type', 'application/json');
-			res.statusCode = 412;
-			res.end(JSON.stringify({Message: 'A file or folder with the same name already exists at this location.'}));
-			return;
-		} 
-		var isCopy;
-		if ((isCopy = xCreateOptions.indexOf('copy') !== -1) || (xCreateOptions.indexOf('move') !== -1)) {
-			doCopyOrMove(isCopy);
-		} else {
-			if (destExists) {
-				fs.unlink(destFilepath, createFile);
-			} else {
-				createFile();
-			}
+			return api.writeError(412, res, new Error('A file or folder with the same name already exists at this location.'));
 		}
-	});	
+
+		if (isCopy || isMove) {
+			var sourceUrl = req.body.Location;
+			if (!sourceUrl) {
+				return api.writeError(400, res, 'Missing Location property in request body');
+			}
+			var sourceFilepath = safeFilePath(req.user.workspaceDir, api.rest(fileRoot, api.matchHost(req, sourceUrl)));
+			return fs.statAsync(sourceFilepath)
+			.then(function(/*stats*/) {
+				return isCopy ? copy(sourceFilepath, destFilepath) : fs.renameAsync(sourceFilepath, destFilepath);
+			})
+			.then(writeResponse.bind(null, destExists))
+			.catch(function(err) {
+				if (err.code === 'ENOENT') {
+					return api.writeError(404, res, 'File not found:' + sourceUrl);
+				}
+				return api.writeError(500, res, err);
+			});
+		}
+		// Just a regular file write
+		return Promise.resolve()
+		.then(function(){
+			return destExists ? fs.unlinkAsync(destFilepath) : null;
+		})
+		.then(function() {
+			return isDirectory ? fs.mkdirAsync(destFilepath) : fs.writeFileAsync(destFilepath, '');
+		})
+		.then(writeResponse.bind(null, destExists))
+		.catch(api.writeError.bind(null, 500, res));
+	});
 };

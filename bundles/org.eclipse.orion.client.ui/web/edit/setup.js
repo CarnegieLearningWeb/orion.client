@@ -17,7 +17,7 @@ define([
 	'orion/inputManager',
 	'orion/commands',
 	'orion/globalCommands',
-	'orion/editor/textModel',
+	'orion/editor/textModelFactory',
 	'orion/editor/undoStack',
 	'orion/folderView',
 	'orion/editorView',
@@ -42,6 +42,7 @@ define([
 	'orion/URITemplate',
 	'orion/i18nUtil',
 	'orion/PageUtil',
+	'orion/util',
 	'orion/objects',
 	'orion/webui/littlelib',
 	'orion/Deferred',
@@ -54,10 +55,10 @@ define([
 	'orion/customGlobalCommands'
 ], function(
 	messages, Sidebar, mInputManager, mCommands, mGlobalCommands,
-	mTextModel, mUndoStack,
+	mTextModelFactory, mUndoStack,
 	mFolderView, mEditorView, mPluginEditorView , mMarkdownView, mMarkdownEditor,
 	mCommandRegistry, mContentTypes, mFileClient, mFileCommands, mEditorCommands, mSelection, mStatus, mProgress, mOperationsClient, mOutliner, mDialogs, mExtensionCommands, ProjectCommands, mSearchClient,
-	EventTarget, URITemplate, i18nUtil, PageUtil, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor, mJSEditor, bidiUtils, mCustomGlobalCommands
+	EventTarget, URITemplate, i18nUtil, PageUtil, util, objects, lib, Deferred, mProjectClient, mSplitter, mTooltip, mHTMLEditor, mJSEditor, bidiUtils, mCustomGlobalCommands
 ) {
 
 var exports = {};
@@ -183,7 +184,7 @@ function TextModelPool(options) {
 TextModelPool.prototype = {};
 objects.mixin(TextModelPool.prototype, {
 	create: function(serviceID) {
-		var model = new mTextModel.TextModel();
+		var model = new mTextModelFactory.TextModelFactory().createTextModel({serviceRegistry: this.serviceRegistry});
 		var undoStack = new mUndoStack.UndoStack(model, 500);
 		var contextImpl = {};
 		[	
@@ -365,7 +366,7 @@ objects.mixin(EditorViewer.prototype, {
 			this.commandRegistry.processURL(href);
 			if (this.curFileNode) {
 				var curFileNodeName = evt.name || "";
-				if (bidiUtils.isBidiEnabled) {
+				if (bidiUtils.isBidiEnabled()) {
 					curFileNodeName = bidiUtils.enforceTextDirWithUcc(curFileNodeName);
 				}
 				this.curFileNode.textContent = curFileNodeName;				
@@ -584,6 +585,7 @@ objects.mixin(EditorSetup.prototype, {
 			serviceRegistry: serviceRegistry,
 			commandRegistry: this.commandRegistry,
 			fileClient: this.fileClient,
+			preferences: this.preferences,
 			renderToolbars: this.renderToolbars.bind(this),
 			searcher: this.searcher,
 			readonly: this.readonly,
@@ -627,13 +629,18 @@ objects.mixin(EditorSetup.prototype, {
 			editorInputManager: this.editorInputManager
 		}).then(function(runBar){
 			if (runBar) {
-				this.runBar = runBar;
+				this.preferences.get('/runBar').then(function(prefs){ //$NON-NLS-1$
+					this.runBar = runBar;
+					var displayRunBar = prefs.display === undefined  || prefs.display;
+					if (util.isElectron || !displayRunBar) {
+						lib.node("runBarWrapper").style.display = "none";
+					}
+				});
 			}
 		}.bind(this));
 	},
 	
 	createSideBar: function() {
-		var commandRegistry = this.commandRegistry;
 		// Create input manager wrapper to handle multiple editors
 		function EditorInputManager() {
 			EventTarget.attach(this);
@@ -698,9 +705,9 @@ objects.mixin(EditorSetup.prototype, {
 		this.sidebarNavInputManager.addEventListener("rootChanged", function(evt) { //$NON-NLS-0$
 			this.lastRoot = evt.root;
 		}.bind(this));
-		var gotoInput = function(evt) { //$NON-NLS-0$
-			var newInput = evt.newInput || evt.parent || ""; //$NON-NLS-0$
-			window.location = uriTemplate.expand({resource: newInput}); //$NON-NLS-0$
+		var gotoInput = function(evt) {
+			var newInput = evt.newInput || evt.parent || "";
+			window.location = uriTemplate.expand({resource: newInput.resource || newInput, params: newInput.params || []});
 		};
 		this.sidebarNavInputManager.addEventListener("filesystemChanged", gotoInput); //$NON-NLS-0$
 		this.sidebarNavInputManager.addEventListener("editorInputMoved", gotoInput); //$NON-NLS-0$
@@ -721,7 +728,7 @@ objects.mixin(EditorSetup.prototype, {
 	 */
 	computeNavigationHref: function(item, options) {
 		var openWithCommand = mExtensionCommands.getOpenWithCommand(this.commandRegistry, item);
-		if (openWithCommand && typeof(openWithCommand.hrefCallback) === 'function') {
+		if (openWithCommand && typeof openWithCommand.hrefCallback === 'function') {
 			return openWithCommand.hrefCallback({items: objects.mixin({}, item, {params: options})});
 		}
 		if(options) {
@@ -862,7 +869,6 @@ objects.mixin(EditorSetup.prototype, {
 		window.addEventListener("hashchange", function() { //$NON-NLS-0$
 			this.setInput(PageUtil.hash());
 		}.bind(this));
-
 		window.onbeforeunload = function() {
 			var dirty, autoSave;
 			this.editorViewers.forEach(function(viewer) {
@@ -875,7 +881,18 @@ objects.mixin(EditorSetup.prototype, {
 					}
 				}
 			});
-			return dirty ? (autoSave ? messages.unsavedAutoSaveChanges : messages.unsavedChanges) : undefined;
+			var unsavedMessage = dirty ? (autoSave ? messages.unsavedAutoSaveChanges : messages.unsavedChanges) : undefined;
+			if(util.isElectron && dirty){
+				window.__electron.remote.dialog.showMessageBox(
+					window.__electron.remote.getCurrentWindow(),
+					{
+						type: 'warning',
+						buttons: [messages["OK"]],
+						title: messages["Orion"],
+						message: unsavedMessage
+					});
+			}
+			return unsavedMessage;
 		}.bind(this);
 	},
 
@@ -921,7 +938,7 @@ objects.mixin(EditorSetup.prototype, {
 		if (!target) { //evt.input === null || evt.input === undefined) {
 			targetName = this.lastRoot ? this.lastRoot.Name : "";
 			target = this.lastRoot;
-		} else if (target && !target.Parents) {//If the target is file system root then we use the file service name
+		} else if (!util.isElectron && target && !target.Parents) {//If the target is file system root then we use the file service name
 			targetName = this.fileClient.fileServiceName(target.Location);
 		} else {
 			targetName = target.Name;
@@ -1097,7 +1114,7 @@ var setup;
 exports.getEditorViewers = function() {
 	if (!setup) return [];
 	return setup.editorViewers;
-}
+};
 
 exports.setUpEditor = function(serviceRegistry, pluginRegistry, preferences, readonly) {
 	enableSplitEditor = localStorage.enableSplitEditor !== "false"; //$NON-NLS-0$

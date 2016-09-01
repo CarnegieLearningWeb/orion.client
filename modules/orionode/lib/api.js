@@ -50,6 +50,10 @@ function join(/*varags*/) {
 	return path.join('/');
 }
 
+function toURLPath(p) {
+	return p.replace(/\\/g, "/");
+}
+
 /**
  * Helper for writing a JSON response.
  * @param {Number} code
@@ -59,7 +63,7 @@ function join(/*varags*/) {
  */
 function write(code, res, headers, body) {
 	if (typeof code === 'number') {
-		res.statusCode = code;
+		res.status(code);
 	}
 	if (headers && typeof headers === 'object') {
 		Object.keys(headers).forEach(function(header) {
@@ -67,13 +71,30 @@ function write(code, res, headers, body) {
 		});
 	}
 	if (typeof body !== 'undefined') {
-		var contentType = typeof body === 'object' ? 'application/json' : 'text/plain';
-		body = typeof body === 'object' ? body = JSON.stringify(body) : body;
-		res.setHeader('Content-Type', contentType);
-		res.setHeader('Content-Length', body.length);
-		res.end(body);
+		if (typeof body === 'object') {
+			encodeLocation(body);
+			return res.json(body);
+		}
+		res.send(body);
 	} else {
 		res.end();
+	}
+}
+
+var LocationRegex = /Location$/;
+var PercentReplaceRegex = /\%/g;
+function encodeLocation(obj) {
+	for (var p in obj) {
+		if (p.match(LocationRegex)) {
+			if (typeof obj[p] === "object") {
+				obj[p].pathname = obj[p].pathname.replace(PercentReplaceRegex, "%25");
+				obj[p] = url.format(obj[p]);
+			} else {
+				obj[p] = url.format({pathname: obj[p].replace(PercentReplaceRegex, "%25")});
+			}
+		} else if (typeof obj[p] === "object") {
+			encodeLocation(obj[p]);
+		}
 	}
 }
 
@@ -86,7 +107,7 @@ function write(code, res, headers, body) {
 function writeError(code, res, msg) {
 	msg = msg instanceof Error ? msg.message : msg;
 	if (typeof msg === 'string') {
-		var err = JSON.stringify({Error: msg, Message: msg});
+		var err = JSON.stringify({Severity: "Error", Message: msg});
 		res.setHeader('Content-Type', 'application/json');
 		res.setHeader('Content-Length', err.length);
 		res.writeHead(code, msg);
@@ -120,6 +141,7 @@ function matchHost(req, aUrl) {
 	return aUrl;
 }
 
+exports.toURLPath = toURLPath;
 exports.pathMatch = pathMatch;
 exports.matchHost = matchHost;
 exports.rest = rest;

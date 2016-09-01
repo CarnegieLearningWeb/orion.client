@@ -15,6 +15,7 @@ var git = require('nodegit');
 var url = require("url");
 var path = require("path");
 var fs = require('fs');
+var args = require('../args');
 var async = require('async');
 var fileUtil = require('../fileUtil');
 var tasks = require('../tasks');
@@ -29,18 +30,30 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.root is required'); }
 
 	module.exports.getRepo = getRepo;
+	module.exports.getClones = getClones;
+	module.exports.getRemoteCallbacks = getRemoteCallbacks;
+	module.exports.handleRemoteError = handleRemoteError;
 	module.exports.foreachSubmodule = foreachSubmodule;
+	module.exports.getRepoByPath = getRepoByPath;
+	module.exports.getfileDir = getfileDir;
+	module.exports.getfileDirPath = getfileDirPath;
+	module.exports.getfileAbsolutePath = getfileAbsolutePath;
+	module.exports.getfileRelativePath = getfileRelativePath;
+	module.exports.isWorkspace = isWorkspace;
+	module.exports.getSignature = getSignature;
+	module.exports.getCommit = getCommit;
 
 	return express.Router()
 	.use(bodyParser.json())
 	.get('/workspace*', getClone)
 	.get('/file/:rootDir*', getClone)
+	.get('/file', getClone)
 	.put('/file*', putClone)
 	.delete('/file*', deleteClone)
 	.post('*', postInit);
 
-function cloneJSON(base, location, url, parents, submodules) {
-	return {
+function cloneJSON(base, location, giturl, parents, submodules) {
+	var result = {
 		"BranchLocation": "/gitapi/branch" + location,
 		"CommitLocation": "/gitapi/commit" + location,
 		"ConfigLocation": "/gitapi/config/clone" + location,
@@ -50,7 +63,7 @@ function cloneJSON(base, location, url, parents, submodules) {
 		"IndexLocation": "/gitapi/index" + location,
 		"Location": "/gitapi/clone" + location,
 		"Name": base,
-		"GitUrl": url,
+		"GitUrl": giturl,
 		"Children": submodules && submodules.length ? submodules : undefined,
 		"Parents": parents && parents.length ? parents : undefined,
 		"RemoteLocation": "/gitapi/remote" + location,
@@ -60,28 +73,103 @@ function cloneJSON(base, location, url, parents, submodules) {
 		"TagLocation": "/gitapi/tag" + location,
 		"Type": "Clone"
 	};
+	if (giturl && isGithubURL(giturl)){
+		result["PullRequestLocation"] = "/gitapi/pullRequest" + location;
+	}
+	function isGithubURL(checkUrl){
+		var hostname = url.parse(checkUrl)["hostname"];
+		return hostname === "github.com";
+	}
+	return result;
 }
+	
+function getRepoByPath(filePath,workspaceDir) {
+	while (!fs.existsSync(filePath)) {
+		filePath = path.dirname(filePath);
+		if (filePath.length <= workspaceDir) return Promise.reject(new Error("Forbidden"));
+	}
+	var ceiling = options.options.configParams.isElectron ? "" : workspaceDir ; 
+	return git.Repository.discover(filePath, 0, ceiling).then(function(buf) {
+		return git.Repository.open(buf.toString());
+	});
+}	
 	
 function getRepo(req) {
 	var u = url.parse(req.url, true);
-	var restpath = u.pathname.split(fileRoot)[1];
-	if (!restpath) return "";
-	return git.Repository.discover(api.join(req.user.workspaceDir, restpath), 0, req.user.workspaceDir).then(function(buf) {
-		return git.Repository.open(buf.toString());
+	var restpath = u.pathname.split(fileRoot)[1] || "";
+	var filePath = path.join(req.user.workspaceDir, restpath);
+	return getRepoByPath(filePath,req.user.workspaceDir);
+}
+
+function getfileDir(repo ,req) {
+	var fileDir;
+	if(repo.workdir().slice(0, -1).length === req.user.workspaceDir.length){
+		fileDir = api.join(fileRoot);
+	}else{
+		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+	}
+	return fileDir;
+}
+
+function getfileDirPath(repo ,req) {
+	var fileDirpath;
+	if(repo.workdir().slice(0, -1).length === req.user.workspaceDir.length){
+		fileDirpath = path.join(fileRoot, path.sep);
+	}else{
+		fileDirpath = path.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+	}
+	return fileDirpath;
+}
+
+function getfileAbsolutePath(req) {
+	var fileAbsolutePath = path.join(req.user.workspaceDir, req.params["0"] || "");
+	return fileAbsolutePath;
+}
+
+function getfileRelativePath(repo, req) {
+	var fileRelativePath = api.toURLPath(getfileAbsolutePath(req).substring(repo.workdir().length));
+	return fileRelativePath;
+}
+
+function isWorkspace(req){
+	return !fs.existsSync(path.join(req.user.workspaceDir,'.git'));
+}
+
+function getCommit(repo, refOrCommit) {
+	return git.Reference.dwim(repo, refOrCommit).then(function(reference) {
+		if (reference.isTag()) {
+			return repo.getTagByName(reference.shorthand())
+			.then(function(tag){
+				return repo.getCommit(tag.targetId());
+			})
+			.catch(function() {
+				return repo.getReferenceCommit(reference);
+			});
+		}
+		return repo.getReferenceCommit(reference);
+	})
+	.catch(function() {
+		return repo.getCommit(refOrCommit);
 	});
 }
 
 function getClone(req, res) {
+	getClones(req, res, function(repos) {
+		res.status(200).json({
+			"Children": repos,
+			"Type": "Clone"
+		});
+	});
+}
+
+function getClones(req, res, callback) {
 	var repos = [];
 	
 	var rootDir = path.join(req.user.workspaceDir, req.params.rootDir || "");
 		
 	checkDirectory(rootDir, function(err) {
 		if (err) return writeError(403, res, err.message);
-		res.status(200).json({
-			"Children": repos,
-			"Type": "Clone"
-		});
+		callback(repos);
 	});
 	
 	function pushRepo(repos, repo, base, location, url, parents, cb) {
@@ -165,7 +253,7 @@ function getClone(req, res) {
 			git.Repository.open(dir)
 			.then(function(repo) {
 				var base = path.basename(dir);
-				var location = api.join(fileRoot, dir.replace(req.user.workspaceDir + "/", ""));
+				var location = getfileDir(repo ,req);
 				pushRepo(repos, repo, base, location, null, [], function() { cb(); });
 	 		})
 			.catch(function() {
@@ -183,10 +271,40 @@ function getClone(req, res) {
 	}
 }
 
+function configRepo(repo, username, email) {
+	var configFile = api.join(repo.path(), "config");
+	return new Promise(function(fulfill, reject) {
+		args.readConfigFile(configFile, function(err, config) {
+			if (err) {
+				return reject(err);
+			}
+			var user = config.user || (config.user = {});
+			//TODO read user prefs if no username/email is specified -> git/config/userInfo (GitName && GitEmail)
+			if (username) {
+				user.name = username;
+			}
+			if (email) {
+				user.email = email;
+			}
+			args.writeConfigFile(configFile, config, function(err) {
+				if (err) {
+					return reject(err);
+				}
+				fulfill();
+			});
+		});
+	});
+}
+
 function postInit(req, res) {
 	if (req.body.GitUrl) {
 		postClone(req, res);
 	} else {
+		
+		if (req.body.Name === undefined) {
+			return writeError(400, res);
+		}
+		
 		var initDir = req.user.workspaceDir + '/' + req.body.Name;
 		var theRepo, index, author, committer;
 
@@ -198,21 +316,18 @@ function postInit(req, res) {
 			git.Repository.init(initDir, 0)
 			.then(function(repo) {
 				theRepo = repo;
-				return repo;
+				return configRepo(repo, req.body.GitName, req.body.GitMail);
 			})
-			.then(function(repo){
-				return repo.openIndex();
+			.then(function(){
+				return theRepo.refreshIndex();
 			})
 			.then(function(idx) {
 				index = idx;
-				index.read(1);
-			})
-			.then(function() {
 				return index.writeTree();
 			})
 			.then(function(oid) {
-				author = git.Signature.default(theRepo);	
-				committer = git.Signature.default(theRepo);
+				author = getSignature(theRepo);	
+				committer = getSignature(theRepo);	
 
 				// Since we're creating an inital commit, it has no parents. Note that unlike
 				// normal we don't get the head either, because there isn't one yet.
@@ -243,13 +358,14 @@ function putClone(req, res) {
 
 	var theRepo, theCommit;
 	var checkOptions = {
-		checkoutStrategy: git.Checkout.STRATEGY.FORCE,
+		checkoutStrategy: git.Checkout.STRATEGY.SAFE,
 	};
 	getRepo(req)
 	.then(function(repo) {
 		theRepo = repo;
 		if (paths) {
 			checkOptions.paths = paths;
+			checkOptions.checkoutStrategy = git.Checkout.STRATEGY.FORCE;
 			var toRemove = [];
 			return repo.index()
 			.then(function(index) {
@@ -285,7 +401,15 @@ function putClone(req, res) {
 			.then(function(reference) {
 				return theRepo.getReferenceCommit(reference);
 			}).catch(function() {
-				return theRepo.getCommit(tag);
+				return theRepo.getTagByName(tag)
+				.then(function(tag) {
+					return tag.targetId();
+				})
+				.then(function(commitOid){
+					return theRepo.getCommit(commitOid);
+				}).catch(function(){
+					return theRepo.getCommit(tag);
+				});
 			})
 			.then(function(commit) {
 				theCommit = commit;
@@ -362,22 +486,113 @@ function foreachSubmodule(repo, operation, recursive) {
 	});
 }
 
-function postClone(req, res) {
-	var url = req.body.GitUrl;
-	var dirName = url.substring(url.lastIndexOf("/") + 1).replace(".git", "");
-	
-	var task = new tasks.Task(res);
-	
-	git.Clone.clone(url, path.join(req.user.workspaceDir, dirName), {
-		fetchOpts: {
-			callbacks: {
-				certificateCheck: function() {
-					return 1; //Ignore SSL certificate check
-				}
+function getRemoteCallbacks(creds, task) {
+	return {
+		certificateCheck: function() {
+			return 1; // Continues connection even if SSL certificate check fails. 
+		},
+		transferProgress: function(progress) {
+			if (!task) return;
+			if (progress.indexedDeltas()) {
+				task.updateProgress("Resolving deltas", progress.indexedDeltas(), progress.totalDeltas());
+			} else {
+				task.updateProgress("Receiving objects", progress.receivedObjects(), progress.totalObjects());
 			}
+		},
+		/**
+		 * @callback
+		 */
+		credentials: function(gitUrl, urlUsername) {
+			if (!creds.GitSshUsername && !creds.GitSshPrivateKey) {
+				return git.Cred.defaultNew();
+			}
+			if (creds.GitSshPrivateKey) {
+				var privateKey = creds.GitSshPrivateKey;
+				var passphrase = creds.GitSshPassphrase;
+				return git.Cred.sshKeyMemoryNew(
+					creds.GitSshUsername || urlUsername,
+					"",
+					privateKey,
+					passphrase || ""
+				);
+			}
+			var username = creds.GitSshUsername || urlUsername;
+			var password = creds.GitSshPassword;
+			// clear username/password to avoid inifinite loop in nodegit
+			delete creds.GitSshUsername;
+			delete creds.GitSshPassword;
+			return git.Cred.userpassPlaintextNew(
+				username,
+				password || ""
+			);
+		}
+	};
+}
+
+function handleRemoteError(task, err, cloneUrl) {
+	var fullCloneUrl;
+	if(cloneUrl.indexOf("://") !== -1){
+		fullCloneUrl = cloneUrl;
+	}else if(cloneUrl.indexOf("@") < cloneUrl.indexOf(":")){
+		fullCloneUrl = "ssh://" + cloneUrl;
+	}
+	var u = url.parse(fullCloneUrl, true);
+	var code = 403;
+	var jsonData;
+	if (err.message && ["credentials", "authentication", "401"].some(function(s) { return err.message.indexOf(s) !== -1; })) {
+		code = 401;
+		jsonData = {
+			"Host": u.hostname,
+			"HumanishName": u.pathname.substring(u.pathname.lastIndexOf("/") + 1).replace(".git", ""),
+			"Port": u.port,
+			"Scheme": u.protocol && u.protocol.replace(":", ""),
+			"Url": cloneUrl,
+			"User": u.auth
+		};
+	}
+	task.done({
+		HttpCode: code,
+		Code: 0,
+		JsonData: jsonData,
+		DetailedMessage: err.message,
+		Message: err.message,
+		Severity: "Error"
+	});
+}
+
+function getUniqueFileName(folder, file) {
+	var result, counter = 0, name = file;
+	do {
+		result = path.join(folder, name);
+		name = file + "-" + ++counter;
+	} while (fs.existsSync(result));
+	return result;
+}
+
+function postClone(req, res) {
+	var repo;
+	var cloneUrl = req.body.GitUrl;
+	if(cloneUrl.charAt(cloneUrl.length - 1) === "/"){
+		cloneUrl = cloneUrl.slice(0, -1);
+	}	
+	var dirName = cloneUrl.substring(cloneUrl.lastIndexOf("/") + 1).replace(".git", "");
+	var folder = req.user.workspaceDir;
+	if (req.body.Path) {
+		folder = path.join(folder, req.body.Path.substring(fileRoot.length));
+	}
+	
+	var task = new tasks.Task(res, false, true, 0, true);
+	
+	git.Clone.clone(cloneUrl, getUniqueFileName(folder, dirName), {
+		fetchOpts: {
+			callbacks: getRemoteCallbacks(req.body, task)
 		}
 	})
-	.then(function(repo) {
+	.then(function(_repo) {
+		repo = _repo;
+		return configRepo(repo, req.body.GitName, req.body.GitMail);
+	})
+	.then(function() {
 		if (req.body.cloneSubmodules) {
 			return foreachSubmodule(repo, "update", true);
 		}
@@ -395,13 +610,11 @@ function postClone(req, res) {
 		});
 	})
 	.catch(function(err) {
-		task.done({
-			HttpCode: 403,
-			Code: 0,
-			DetailedMessage: err.message,
-			Message: err.message,
-			Severity: "Error"
-		});
+		handleRemoteError(task, err, cloneUrl);
 	});
+}
+
+function getSignature(repo){
+	return git.Signature.default(repo) || git.Signature.now("unknown","unknown@unknown.com");
 }
 };

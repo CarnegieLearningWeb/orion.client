@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation and others.
+ * Copyright (c) 2015, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -166,7 +166,7 @@ define([
 		var theType, proposal, key;
 		var proposals = [];
 		
-		var defaultEnvs = {ecma5: true, ecma6: true};
+		var defaultEnvs = {ecma5: true, ecma6: true, ecma7: true};
 		if (isHTML(file.name)){
 			defaultEnvs.browser = true;
 		}
@@ -201,6 +201,21 @@ define([
 			}
 			scope = scope.prev;
 		}
+		
+		// Add in additional types that Tern can understand
+		var _p = createProposal('{}', Messages['jsDocEmptyObjDesc'], prefix);
+		_p.origin = "ecma5";
+		_p.doc = Messages['jsDocEmptyObjDoc'];
+		proposals.push(_p);
+		_p = createProposal('{prop: propType}', Messages['jsDocObjPropDesc'], prefix);
+		_p.origin = "ecma5";
+		_p.doc = Messages['jsDocObjPropDoc'];
+		proposals.push(_p);
+		_p = createProposal('?', Messages['jsDocAnyTypeDesc'], prefix);
+		_p.origin = "ecma5";
+		_p.doc = Messages['jsDocAnyTypeDoc'];
+		proposals.push(_p);
+		
 		return proposals;
 	}
 	
@@ -553,13 +568,13 @@ define([
 		if(typeof template === 'string') {
 			p.type = 'jsdoc_template';
 			p.template = template;
-			p.isTemplate = true;
 		} else {
 			p.type = 'doc';
 		}
 		p.name = name;
 		p.proposal = name.slice(prefix.length);
 		p.description = description;
+		p.overwrite = true;
 		if(typeof prefix === 'string') {
 			p.prefix = prefix;
 		}

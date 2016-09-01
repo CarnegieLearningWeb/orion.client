@@ -303,7 +303,7 @@ define([
     	it('Tag templates 3', function() {
     		var _o = setup({buffer: '<html>\n<body><ar\n</body>\n</html>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 17}).then(function(proposals) {
-    			assertTagProposals(proposals);
+    			assertGlobalTagAttributes(proposals);
     		});
     	});
     	it('Tag attribute proposals 1', function() {
@@ -346,6 +346,30 @@ define([
     				{proposal: 'href=""', prefix: 'href'},
     				{proposal: 'hreflang=""', prefix: 'href'}
     			]);
+    		});
+    	});
+    	it('Tag attribute proposals unclosed tag 1', function() {
+    		var _o = setup({buffer: '<zzz </zzz>'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
+    			assertGlobalTagAttributes(proposals);
+    		});
+    	});
+    	it('Tag attribute proposals unclosed tag 2', function() {
+    		var _o = setup({buffer: '<zzz '});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
+    			assertGlobalTagAttributes(proposals);
+    		});
+    	});
+    	it('Tag attribute proposals unclosed tag 3', function() {
+    		var _o = setup({buffer: '<zzz >'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6}).then(function(proposals) {
+    			assertTagProposals(proposals);
+    		});
+    	});
+    	it('Tag attribute proposals unclosed tag 4', function() {
+    		var _o = setup({buffer: '<zzz <'});
+    		return assist.computeContentAssist(_o.editorContext, {offset: 6}).then(function(proposals) {
+    			assertTagProposals(proposals);
     		});
     	});
     	it('Tag attribute proposals filter existing 1', function() {
@@ -500,14 +524,13 @@ define([
     			]);
     		});
     	});
-    	// TODO The parser does not create a start tag element so we don't recognize that we are looking for attributes
-    	it.skip('Tag attribute proposals incomplete tag 1', function() {
+    	it('Tag attribute proposals incomplete tag 1', function() {
     		var _o = setup({buffer: '<zzz '});
     		return assist.computeContentAssist(_o.editorContext, {offset: 5}).then(function(proposals) {
     			assertGlobalTagAttributes(proposals);
     		});
     	});
-    	it.skip('Tag attribute proposals incomplete tag 2', function() {
+    	it('Tag attribute proposals incomplete tag 2', function() {
     		var _o = setup({buffer: '<body><zzz </body>'});
     		return assist.computeContentAssist(_o.editorContext, {offset: 11}).then(function(proposals) {
     			assertGlobalTagAttributes(proposals);
@@ -1786,69 +1809,6 @@ define([
     				}
     			}
     			assert(knownProp, "Could not find expected proposal role");
-    		});
-    	});
-    	it('Tags that support the attributes of many roles: details (13). Empty prefix. <details aria->', function() {
-    		var _o = setup({buffer: '<html><body><details aria-></details></body></html>'});
-    		return assist.computeContentAssist(_o.editorContext, {offset: 26, prefix: ''}).then(function(proposals) {
-    			var expectedCount = 17 + 13; // "ARIA title" + 16 aria-* globals + 13 role-specific aria-* attributes
-    			assert(proposals.length === expectedCount, "Incorrect number of proposals for details tag attributes. Proposal count: " + proposals.length + " Expected count: " + expectedCount);
-    			var knownProp;
-    			for (var i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-checked"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-checked");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-expanded"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-expanded");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-activedescendant"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-activedescendant");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-multiselectable"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-multiselectable");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-pressed"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-pressed");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-required"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-required");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-posinset"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-posinset");
-    			knownProp = null;
-    			for (i=0; i<proposals.length; i++) {
-    				if (proposals[i].name === "aria-setsize"){
-    					knownProp = proposals[i];
-    				}
-    			}
-    			assert(knownProp, "Could not find expected proposal aria-setsize");
     		});
     	});
     	it('Tags that support the attributes of many roles: details (13). Prefix ar. <details ar>', function() {

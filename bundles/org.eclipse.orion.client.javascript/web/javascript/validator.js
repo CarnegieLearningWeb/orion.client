@@ -29,20 +29,21 @@ define([
 		 * @param {Number} value The value to set the rule to
 		 * @param {Object} [key] Optional key to use for complex rule configuration.
 		 */
-		setOption: function(ruleId, value, key) {
-			if (typeof value === "number") {
-				if(Array.isArray(this.rules[ruleId])) {
-					var ruleConfig = this.rules[ruleId];
-					if (key) {
-						ruleConfig[1] = ruleConfig[1] || {};
-						ruleConfig[1][key] = value;
-					} else {
-						ruleConfig[0] = value;
-					}
+		setOption: function(ruleId, value, key, index) {
+			if(Array.isArray(this.rules[ruleId])) {
+				var ruleConfig = this.rules[ruleId];
+				var length = ruleConfig.length;
+				var lastIndex = length - 1;
+				if (index) {
+					ruleConfig[index] = value;
+				} else if (key) {
+					ruleConfig[lastIndex] = ruleConfig[lastIndex] || {};
+					ruleConfig[lastIndex][key] = value;
+				} else {
+					ruleConfig[0] = value;
 				}
-				else {
-					this.rules[ruleId] = value;
-				}
+			} else {
+				this.rules[ruleId] = value;
 			}
 		},
 		
@@ -51,27 +52,46 @@ define([
 		 * @function
 		 */
 		setDefaults: function setDefaults() {
-		    this.rules = Object.create(null);
-		    var keys = Object.keys(this.defaults);
-		    for(var i = 0; i < keys.length; i++) {
-		        var key = keys[i];
-		        this.rules[key] = this.defaults[key];
-		    }
+			this.rules = Object.create(null);
+			var keys = Object.keys(this.defaults);
+			for (var i = 0; i < keys.length; i++) {
+				var key = keys[i];
+				this.rules[key] = this.defaults[key];
+			}
 		}
 	};
 
+	var registry;
+	
 	/**
 	 * @description Creates a new ESLintValidator
 	 * @constructor
 	 * @public
-	 * @param {javascript.ASTManager} astManager The AST manager backing this validator
+	 * @param {Worker} ternWorker The backing worker
+	 * @param {javascript.javascriptProject} jsProject The backing JS project context
+	 * @param {Object} serviceRegistry The platform service registry
 	 * @returns {ESLintValidator} Returns a new validator
 	 */
-	function ESLintValidator(ternWorker, ternProjectManager) {
+	function ESLintValidator(ternWorker, jsProject, serviceRegistry) {
 		this.ternWorker = ternWorker;
-		this.projectManager = ternProjectManager;
+		this.project = jsProject;
 		config.setDefaults();
+		registry = serviceRegistry;
 	}
+	
+	/**
+	 * @description Log the given timing in the metrics service
+	 * @param {Number} end The total time to log
+	 * @since 12.0
+	 */
+	function logTiming(end) {
+		if(registry) {
+			var metrics = registry.getService("orion.core.metrics.client"); //$NON-NLS-1$
+			if(metrics) {
+				metrics.logTiming('language tools', 'validation', end, 'application/javascript'); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			}
+		}
+ 	}
 	
 	/**
 	 * @description Converts the configuration rule value to an Orion problem severity string. One of 'warning', 'error'.
@@ -79,7 +99,7 @@ define([
 	 * @returns {String} the severity string
 	 */
 	function getSeverity(prob) {
-		var val = 2;
+		var val = prob.severity;
 		var ruleConfig = config.rules[prob.ruleId];
 		if(Array.isArray(ruleConfig)) {
 			// Hack for missing-doc which overloads the prob.related object to expose which subrule
@@ -87,12 +107,7 @@ define([
 			var related = prob.related, ruleType = related && related.type;
 			if (prob.ruleId === "missing-doc" && ruleConfig[1][ruleType] !== undefined) {
 				val = ruleConfig[1][ruleType];
-			} else {
-				val = ruleConfig[0];
 			}
-		}
-		else {
-			val = prob.severity;
 		}
 		switch (val) {
 			case 1: return "warning"; //$NON-NLS-0$
@@ -126,17 +141,6 @@ define([
 	 */
 	function toProblem(e) {
 		var start = e.start, end = e.end;
-		if (e.node) {
-			// Error produced by eslint
-			start = e.node.range[0];
-			end = e.node.range[1];
-			if (e.related && e.related.range) {
-				// Flagging the entire node is distracting. Just flag the bad token.
-				var relatedToken = e.related;
-				start = relatedToken.range[0];
-				end = relatedToken.range[1];
-			}
-		}
 		var descriptionKey = e.args && e.args.nls ? e.args.nls : e.ruleId;
 		var descriptionArgs = e.args || Object.create(null);
 		var description = e.message;
@@ -148,10 +152,26 @@ define([
 			description: description,
 			severity: getSeverity(e)
 		};
+		if (e.args && e.args.range) {
+			prob.start = e.args.range.start;
+			prob.end = e.args.range.end;
+		} else if (e.node) {
+			// Error produced by eslint
+			start = e.node.range[0];
+			end = e.node.range[1];
+			if (e.related && e.related.range) {
+				// Flagging the entire node is distracting. Just flag the bad token.
+				var relatedToken = e.related;
+				start = relatedToken.range[0];
+				end = relatedToken.range[1];
+			}
+		}
 		if (e.nodeType) {
 			prob.nodeType = e.nodeType;
 		}
-		if (e.node && e.nodeType === "Program" && typeof e.line !== 'undefined') {
+		if(e.args && e.args.range) {
+			// skip start/end settings
+		} else if (e.node && e.nodeType === "Program" && typeof e.line !== 'undefined') {
 			prob.line = e.line;
 			prob.start = e.column;
 		} else if(typeof start !== 'undefined') {
@@ -179,6 +199,15 @@ define([
 
 	Objects.mixin(ESLintValidator.prototype, {
 		/**
+		 * @description Callback from SyntaxChecker API to perform any load-time initialization
+		 * @function
+		 * @param {String} loc The optional location the checker is initializing from
+		 * @callback
+		 */
+		initialize: function initialize(loc, contentType) {
+			this.project.initFrom(loc);
+		},
+		/**
 		 * @description Callback to create problems from orion.edit.validator
 		 * @function
 		 * @public
@@ -188,21 +217,31 @@ define([
 		 * @callback
 		 */
 		computeProblems: function(editorContext , context, config) {
-			var _self = this;
 			var deferred = new Deferred();
 			editorContext.getFileMetadata().then(function(meta) {
 				editorContext.getText().then(function(text) {
 					var env = null;
-					var isHtml = meta.contentType.id === 'text/html';
-					if(isHtml) {
+					if(meta.contentType.id === 'text/html') {
 						//auto-assume browser env - https://bugs.eclipse.org/bugs/show_bug.cgi?id=458676
 						env = Object.create(null);
 						env.browser = true;
 					}
-					// need to extract all scripts from the html text
-					_self._validate(meta, text, env, deferred, config);
-				});
-			});
+					if(this.project) {
+						this.project.getESlintOptions().then(function(cfg) {
+							if(cfg && cfg.env) {
+								env = !env ? Object.create(null) : env;
+								Object.keys(cfg.env).forEach(function(key) {
+									env[key] = cfg.env[key];
+								});
+							}
+							this._validate(meta, text, env, deferred, cfg);
+						}.bind(this));
+					} else {
+						// need to extract all scripts from the html text
+						this._validate(meta, text, env, deferred, config);
+					}
+				}.bind(this));
+			}.bind(this));
 			return deferred;
 		},
 		
@@ -218,60 +257,34 @@ define([
 		 */
 		_validate: function(meta, text, env, deferred, configuration) {
 			// When validating snippets in an html file ignore undefined rule because other scripts may add to the window object
-			if (configuration) {
-				config.rules = configuration.rules;
+			var rules = config.rules;
+			if (configuration && configuration.rules) {
+				rules = configuration.rules;
 			}
 			var files = [{type: 'full', name: meta.location, text: text}]; //$NON-NLS-1$
-			var request = {request: 'lint', args: {meta: {location: meta.location}, files: files, rules: config.rules}}; //$NON-NLS-1$
-			if(env) {
-				config.env = env;
-				request.env = config.env;
+			var args =  {meta: {location: meta.location}, env: env, files: files, rules: rules};
+			if (configuration && configuration.ecmaFeatures) {
+				args.ecmaFeatures = configuration.ecmaFeatures;
 			}
-			var ternProjectManager = this.projectManager;
+			var request = {request: 'lint', args: args}; //$NON-NLS-1$
+			var start = Date.now();
 			this.ternWorker.postMessage(
 				request, 
-				/* @callback */ function(type, err) {
-						var eslintErrors = [];
-						if(err) {
-							eslintErrors.push({
-								start: 0,
-								args: {0: type.error, nls: "eslintValidationFailure" }, //$NON-NLS-0$
-								severity: "error" //$NON-NLS-0$
-							});
-						} else if (type.problems) {
-							var json = ternProjectManager.getJSON();
-							if(json) {
-								type.problems.forEach(function(element) {
-									// check the .tern-project file
-									if (element.ruleId === "check-tern-project") {
-										// check the .tern-project file
-										var loadEagerly = json.loadEagerly;
-										if(Array.isArray(loadEagerly) && loadEagerly.length > 0) {
-											var found = false;
-											loop: for (var j = 0, max2 = loadEagerly.length; j < max2;  j++) {
-												if (loadEagerly[j] === meta.location) {
-													found = true;
-													break loop;
-												}
-											}
-											if (!found) {
-												eslintErrors = eslintErrors.concat(element);
-											}
-										} else {
-											// in case of an empty loadEagerly file property
-											eslintErrors.push(element);
-										}
-									} else {
-										eslintErrors.push(element);
-									}
-								});
-							} else {
-								type.problems.forEach(function(element) {
-									eslintErrors.push(element);
-								});
-							}
-						}
-						deferred.resolve({ problems: eslintErrors.map(toProblem) });
+				/* @callback */
+				function(type, err) {
+					var end = Date.now() - start;
+					logTiming(end);
+					var problems = [];
+					if(err) {
+						problems.push({
+							start: 0,
+							args: {0: type.error, nls: "eslintValidationFailure" }, //$NON-NLS-0$
+							severity: "error" //$NON-NLS-0$
+						});
+					} else if (Array.isArray(type.problems)) {
+						problems = type.problems;
+					}
+					deferred.resolve({ problems: problems.map(toProblem) });
 				});
 		},
 
@@ -288,23 +301,57 @@ define([
 			var oldconfig = properties.pid === 'eslint.config';
 			var keys = Object.keys(properties);
 			var seen = Object.create(null);
-			for(var i = 0; i < keys.length; i++) {
-			    var key = keys[i];
-			    var ruleId = key;
-			    if(oldconfig && config.rules[key] !== config.defaults[key]) {
-			        //don't overwrite a new setting with an old one
-		            continue;
-			    }
-			    var legacy = this._legacy[ruleId];
-			    if(typeof legacy === 'string') {
-			        ruleId = legacy;
-			        if(seen[ruleId]) {
-			            //don't overwrite a new pref name with a legacy one
-			            continue;
-			        }
-			    }
-			    seen[ruleId] = true;
-			    config.setOption(ruleId, properties[key]);
+			for (var i = 0; i < keys.length; i++) {
+				var key = keys[i];
+				var index = key.indexOf(':');
+				var subKey = null;
+				var realKey = key;
+				var tabIndex = 0;
+				if (index !== -1) {
+					realKey = key.substring(0, index);
+					subKey = key.substring(index + 1);
+				} else {
+					// check !
+					index = key.indexOf('!');
+					if (index !== -1) {
+						realKey = key.substring(0, index);
+						tabIndex = key.substring(index + 1);
+					}
+				}
+				var ruleId = realKey;
+				if (oldconfig && config.rules[realKey] !== config.defaults[realKey]) {
+					//don't overwrite a new setting with an old one
+					continue;
+				}
+				var legacy = this._legacy[ruleId];
+				if (typeof legacy === 'string') {
+					ruleId = legacy;
+					if (seen[ruleId]) {
+						//don't overwrite a new pref name with a legacy one
+						continue;
+					}
+				}
+				seen[ruleId] = true;
+				var value = properties[key];
+				if (subKey) {
+					if (typeof value === 'string') {
+						// split into an array
+						var arr = value.split(',');
+						if (arr && Array.isArray(arr)) {
+							value = [];
+							arr.forEach(function(element) {
+								value.push(element.trim());
+							});
+						}
+						config.setOption(ruleId, value, subKey);
+					} else {
+						config.setOption(ruleId, value, subKey);
+					}
+				} else if (tabIndex) {
+					config.setOption(ruleId, value, null, tabIndex);
+				} else {
+					config.setOption(ruleId, value);
+				}
 			}
 		},
 		
@@ -318,14 +365,20 @@ define([
 		 * @since 8.0
 		 */
 		_enableOnly: function _enableOnly(ruleid, severity, opts) {
-		    var keys = Object.keys(config.rules);
-		    for(var i = 0; i < keys.length; i++) {
-		        if(keys[i] === ruleid) {
-		            config.setOption(ruleid, severity ? severity : 2, opts);
-		        } else {
-		            config.setOption(keys[i], 0);
-		        }
-		    }
+			var keys = Object.keys(config.rules);
+			for (var i = 0; i < keys.length; i++) {
+				if (keys[i] === ruleid) {
+					config.setOption(ruleid, severity ? severity : 2);
+					if (typeof opts === 'object') {
+						// object for rules' options
+						for (var prop in opts) {
+							config.setOption(ruleid, opts[prop], prop);
+						}
+					}
+				} else {
+					config.setOption(keys[i], 0);
+				}
+			}
 		},
 		
 		/**

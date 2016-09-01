@@ -12,15 +12,16 @@
 var chai = require('chai'),
     express = require('express'),
     nodePath = require('path'),
-    PrefsController = require('../lib/controllers/prefs'),
+    PrefsController = require('../lib/controllers/prefs').router,
     Promise = require('bluebird'),
     supertestAsPromised = require('supertest-as-promised'),
     testData = require('./support/test_data');
 
 var expect = chai.expect,
-    fs = Promise.promisifyAll(require('fs'));
+    fs = Promise.promisifyAll(require('fs')),
+    mkdirpAsync = Promise.promisify(require('mkdirp'));
 
-var CONTEXT_PATH = '/orionn';
+var CONTEXT_PATH = '';
 var PREFS_PREFIX = CONTEXT_PATH + '/prefs';
 var WORKSPACE_DIR = nodePath.join(__dirname, '.test_workspace');
 
@@ -36,12 +37,15 @@ var samplePrefData = {
 };
 
 var app = express();
-app
-.use(function() {
-	req.user = {workspace: WORKSPACE};
+app.use(/* @callback */ function(req, res, next) {
+	req.user = { workspaceDir: WORKSPACE_DIR };
+	next();
 })
 .use(PREFS_PREFIX, PrefsController({
-	ttl: 50 // flush after 50 ms
+	configParams: {
+		'orion.single.user': false, // use workspaceDir from req.user
+	},
+	ttl: 50, // flush after 50 ms
 }));
 
 var request = supertestAsPromised.bind(null, app);
@@ -52,8 +56,9 @@ function setupWorkspace(done) {
 }
 
 function setupPrefs(done) {
-	var path = nodePath.join(WORKSPACE_DIR, PrefsController.PREF_FILENAME);
-	return fs.writeFileAsync(path, JSON.stringify(samplePrefData))
+	var path = nodePath.join(WORKSPACE_DIR, '.orion', PrefsController.PREF_FILENAME);
+	return mkdirpAsync(nodePath.dirname(path))
+	.then(() => fs.writeFileAsync(path, JSON.stringify(samplePrefData)))
 	.asCallback(done);
 }
 
@@ -170,7 +175,7 @@ describe('prefs', function() {
 				.then(function(res) {
 					expect(res.body).to.deep.equal({ });
 				});
-			})
+			});
 		});
 
 		describe('and we DELETE a non-existent node', function() {

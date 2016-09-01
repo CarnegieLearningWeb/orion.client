@@ -16,12 +16,18 @@ var mRemotes = require('./remotes');
 var clone = require('./clone');
 var express = require('express');
 var bodyParser = require('body-parser');
+var util = require('./util');
+var args = require('../args');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
 	if (!fileRoot) { throw new Error('options.root is required'); }
+	
+	module.exports.branchJSON = branchJSON;
+	module.exports.getBranchCommit = getBranchCommit;
+	module.exports.getBranchRemotes = getBranchRemotes;
 
 	return express.Router()
 	.use(bodyParser.json())
@@ -33,17 +39,17 @@ module.exports.router = function(options) {
 	function branchJSON(repo, ref, fileDir) {
 		var fullName = ref.name();
 		var shortName = ref.shorthand();
-		var branchURL = encodeURIComponent(fullName);
+		var branchURL = util.encodeURIComponent(fullName);
 		var current = !!ref.isHead() || repo.headDetached() && ref.name() === "HEAD";
 		return {
 			"CloneLocation": "/gitapi/clone"+ fileDir,
 			"CommitLocation": "/gitapi/commit/" + branchURL + fileDir,
 			"Current": current,
 			"Detached": current && !!repo.headDetached(),
-			"DiffLocation": "/gitapi/diff/" + shortName + fileDir,
+			"DiffLocation": "/gitapi/diff/" + util.encodeURIComponent(shortName) + fileDir,
 			"FullName": fullName,
 			"HeadLocation": "/gitapi/commit/HEAD" + fileDir,
-			"Location": "/gitapi/branch/" + branchURL + fileDir,
+			"Location": "/gitapi/branch/" + util.encodeURIComponent(shortName) + fileDir,
 			"Name": shortName,
 			"RemoteLocation": [],
 			"TreeLocation": "/gitapi/tree" + fileDir + "/" + branchURL,
@@ -51,51 +57,74 @@ module.exports.router = function(options) {
 		};
 	}
 	
-	function getBranchCommit(repo, branches, callback) {
-		async.each(branches, function(branch, cb) {
-			return repo.getReferenceCommit(branch.FullName)
-			.then(function(commit) {
-				branch["LocalTimeStamp"] = commit.timeMs();
-				branch["HeadSHA"] = commit.sha();
-				cb();
-			})
-			.catch(function() {
-				cb();
-			});
-		}, function(err) {
-			callback(err);
-		});
-	}
-	
-	function getBranchRemotes(repo, branches, fileDir, callback) {
-		return git.Remote.list(repo)
-	 	.then(function(remotes) {
-			async.each(remotes, function(remote, cb) {
-				git.Remote.lookup(repo, remote)
-				.then(function(remote) {
-					return Promise.all(branches.map(function(branch) {
-						return git.Branch.lookup(repo, api.join(remote.name(), branch.Name), git.Branch.BRANCH.REMOTE).then(function(remoteBranch) {
-							return repo.getBranchCommit(remoteBranch).then(function(commit) {
-								branch["RemoteLocation"].push(mRemotes.remoteJSON(remote, fileDir, [mRemotes.remoteBranchJSON(remoteBranch, commit, remote, fileDir)]));
-							});
-						}).catch(function() {
-							//No remote tracking branch
-							branch["RemoteLocation"].push(mRemotes.remoteJSON(remote, fileDir, [mRemotes.remoteBranchJSON(null, null, remote, fileDir, branch)]));
-						});
-					}));
-				})
-				.then(function() {
+	function getBranchCommit(repo, branches) {
+		return new Promise(function (fulfill, reject){
+			async.each(branches, function(branch, cb) {
+				return repo.getReferenceCommit(branch.FullName)
+				.then(function(commit) {
+					branch["LocalTimeStamp"] = commit.timeMs();
+					branch["HeadSHA"] = commit.sha();
 					cb();
 				})
 				.catch(function(err) {
 					cb(err);
 				});
-			}, callback);
+			}, function(err) {
+				if(err){
+					return reject(err);
+				}
+				fulfill();
+			});
+		});
+	}
+	
+	function getBranchRemotes(repo, branches, fileDir) {
+		return git.Remote.list(repo)
+		.then(function(remotes) {
+			var configFile = api.join(repo.path(), "config");
+			return new Promise(function(fulfill, reject) {
+				args.readConfigFile(configFile, function(err, config) {
+					if (err) {
+						return reject(err);
+					}
+					config = config || {};
+					async.each(remotes, function(remote, cb) {
+						git.Remote.lookup(repo, remote)
+						.then(function(remote) {
+							return Promise.all(branches.map(function(branch) {
+								return git.Branch.lookup(repo, api.join(remote.name(), branch.Name), git.Branch.BRANCH.REMOTE).then(function(remoteBranch) {
+									return repo.getBranchCommit(remoteBranch).then(function(commit) {
+										var rJson = mRemotes.remoteJSON(remote, fileDir, [mRemotes.remoteBranchJSON(remoteBranch, commit, remote, fileDir)]);
+										var trackingRemote = config.branch && config.branch[branch.Name] && config.branch[branch.Name].remote;
+										if (trackingRemote === remote.name() || !trackingRemote) {
+											branch["RemoteLocation"].splice(0, 0, rJson);
+										} else {
+											branch["RemoteLocation"].push(rJson);
+										}
+									});
+								}).catch(function() {
+									//No remote tracking branch
+									branch["RemoteLocation"].push(mRemotes.remoteJSON(remote, fileDir, [mRemotes.remoteBranchJSON(null, null, remote, fileDir, branch)]));
+								});
+							}));
+						})
+						.then(function() {
+							cb();
+						})
+						.catch(function(err) {
+							cb(err);
+						});
+					}, function(err) {
+						if (err) return reject(err);
+						fulfill();
+					});
+				});
+			});
 		});
 	}
 	
 	function getBranches(req, res) {
-		var branchName = decodeURIComponent(req.params.branchName || "");
+		var branchName = util.decodeURIComponent(req.params.branchName || "");
 		var fileDir;
 		
 		var theRepo;
@@ -104,20 +133,18 @@ module.exports.router = function(options) {
 			clone.getRepo(req)
 			.then(function(repo) {
 				theRepo = repo;
-				fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+				fileDir = clone.getfileDir(repo,req);
 				return git.Branch.lookup(repo, branchName, git.Branch.BRANCH.LOCAL);
 			})
 			.then(function(ref) {
 				theBranch = ref;
 				var branch = branchJSON(theRepo, theBranch, fileDir);
-				return getBranchCommit(theRepo, [branch], function() {
-					return getBranchRemotes(theRepo, [branch], fileDir, function(err) {
-						if (err) {
-							console.log(err);
-							return writeError(500, res);
-						}
-						res.status(200).json(branch);
-					});
+				return getBranchCommit(theRepo, [branch])
+				.then(function(){
+					return getBranchRemotes(theRepo, [branch], fileDir);
+				})
+				.then(function(){
+					res.status(200).json(branch);
 				});
 			})
 			.catch(function(err) {
@@ -126,46 +153,47 @@ module.exports.router = function(options) {
 			return;
 		}
 		
-		var branches = [], theHead;
 		var filter = req.query.filter;
 	
 		clone.getRepo(req)
 		.then(function(repo) {
 			theRepo = repo;
-			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
-			return repo.head();
-		})
-		.then(function(head) {
-			theHead = head;
-			return theRepo.getReferences(git.Reference.TYPE.LISTALL);
+			fileDir = clone.getfileDir(repo,req);
+			return git.Reference.list(theRepo);
 		})
 		.then(function(referenceList) {
 			if (theRepo.headDetached()) {
-				referenceList.unshift(theHead);
+				referenceList.unshift("HEAD");
 			}
-			referenceList.forEach(function(ref) {
-				if (ref.isBranch() || theRepo.headDetached() && ref === theHead) {
-					if (!filter || ref.shorthand().indexOf(filter) !== -1) {
-						branches.push(branchJSON(theRepo, ref, fileDir));
+			referenceList = referenceList.filter(function(ref) {
+				if (ref === "HEAD" || ref.indexOf("refs/heads/") === 0) {
+					if (!filter || ref.replace("refs/heads/", "").indexOf(filter) !== -1) {
+						return true;
 					}
 				}
 			});
-			
-			branches.sort(function(a, b) {
-				if (a.Current) return -1;
-				if (b.Current) return 1;
-				return a.LocalTimeStamp < b.LocalTimeStamp ? 1 : a.LocalTimeStamp > b.LocalTimeStamp ? -1 : b.Name.localeCompare(a.Name);
-			});
-	
-			return getBranchCommit(theRepo, branches, function() {
-				return getBranchRemotes(theRepo, branches, fileDir, function(err) {
-					if (err) {
-						console.log(err);
-						return writeError(500, res);
-					}
+			return Promise.all(referenceList.map(function(ref) {
+				return git.Reference.lookup(theRepo, ref);
+			}))
+			.then(function(branches) {
+				branches = branches.map(function(ref) {
+					return branchJSON(theRepo, ref, fileDir);
+				});
+				
+				branches.sort(function(a, b) {
+					if (a.Current) return -1;
+					if (b.Current) return 1;
+					return a.LocalTimeStamp < b.LocalTimeStamp ? 1 : a.LocalTimeStamp > b.LocalTimeStamp ? -1 : b.Name.localeCompare(a.Name);
+				});
+		
+				return getBranchCommit(theRepo, branches)
+				.then(function(){
+					return getBranchRemotes(theRepo, branches, fileDir);
+				})
+				.then(function(){
 					res.status(200).json({
-						"Children": branches,
-						"Type": "Branch"
+							"Children": branches,
+							"Type": "Branch"
 					});
 				});
 			});
@@ -188,7 +216,7 @@ module.exports.router = function(options) {
 		clone.getRepo(req)
 		.then(function(repo) {
 			theRepo = repo;
-			fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+			fileDir = clone.getfileDir(repo,req);
 			return startPoint ? git.Reference.lookup(repo, "refs/remotes/" + startPoint) : repo.getCurrentBranch();
 		})
 		.then(function(reference) {
@@ -203,12 +231,9 @@ module.exports.router = function(options) {
 		})
 		.then(function(ref) {
 			var branch = branchJSON(theRepo, ref, fileDir);
-			return getBranchRemotes(theRepo, [branch], fileDir, function(err) {
-				if (err) {
-					console.log(err);
-					return writeError(500, res);
-				}
-				res.status(200).json(branch);
+			return getBranchRemotes(theRepo, [branch], fileDir)
+			.then(function(){
+				res.status(201).json(branch);
 			});
 		})
 		.catch(function(err) {
@@ -217,10 +242,10 @@ module.exports.router = function(options) {
 	}
 	
 	function deleteBranch(req, res) {
-		var branchName = decodeURIComponent(req.params.branchName);
+		var branchName = util.decodeURIComponent(req.params.branchName);
 		clone.getRepo(req)
 		.then(function(repo) {
-			return git.Reference.lookup(repo, branchName);
+			return git.Branch.lookup(repo, branchName, git.Branch.BRANCH.LOCAL);
 		})
 		.then(function(ref) {
 			if (git.Branch.delete(ref) === 0) {

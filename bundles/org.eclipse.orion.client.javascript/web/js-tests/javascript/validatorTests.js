@@ -18,36 +18,37 @@ define([
 	"orion/i18nUtil",
 	"i18n!javascript/nls/problems",
 	"javascript/ruleData",
-	'orion/serviceregistry',
-	'javascript/scriptResolver',
-	'javascript/ternProjectManager',
 	'mocha/mocha', //must stay at the end, not a module
-], function(Validator, chai, Deferred, i18nUtil, messages, Rules, mServiceRegistry, Resolver, Manager) {
+], function(Validator, chai, Deferred, i18nUtil, messages, Rules) {
 	var assert = chai.assert;
-
 	return function(worker) {
 		describe('Validator Tests', function() {
+			this.timeout(10000);
 			
-			before('Reset Tern Server', function() {
-				worker.start(); // Reset the tern server state to remove any prior files
+			before('Reset Tern Server', function(done) {
+				worker.start(done); // Reset the tern server state to remove any prior files
 			});
 			
 			/**
 			 * @description Sets up the test
-			 * @param {Object} options {buffer, contentType}
+			 * @param {Object} options {buffer, contentType}i
 			 * @returns {Object} The object with the initialized values
 			 */
 			function setup(options) {
-				var serviceRegistry = new mServiceRegistry.ServiceRegistry();
-				var resolver = new Resolver.ScriptResolver(serviceRegistry);
-				var ternProjectManager = new Manager.TernProjectManager(worker, resolver, serviceRegistry);
 				var buffer = options.buffer;
 				var contentType = options.contentType ? options.contentType : 'application/javascript';
-				var validator = new Validator(worker, ternProjectManager);
+				var validator = new Validator(worker);
 				var state = Object.create(null);
 				assert(options.callback, "You must provide a callback for a worker-based test");
 				state.callback = options.callback;
 				worker.setTestState(state);
+				
+				if (options.createFiles){
+					for (var i=0; i<options.createFiles.length; i++) {
+						worker.createTestFile(options.createFiles[i].name, options.createFiles[i].text);
+					}
+				}
+				
 				var editorContext = {
 					/*override*/
 					getText: function() {
@@ -136,7 +137,7 @@ define([
 							{start: 0,
 							 end: 8,
 							 severity: 'error',
-							 description: i18nUtil.formatMessage.call(null, messages['syntaxErrorIncomplete'], {nls: 'syntaxErrorIncomplete'})
+							 description: 'Unexpected token'
 							}
 						]);
 					}, function (error) {
@@ -151,14 +152,14 @@ define([
 							{start: 14,
 							 end: 22,
 							 severity: 'error',
-							 description: i18nUtil.formatMessage.call(null, messages['syntaxErrorIncomplete'], {nls: 'syntaxErrorIncomplete'})
+							 description: 'Unexpected token'
 							}
 						]);
 					}, function (error) {
 						worker.getTestState().callback(error);
 					});
 			});
-			
+
 			it("Test invalid regex 1", function(callback) {
 				var config = { rules: {} };
 				validate({buffer: "/", callback: callback, config: config}).then(function (problems) {
@@ -166,26 +167,157 @@ define([
 							{start: 0, 
 							 end: 1, 
 							 severity: 'error', 
-							 description: 'Invalid regular expression: missing /' //i18nUtil.formatMessage.call(null, messages['esprimaParseFailure'], {
-									//0: "Invalid regular expression: missing /",
-									//nls: "esprimaParseFailure"
-								 //})
-							 },
-							{start: 0, 
-							 end: 1, 
-							 severity: 'error', 
-							 description: i18nUtil.formatMessage.call(null, messages['syntaxErrorBadToken'], {
-								0: "/",
-								nls: "syntaxErrorBadToken"
-							 })
+							 description: "Unterminated regular expression"
 							 }
 						]);
 					}, function (error) {
 						worker.getTestState().callback(error);
 					});
 			});
-			
+			/**
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=491727
+			 */
+			it("Test broken TemplateExpression 1", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var v1 = foo(`bar),\n\tv2;", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{start: 14, 
+							 end: 15, 
+							 severity: 'error', 
+							 description: "Unterminated template"
+							 },
+							{start: 19, 
+							 end: 20, 
+							 severity: 'error', 
+							 description: "Unterminated template"
+							 }
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
+			/**
+			 * 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=491727
+			 */
+			it("Test broken TemplateExpression 2", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var v1 = foo(`bar),\nv2;", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{start: 14, 
+							 end: 15, 
+							 severity: 'error', 
+							 description:"Unterminated template"
+							 },
+							{start: 19, 
+							 end: 20, 
+							 severity: 'error', 
+							 description: "Unterminated template"
+							 }
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
+			/**
+			 * 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=491727
+			 */
+			it("Test broken TemplateExpression 3", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var v1 = foo(`bar),v2;", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{
+							 start: 14, 
+							 end: 15, 
+							 severity: 'error', 
+							 description: "Unterminated template"
+							 }
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
+			/**
+			 * 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=491727
+			 */
+			it("Test broken TemplateExpression 4", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var v1 = foo(`bar),\n\t\tv2;", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{start: 14, 
+							 end: 15, 
+							 severity: 'error', 
+							 description: "Unterminated template"
+							},
+							{start: 19, 
+							 end: 20, 
+							 severity: 'error',
+							 description: "Unterminated template"
+							}
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
+			/**
+			 * 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=491727
+			 */
+			it("Test broken TemplateExpression 5", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var v1 = foo(`bar);", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{start: 14, 
+							 end: 15, 
+							 severity: 'error', 
+							 description: "Unterminated template"
+							 }
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
+			// https://bugs.eclipse.org/bugs/show_bug.cgi?id=500004
+			it("Test unterminated block comment", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var v1 = foo(); /* test", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{
+								start: 16,
+								end: 17,
+								severity: 'error',
+								description: "Unterminated comment"
+							}
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
+			/**
+			 * 
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=492484
+			 */
+			it("Test broken code", function(callback) {
+				var config = { rules: {} };
+				validate({buffer: "var index, a; if(index===a) {a[index>0index]};", callback: callback, config: config}).then(function (problems) {
+						assertProblems(problems, [
+							{start: 38, 
+							 end: 39, 
+							 severity: 'error',
+							 description: "Identifier directly after number"
+							 }
+						]);
+					}, function (error) {
+						worker.getTestState().callback(error);
+					});
+			});
 			describe("HTML script block validation tests", function(){
+				before('Turn on browser library', function(done) {
+					worker.start(done,  {options:{ libs: ['browser']}});
+				});
+				
 				/*
 				 * Tests that the validator runs correctly on script blocks and wrapped functions in HTML files
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=476592
@@ -219,7 +351,7 @@ define([
 							{start: 43,
 							 end: 44,
 							 severity: 'warning',
-							 description: i18nUtil.formatMessage.call(null, messages['semi'], {})
+							 description: i18nUtil.formatMessage.call(null, messages['semi-missing'], {})
 							}
 						]);
 					}, function (error) {
@@ -233,7 +365,6 @@ define([
 				 */
 				it("HTML Script Block - empty block", function(callback) {
 					var config = { rules: Rules.defaults };
-					config.rules['check-tern-project'] = 0;
 					validate({buffer: '<html><head><script></script></head></html>', contentType: 'text/html', callback: callback, config: config}).then(function (problems) {
 						assertProblems(problems, [
 						]);
@@ -248,7 +379,6 @@ define([
 				 */
 				it("HTML Script Block - multi block used var 1", function(callback) {
 					var config = { rules: Rules.defaults };
-					config.rules['check-tern-project'] = 0;
 					validate(
 						{buffer: '<html><head><script>var xx;</script></head><body><a>test</a><script>xx++;</script></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
@@ -266,7 +396,6 @@ define([
 				 */
 				it("HTML Script Block - multi block used var 2", function(callback) {
 					var config = { rules: Rules.defaults };
-					config.rules['check-tern-project'] = 0;
 					validate(
 						{buffer: '<html><head><script>xx++;</script></head><body><a>test</a><script>var xx;</script></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
@@ -289,7 +418,6 @@ define([
 				 */
 				it("HTML Script Block - multi block unused var", function(callback) {
 					var config = { rules: Rules.defaults };
-					config.rules['check-tern-project'] = 0;
 					validate(
 						{buffer: '<html><head><script>var xx;</script></head><body><a>test</a><script>var yy;</script></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
@@ -317,7 +445,6 @@ define([
 				 */
 				it("HTML Wrapped Function - multi block unused var", function(callback) {
 					var config = { rules: Rules.defaults };
-					config.rules['check-tern-project'] = 0;
 					validate(
 						{buffer: '<html><head><script></script></head><body><a onclick="xx;;"></a></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
@@ -345,9 +472,23 @@ define([
 				 */
 				it("HTML - Empty array for empty blocks", function(callback) {
 					var config = { rules: Rules.defaults };
-					config.rules['check-tern-project'] = 0;
 					validate(
 						{buffer: '<html><head><script></script></head><body><a onclick=""></a></body></html>', contentType: 'text/html', callback: callback, config: config}).then(
+						function (problems) {
+							assertProblems(problems, [
+							]);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
+				/*
+				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=493144
+				 */
+				it("HTML - No script blocks", function(callback) {
+					var config = { rules: Rules.defaults };
+					validate(
+						{buffer: '<html></html>', contentType: 'text/html', callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, [
 							]);
@@ -470,7 +611,273 @@ define([
 							worker.getTestState().callback(error);
 						});
 					});
-				});		
+				});
+				// check-tern-plugin --------------------------------------------
+				describe('check-tern-plugin', function() {
+					var RULE_ID = "check-tern-plugin";
+					it("No eslint-env", function(callback) {
+						var topic = 	"function foo() {}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					it("Empty eslint-env", function(callback) {
+						var topic = 	"/* eslint-env */\nfunction foo() {}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					it("Bogus lib", function(callback) {
+						var topic = 	"/*eslint-env garbage*/\nfunction foo() {}";
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					it("No plugins entry", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env amd, mongodb*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'amd\' environment, the \'requirejs\' plugin must be running.",
+									 nodeType: "EnvName"
+									},
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'mongodb\' environment, the \'mongodb\' plugin must be running.",
+									 nodeType: "EnvName"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					it("Empty plugins entry", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {plugins: {}}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env amd, mongodb*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'amd\' environment, the \'requirejs\' plugin must be running.",
+									 nodeType: "EnvName"
+									},
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'mongodb\' environment, the \'mongodb\' plugin must be running.",
+									 nodeType: "EnvName"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					it("RequireJS running", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {plugins: {"requirejs": {}}}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env amd*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					it("RequireJS not running", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {plugins: {"node": {}}}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env amd*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'amd\' environment, the \'requirejs\' plugin must be running.",
+									 nodeType: "EnvName"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					it("Postgres running", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {plugins: {"postgres": {}}}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env pg*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					it("Postgres not running", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {plugins: {"node": {}}}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env pg*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'pg\' environment, the \'postgres\' plugin must be running.",
+									 nodeType: "EnvName"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					it("Multiple plugins not running", function(callback) {
+						worker.postMessage({request: "start_server", args:{options: {plugins: {"redis": {}}}}}, /* @callback */ function(response) {
+							assert(response, "Tried to restart Tern server with specific options, did not receive response");
+							assert.equal("server_ready", response.state, "Tried to restart Tern server with specific options, the server was not ready");
+							var topic = 	"/*eslint-env mongodb,redis,pg*/\nfunction foo() {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'mongodb\' environment, the \'mongodb\' plugin must be running.",
+									 nodeType: "EnvName"
+									},
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'pg\' environment, the \'postgres\' plugin must be running.",
+									 nodeType: "EnvName"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+				});	
+				// check-tern-lib --------------------------------------------
+				describe('check-tern-lib', function() {
+					var RULE_ID = "check-tern-lib";
+					it("Browser lib not running", function(callback) {
+						var topic = "/*eslint-env browser*/\nElement();";
+						var config = { rules: {} };
+						config.rules["check-tern-plugin"] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'browser\' environment, the \'browser\' library must be running.",
+									 nodeType: "EnvName"
+									},
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					it("Ecma7 lib not running with other garbage", function(callback) {
+						var topic = "/*eslint-env garbage, ecma7, moreGarbage*/\nElement();";
+						var config = { rules: {} };
+						config.rules["check-tern-plugin"] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'ecma7\' environment, the \'ecma7\' library must be running.",
+									 nodeType: "EnvName"
+									},
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					it("Mulitple libs not running", function(callback) {
+						var topic = "/*eslint-env browser, ecma7, garbage*/\nElement();";
+						var config = { rules: {} };
+						config.rules["check-tern-plugin"] = 1;
+						validate({buffer: topic, callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'browser\' environment, the \'browser\' library must be running.",
+									 nodeType: "EnvName"
+									},
+									{id: RULE_ID,
+									 severity: 'warning',
+									 description: "To work in the \'ecma7\' environment, the \'ecma7\' library must be running.",
+									 nodeType: "EnvName"
+									},
+
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+				});
 				// CURLY ---------------------------------------------
 				describe('curly', function() {
 					var RULE_ID = 'curly';
@@ -809,6 +1216,55 @@ define([
 								worker.getTestState().callback(error);
 							});
 					});
+					it("should flag == 2", function(callback) {
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: "var a = 6;var b = 7;var c = 8;var test = a == b == c;", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Expected '===' and instead saw '=='.",
+										nodeType: "BinaryExpression",
+										start: 48,
+										end: 50
+									},
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Expected '===' and instead saw '=='.",
+										nodeType: "BinaryExpression",
+										start: 43,
+										end: 45
+									}
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					// https://bugs.eclipse.org/bugs/show_bug.cgi?id=495807
+					it("should flag == 3", function(callback) {
+						var config = { rules: {} };
+						config.rules[RULE_ID] = 1;
+						validate({buffer: "if (typeof(foo)==\"bar\") {}", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Expected '===' and instead saw '=='.",
+										nodeType: "BinaryExpression",
+										start: 15,
+										end: 17
+									}
+								]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
 				});
 				// MISSING-DOC DECL------------------------------------------------
 				describe("missing-doc - function declaration", function(){
@@ -1002,6 +1458,21 @@ define([
 										severity: 'warning',
 										description: "Missing documentation for function \'f\'.",
 										nodeType: "Identifier"
+								}]);
+							},
+							function (error) {
+								worker.getTestState().callback(error);
+							});
+					});
+					it("should not flag missing doc for property when there is a syntax error", function(callback) {
+						var config = { rules: {} };
+						config.rules[RULE_ID] = [1, {decl: 1}];
+						validate({buffer: "var f = { /** @return {Array.<String>} array or null */ one: function() {f.one. }}", callback: callback, config: config}).then(
+							function (problems) {
+								assertProblems(problems, [{
+										id: "syntaxErrorBadToken",
+										severity: 'error',
+										description: "Unexpected token"
 								}]);
 							},
 							function (error) {
@@ -1745,7 +2216,7 @@ define([
 					it("should flag root assign in do-while statement ", function(callback) {
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
-						validate({buffer: "do {} while (a = b) {}", callback: callback, config: config}).then(
+						validate({buffer: "do {} while (a = b)", callback: callback, config: config}).then(
 							function (problems) {
 								assertProblems(problems, [{
 									id: RULE_ID,
@@ -1761,7 +2232,7 @@ define([
 					it("should flag follow-on assign in do-while statement ", function(callback) {
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
-						validate({buffer: "do {} while (a = b && (c = 10)) {}", callback: callback, config: config}).then(
+						validate({buffer: "do {} while (a = b && (c = 10))", callback: callback, config: config}).then(
 							function (problems) {
 								assertProblems(problems, [{
 									id: RULE_ID,
@@ -1777,7 +2248,7 @@ define([
 					it("should flag nested assign in do-while statement", function(callback) {
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
-						validate({buffer: "do {} while ((a = b = 10)) {}", callback: callback, config: config}).then(
+						validate({buffer: "do {} while ((a = b = 10))", callback: callback, config: config}).then(
 							function (problems) {
 								assertProblems(problems, [{
 									id: RULE_ID,
@@ -1912,7 +2383,7 @@ define([
 							});
 					});
 					it("should not flag root assign in do-while statement if parenthesised", function(callback) {
-						var topic = "do{}while ((a = b)) {}";
+						var topic = "do{}while ((a = b))";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -1924,7 +2395,7 @@ define([
 							});
 					});
 					it("should not flag follow-on assign in do-while statement if parenthesised ", function(callback) {
-						var topic = "do{}while ((a = b) && (c = 10)) {}";
+						var topic = "do{}while ((a = b) && (c = 10))";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -1936,7 +2407,7 @@ define([
 							});
 					});
 					it("should not flag nested assign in do-while statement if parenthesised", function(callback) {
-						var topic = "do{}while ((a = (b = 10))) {}";
+						var topic = "do{}while ((a = (b = 10)))";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -2333,7 +2804,7 @@ define([
 							});
 					});
 					it("should flag do-while statement 3", function(callback) {
-						var topic = "do{}while(!true) {}";
+						var topic = "do{}while(!true)";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -2638,7 +3109,7 @@ define([
 					});
 		
 					it("should not flag do-while statement", function(callback) {
-						var topic = "do{}while(x) {}";
+						var topic = "do{}while(x)";
 						var config = { rules: {} };
 						config.rules[RULE_ID] = 1;
 						validate({buffer: topic, callback: callback, config: config}).then(
@@ -6005,13 +6476,14 @@ define([
 					});
 				});
 			
-			//NO-REDECLARE -------------------------------------------------------
+				//NO-REDECLARE -------------------------------------------------------
 				describe('no-redeclare', function() {
 					var RULE_ID = "no-redeclare";
 					/**
 					 *@see https://bugs.eclipse.org/bugs/show_bug.cgi?id=474838
 					 * @since 10.0
 					 */
+					this.timeout(1000000);
 					it("should flag redeclaration in closure 1", function(callback) {
 						var topic = "(function fizz() {var a, a;});";
 						var config = { rules: {} };
@@ -6759,7 +7231,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Parameter 'name' shadows a global member."
 									}]);
@@ -6780,7 +7252,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Parameter 'name' shadows a global member."
 									}]);
@@ -6797,7 +7269,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Variable 'name' shadows a global member."
 									}]);
@@ -6814,7 +7286,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Parameter 'name' shadows a global member."
 									}]);
@@ -6835,7 +7307,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Parameter 'require' shadows a global member."
 									}]);
@@ -6873,7 +7345,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Variable 'require' shadows a global member."
 									}]);
@@ -6890,7 +7362,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Parameter 'module' shadows a global member."
 									}]);
@@ -6952,7 +7424,7 @@ define([
 								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
+										id: 'no-shadow-global-param',
 										severity: 'warning',
 										description: "Parameter 'Math' shadows a global member."
 									}]);
@@ -7429,78 +7901,6 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
-						it("should report a violation (readonly) when evaluating write to a declared readonly global", function(callback) {
-							var topic = "/*global b:false*/ function f() { b = 1; }";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'b' is read-only.",
-										nodeType: "Identifier"
-									}]);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
-						it("should report a violation (readonly) when evaluating read+write to a declared readonly global", function(callback) {
-							var topic = "/*global b:false*/ function f() { b++; }";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'b' is read-only.",
-										nodeType: "Identifier"
-									}]);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
-						it("should report a violation (readonly) when evaluating write to a declared global that is readonly by default", function(callback) {
-							var topic = "/*global b*/ b = 1;";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'b' is read-only.",
-										nodeType: "Identifier"
-									}]);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
-						it("should report a violation (readonly) when evaluating write to a redefined global that is readonly", function(callback) {
-							var topic = "/*global b:false*/ var b = 1;";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'b' is read-only.",
-										nodeType: "Identifier"
-									}]);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
 						//------------------------------------------------------------------------------
 						// Test eslint-env browser flags
 						//------------------------------------------------------------------------------
@@ -7635,50 +8035,6 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
-				
-						it("should report a violation (readonly) when evaluating write to a builtin", function(callback) {
-							var topic = "Array = 1;";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'Array' is read-only.",
-										nodeType: "Identifier"
-									}]);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
-				
-						it("should not report a violation when Typed Array globals are used", function(callback) {
-							var topic = "ArrayBuffer; DataView; Uint32Array;";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, []);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
-						it("should not flag ES6 globals", function(callback) {
-							var topic = "Promise; Proxy; Reflect; Symbol;";
-							var config = { rules: {} };
-							config.rules[RULE_ID] = 1;
-							validate({buffer: topic, callback: callback, config: config}).then(
-								function (problems) {
-									assertProblems(problems, []);
-								},
-								function (error) {
-									worker.getTestState().callback(error);
-								});
-						});
 						
 						//------------------------------------------------------------------------------
 						// Test references to globals in other files that Tern knows about
@@ -7742,9 +8098,192 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'b' is undefined.",
+										description: "'b' is undefined for 'undefExpr' in validator_test_script.js.",
 										nodeType: "Identifier"
 									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file undeclared member - prop literal", function(callback) {
+							var topic = "var undefExpr = {a: function(){}}; undefExpr['b']();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for 'undefExpr' in validator_test_script.js.",
+										nodeType: "Literal"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file no declared members", function(callback) {
+							var topic = "var undefExpr = {}; undefExpr.b();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for 'undefExpr' in validator_test_script.js.",
+										nodeType: "Identifier"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file no declared members - prop literal", function(callback) {
+							var topic = "var undefExpr = {}; undefExpr['b']();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for 'undefExpr' in validator_test_script.js.",
+										nodeType: "Literal"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object not documented but property set in function call", function(callback) {
+							var topic = "function foo(a){a.b();}\nfoo({b: function(){}});";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object not documented, different property set in function call", function(callback) {
+							var topic = "function foo(a){a.b();}\nfoo({c: function(){}});";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for 'a' in validator_test_script.js.",
+										nodeType: "Identifier"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object not documented, no properties set", function(callback) {
+							var topic = "function foo(a){a.b();};";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object documented as {Object}, no properties set", function(callback) {
+							var topic = "/**\n * @param {Object} a\n */\nfunction foo(a){a.b();}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for 'a' in validator_test_script.js.",
+										nodeType: "Identifier"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object documented as {Object}, no properties set - prop literal", function(callback) {
+							var topic = "/**\n * @param {Object} a\n */\nfunction foo(a){a['b']();}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for 'a' in validator_test_script.js.",
+										nodeType: "Literal"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object documented as {{}}, no properties set", function(callback) {
+							var topic = "/**\n * @param {{b:fn}} a\n */\nfunction foo(a){a.b();}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object documented as {Object}, different property set", function(callback) {
+							var topic = "/**\n * @param {Object} a\n */\nfunction foo(a){a.b();} foo({c: function(){}});";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined.",
+										nodeType: "Identifier"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file object not defined", function(callback) {
+							var topic = "undefExpr.b();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
 								},
 								function (error) {
 									worker.getTestState().callback(error);
@@ -7786,13 +8325,13 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'b' is undefined.",
+										description: "'b' is undefined for \'undefExpr\' in validator_test_script.js.",
 										nodeType: "Identifier"
 									},
                                     {
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'c' is undefined.",
+										description: "'c' is undefined for \'undefExpr\' in validator_test_script.js.",
 										nodeType: "Identifier"
 									}]);
 								},
@@ -7800,7 +8339,31 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
-						it.skip("Single file wrong  undeclared members", function(callback) {
+						it("Single file multiple undeclared members - prop literal", function(callback) {
+							var topic = "var undefExpr = {a: function(){}}; undefExpr['b'](); undefExpr['c']()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'b' is undefined for \'undefExpr\' in validator_test_script.js.",
+										nodeType: "Literal"
+									},
+                                    {
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'c' is undefined for \'undefExpr\' in validator_test_script.js.",
+										nodeType: "Literal"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("Single file wrong undeclared members", function(callback) {
 							var topic = "var undefExpr = {a: function(){}}; undefExpr.b(); undefExpr.c()";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
@@ -7810,13 +8373,13 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'b' is undefined.",
+										description: "'b' is undefined for 'undefExpr' in validator_test_script.js.",
 										nodeType: "Identifier"
 									},
                                     {
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'c' is undefined.",
+										description: "'c' is undefined for 'undefExpr' in validator_test_script.js.",
 										nodeType: "Identifier"
 									}]);
 								},
@@ -7834,13 +8397,13 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'d' is undefined.",
+										description: "'d' is undefined for 'b' in validator_test_script.js.",
 										nodeType: "Identifier"
 									},
                                     {
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'b' is undefined.",
+										description: "'b' is undefined for 'undefExpr' in validator_test_script.js.",
 										nodeType: "Identifier"
 									}]);
 								},
@@ -7848,26 +8411,39 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
-						// TODO Tern only finds the property of v if you run open Decl on a()
-                        it.skip("Single file member declared inline", function(callback) {
+						it("Single file browser environment member expression", function(callback) {
+							var topic = "/*eslint-env browser */\ndocument.getElementById('bar');\n document.getZZZ();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									//TODO something is stepping on 'document' and assigning it a stand-in type
+//									{
+//										id: RULE_ID,
+//										severity: 'warning',
+//										description: "'getZZZ' is undefined for 'Document' in browser.",
+//										nodeType: "Identifier"
+//									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+                        it("Single file member declared inline", function(callback) {
 							var topic = "var undefExpr = {}; undefExpr.a = function(){}; undefExpr.a();";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
 									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'a' is undefined.",
-										nodeType: "Identifier"
-									}]);
+									]);
 								},
 								function (error) {
 									worker.getTestState().callback(error);
 								});
 						});
-                        // TODO We check that the property exists, not the actual property type
                         it.skip("Single file declared property is wrong type", function(callback) {
 							var topic = "var undefExpr = {a: {}}; undefExpr.a();";
 							var config = { rules: {} };
@@ -7875,12 +8451,7 @@ define([
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
 									assertProblems(problems, [
-									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "'a' is undefined.",
-										nodeType: "Identifier"
-									}]);
+									]);
 								},
 								function (error) {
 									worker.getTestState().callback(error);
@@ -7889,8 +8460,8 @@ define([
                         //------------------------------------------------------------------------------
 						// Test references to globals in other files that Tern knows about
 						//------------------------------------------------------------------------------
-						it("Multi file 1 - undeclared member", function(callback) {
-							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest1.js", source: "var noUndefExpr1 = {a: function(){}};"}}); 
+						it("Multi file 1a - undeclared member", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest1.js", source: "noUndefExpr1 = {a: function(){}};"}}); 
 							var topic = "noUndefExpr1.b();";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
@@ -7899,7 +8470,26 @@ define([
 									assertProblems(problems, [{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "'b' is undefined.",
+										description: "'b' is undefined for 'noUndefExpr1' in noUndefExprTest1.js.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+						it("Multi file 1b - undeclared nested member", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest1.js", source: "noUndefExpr1 = {abc: {d: function(){}};"}}); 
+							var topic = "noUndefExpr1.abc.testc();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'testc' is undefined for 'abc' in noUndefExprTest1.js.",
 										nodeType: "Identifier"
 									}]);
 								},
@@ -7909,7 +8499,7 @@ define([
 							);
 						});
                         it("Multi file 2 - declared member", function(callback) {
-							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest2.js", source: "var noUndefExpr2 = {a: function(){}};"}}); 
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest2.js", source: "noUndefExpr2 = {a: function(){}};"}}); 
 							var topic = "noUndefExpr2.a();";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
@@ -7923,8 +8513,29 @@ define([
 							);
 						});
                         it("Multi file 3 - undeclared member no properties", function(callback) {
-							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest3.js", source: "var noUndefExpr3 = {};"}}); 
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest3.js", source: "noUndefExpr3 = {};"}}); 
 							var topic = "noUndefExpr3.a();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'a' is undefined for 'noUndefExpr3' in noUndefExprTest3.js.",
+										nodeType: "Identifier"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								}
+							);
+						});
+						 it("Multi file 4 - no object declared", function(callback) {
+							worker.postMessage({request: 'addFile', args: {file: "noUndefExprTest4.js", source: "noUndefExprZZZ4 = {};"}}); 
+							var topic = "noUndefExpr4.a();";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
 							validate({buffer: topic, callback: callback, config: config}).then(
@@ -7935,6 +8546,19 @@ define([
 									worker.getTestState().callback(error);
 								}
 							);
+						});
+						it("Should not flag array access using a binary expression", function(callback) {
+							var topic = "var funcs = [], i = 5; return funcs[i - 1]();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
 						});
 					});
 					//NO-UNDEF-INIT -------------------------------------------------
@@ -8335,12 +8959,28 @@ define([
 								});
 						});
 						it("should not flag hoisted var decl func decl", function(callback) {
-							var topic = "function f() {return\nvar t = r;}";
+							var topic = "function f() {return\nvar t;}";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
 									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag not hoisted var decl func decl", function(callback) {
+							var topic = "function f() {return\nvar t = 4;}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Unreachable code."
+									}]);
 								},
 								function (error) {
 									worker.getTestState().callback(error);
@@ -8352,7 +8992,11 @@ define([
 							config.rules[RULE_ID] = 1;
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
-									assertProblems(problems, []);
+									assertProblems(problems, [{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Unreachable code."
+									}]);
 								},
 								function (error) {
 									worker.getTestState().callback(error);
@@ -9008,6 +9652,21 @@ define([
 								});
 						});
 						/**
+						 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=494783
+						 */
+						it("Should not fail to resolve require(..)", function(callback) {
+							var topic = 'define(function(require) {var p = "foo"; require(p);});';
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						/**
 						 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=457067
 						 */
 						it("Should not flag unused param func decl as call expression in closure with @callback", function(callback) {
@@ -9439,6 +10098,78 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
+						it("should not flag var that has exported comment inline", function(callback) {
+							var topic = "// exported\nvar a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag var that has exported comment block", function(callback) {
+							var topic = "/* exported */\nvar a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag var that has exported comment multiple", function(callback) {
+							var topic = "// blargh\n/* exported */\n/* another comment */var a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag var that has exported comment casing", function(callback) {
+							var topic = "/* eXPOrtED */\nvar a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag var that has comment without exported keyword", function(callback) {
+							var topic = "// this is not exFOOported\nvar a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'a' is unused.",
+										nodeType: "Identifier"
+									}
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						
 						it("no-unused var cross file 1 - should not report unused function when used in a known html file", function(callback) {
 							worker.postMessage(
 								{
@@ -9470,6 +10201,26 @@ define([
 									worker.getTestState().callback(error);
 								}
 							);
+						});
+						it("no-unused-vars import", function(callback) {
+							var topic = 'import { cube } from "./exports"; cube(4)'; 
+							var config = { rules: {} };
+							var createFiles = [{name: './exports.js', text: 'export function cube(x) {return x * x * x;}'}];
+							config.rules[RULE_ID] = 2;
+							validate({buffer: topic, callback: callback, config: config, createFiles: createFiles}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "forbiddenExportImport",
+										severity: 'error',
+										description: '\'import\' and \'export\' may appear only with \'sourceType: module\'',
+										start: 0,
+										end: 6
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
 						});
 					});
 			
@@ -9525,6 +10276,68 @@ define([
 										description: "'a' was used before it was defined.",
 										nodeType: "Identifier"
 									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag var use that precedes declaration in ArrowExpression", function(callback) {
+							var topic = "f => a++; var a;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'a' was used before it was defined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag var use in ArrowExpression", function(callback) {
+							var topic = "var a; f => a++;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag var use that precedes declaration in blocked ArrowExpression", function(callback) {
+							var topic = "f => {a++; var a;};";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "'a' was used before it was defined.",
+										nodeType: "Identifier"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag var use in blocked ArrowExpression", function(callback) {
+							var topic = "var a; f => {a++};";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									]);
 								},
 								function (error) {
 									worker.getTestState().callback(error);
@@ -9779,6 +10592,38 @@ define([
 					//SEMI ----------------------------------------------
 					describe('semi', function() {
 						var RULE_ID = "semi";
+						/**
+						 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=495831
+						 */
+						it("recovered member expression ;", function(callback) {
+							var topic = "var a = b.\nc d";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: undefined,
+										severity: 'error',
+										description: "Unexpected token"
+									},
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Missing semicolon.",
+										nodeType: "VariableDeclaration"
+									},
+									{
+										id: RULE_ID,
+										severity: 'warning',
+										description: "Missing semicolon.",
+										nodeType: "ExpressionStatement"
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
 						it("should flag variable declaration lacking ;", function(callback) {
 							var topic = "var a=1";
 							var config = { rules: {} };
@@ -10337,6 +11182,115 @@ define([
 							var topic = "var o = {f: function() {function inner() {}}};o.f = null;";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag missing semi when 'never' is used", function(callback) {
+							var topic = "var name = \"ESLint\"";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag missing semi when 'never' is used with omitLastInOneLineBlock = true", function(callback) {
+							var topic = "if (foo) { bar() }";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always", {omitLastInOneLineBlock: true}];
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag missing semi when 'never' is used with omitLastInOneLineBlock = true 2", function(callback) {
+							var topic = "if (foo) { bar(); baz() }";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always", {omitLastInOneLineBlock: true}];
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag missing semi when 'never' is used with omitLastInOneLineBlock = true", function(callback) {
+							var topic =
+								"if (foo) {\n" +
+								"    bar()\n" +
+								"}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always", {omitLastInOneLineBlock: true}];
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'error',
+										start: 19,
+										end: 20
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag missing semi when 'never' is used with omitLastInOneLineBlock = true 2", function(callback) {
+							var topic =
+								"if (foo) { bar(); }";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always", {omitLastInOneLineBlock: true}];
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'error',
+										start: 16,
+										end: 17
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag semi when 'never' is set", function(callback) {
+							var topic = "if (foo) { bar(); }";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: RULE_ID,
+										severity: 'error',
+										start: 16,
+										end: 17
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag semi when 'never' is set", function(callback) {
+							var topic = 
+								"var name = \"ESLint\"\n" +
+								";(function() {\n" +
+								"})()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
 									assertProblems(problems, []);
@@ -11851,7 +12805,7 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "Unexpected \'else\' after \'return\'."
+										description: "Unnecessary \'else\' after \'return\'."
 									}]);
 								},
 								function (error) {
@@ -11874,7 +12828,7 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "Unexpected \'else\' after \'return\'."
+										description: "Unnecessary \'else\' after \'return\'."
 									}]);
 								},
 								function (error) {
@@ -11901,12 +12855,12 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "Unexpected \'else\' after \'return\'."
+										description: "Unnecessary \'else\' after \'return\'."
 									},
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "Unexpected \'else\' after \'return\'."
+										description: "Unnecessary \'else\' after \'return\'."
 									}]);
 								},
 								function (error) {
@@ -12097,7 +13051,7 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "Assigning to itself is pointless."
+										description: "'b' is assigned to itself."
 									}]);
 								},
 								function (error) {
@@ -12114,7 +13068,7 @@ define([
 									{
 										id: RULE_ID,
 										severity: 'warning',
-										description: "Assigning to itself is pointless."
+										description: "'x' is assigned to itself."
 									}]);
 								},
 								function (error) {
@@ -12135,6 +13089,18 @@ define([
 						});
 						it("should not flag assign in assignment expression 2", function(callback) {
 							var topic = 	"var y, X = 9; y = X;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 1;
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag operator assignments", function(callback) {
+							var topic = 	"var a; a += a; a -= a; a *= a; a /= a;";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
 							validate({buffer: topic, callback: callback, config: config}).then(
@@ -12336,21 +13302,1361 @@ define([
 									worker.getTestState().callback(error);
 								});
 						});
-					});
-					// check-tern-project --------------------------------------------
-					describe('check-tern-project', function() {
-						var RULE_ID = "check-tern-project";
-						it("flag lonely file", function(callback) {
-							var topic = 	"function foo() {}";
+						it("should not flag return null and String", function(callback) {
+							var topic = 
+								"var getProjectName = function(name2) {\n" +
+								"	if(name2.indexOf(\" | \") !== -1) {\n" +
+								"		var s = name2.split(\" | \");\n" +
+								"		return s.length > 1 ?name2.split(\" | \")[1].trim() : name2;\n" +
+								"	}\n" +
+								"	return name2;\n" +
+								"};";
 							var config = { rules: {} };
 							config.rules[RULE_ID] = 1;
 							validate({buffer: topic, callback: callback, config: config}).then(
 								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// forbiddenExportImport --------------------------------------------
+					describe('forbiddenExportImport', function() {
+						var RULE_ID = "semi";
+						it("flag invalid import/export", function(callback) {
+							var topic = "import * as test from \"./files/es_modules_dep1\"";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
 									assertProblems(problems, [
 									{
-										id: RULE_ID,
-										severity: 'warning',
-										description: "File should be added to the .tern-project file"
+										id: "forbiddenExportImport",
+										severity: 'error',
+										description: '\'import\' and \'export\' may appear only with \'sourceType: module\'',
+										start: 0,
+										end: 6
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-void --------------------------------------------
+					describe('no-void', function() {
+						var RULE_ID = "no-void";
+						it("flag invalid void", function(callback) {
+							var topic = "var foo = void bar();";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-void",
+										severity: 'error',
+										description: 'Expected \'undefined\' and instead saw \'void\'.',
+										start: 10,
+										end: 20
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+
+					// no-implicit-coercion --------------------------------------------
+					describe('no-implicit-coercion', function() {
+						var RULE_ID = "no-implicit-coercion";
+						it("flag invalid coercion for !!", function(callback) {
+							var topic = "var foo = {}; var b = !!foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-implicit-coercion",
+										severity: 'error',
+										description: 'use `Boolean(foo)` instead.',
+										start: 22,
+										end: 27
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid coercion for ~", function(callback) {
+							var topic = "var foo = \"\"; var b =  ~foo.indexOf(\".\");";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-implicit-coercion",
+										severity: 'error',
+										description: 'use `foo.indexOf(".") !== -1` instead.',
+										start: 23,
+										end: 40
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid coercion for +", function(callback) {
+							var topic = "var foo = {}; var n = +foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-implicit-coercion",
+										severity: 'error',
+										description: 'use `Number(foo)` instead.',
+										start: 22,
+										end: 26
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid coercion for 1 *", function(callback) {
+							var topic = "var foo = {}; var n = 1 * foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-implicit-coercion",
+										severity: 'error',
+										description: 'use `Number(foo)` instead.',
+										start: 22,
+										end: 29
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid coercion for string", function(callback) {
+							var topic = "var foo = 0; var s = \"\" + foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-implicit-coercion",
+										severity: 'error',
+										description: 'use `String(foo)` instead.',
+										start: 21,
+										end: 29
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid coercion for string 2", function(callback) {
+							var topic = "var foo = 0; foo += \"\";";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-implicit-coercion",
+										severity: 'error',
+										description: 'use `foo = String(foo)` instead.',
+										start: 13,
+										end: 22
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for Boolean()", function(callback) {
+							var topic = "var foo = 0; var b = Boolean(foo);";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for indexOf() !==", function(callback) {
+							var topic = "var foo = \"\"; var b = foo.indexOf(\".\") !== -1;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for ~", function(callback) {
+							var topic = "var foo = 0; var n = ~foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for Number()", function(callback) {
+							var topic = "var foo = {}; var n = Number(foo);";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for parseFloat()", function(callback) {
+							var topic = "var foo = {}; var n = parseFloat(foo);";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for parseInt()", function(callback) {
+							var topic = "var foo = {}; var n = parseInt(foo, 10);";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid coercion for String()", function(callback) {
+							var topic = "var foo = {}; var s = String(foo);";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag invalid coercion for + when disabled", function(callback) {
+							var topic = "var foo = {}; var n = +foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {"number" : false}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should flag invalid coercion for + when disabled 2", function(callback) {
+							var topic = "/*eslint no-implicit-coercion: [2, {\"number\": false } ]*/\n" +
+										"var foo = {}; var n = +foo;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-extend-native --------------------------------------------
+					describe('no-extend-native', function() {
+						var RULE_ID = "no-extend-native";
+						it("flag invalid extend native", function(callback) {
+							var topic = "Object.prototype.a = \"a\";";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-extend-native",
+										severity: 'error',
+										description: 'Object prototype is read only, properties should not be added.',
+										start: 0,
+										end: 24
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid extend native", function(callback) {
+							var topic = "Object.defineProperty(Array.prototype, \"times\", { value: 999 });";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-extend-native",
+										severity: 'error',
+										description: 'Array prototype is read only, properties should not be added.',
+										start: 0,
+										end: 63
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid extend native because of exceptions value", function(callback) {
+							var topic = "Object.defineProperty(Array.prototype, \"times\", { value: 999 });";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {"exceptions" : ["Array"]}];
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-lone-blocks --------------------------------------------
+					describe('no-lone-blocks', function() {
+						var RULE_ID = "no-lone-blocks";
+						it("flag invalid lone blocks", function(callback) {
+							var topic = "{}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-lone-blocks",
+										severity: 'error',
+										description: 'Block is redundant.',
+										start: 0,
+										end: 2
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid lone blocks 2", function(callback) {
+							var topic = "if (foo) {bar();{baz();}}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-lone-blocks",
+										severity: 'error',
+										description: 'Nested block is redundant.',
+										start: 16,
+										end: 24
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid lone blocks 3", function(callback) {
+							var topic = "function bar() {{baz();}}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-lone-blocks",
+										severity: 'error',
+										description: 'Nested block is redundant.',
+										start: 16,
+										end: 24
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid lone blocks 4", function(callback) {
+							var topic = "{function foo() {}}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-lone-blocks",
+										severity: 'error',
+										description: 'Block is redundant.',
+										start: 0,
+										end: 19
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid lone blocks 5", function(callback) {
+							var topic = "{aLabel: {}}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							var features = Object.create(null);
+							features.modules = false;
+							config.ecmaFeatures = features;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-lone-blocks",
+										severity: 'error',
+										description: 'Block is redundant.',
+										start: 0,
+										end: 12
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// quotes --------------------------------------------
+					describe('quotes', function() {
+						var RULE_ID = "quotes";
+						it("flag invalid quotes", function(callback) {
+							var topic = "var d = \"double\";";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "single"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "quotes",
+										severity: 'error',
+										description: 'Strings must use singlequote.',
+										start: 8,
+										end: 16
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid quotes 2", function(callback) {
+							var topic = "var unescaped = \"a string containing 'single' quotes\";";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "single"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "quotes",
+										severity: 'error',
+										description: 'Strings must use singlequote.',
+										start: 16,
+										end: 53
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid quotes 3", function(callback) {
+							var topic = "var single = 'single';";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "double", {"avoidEscape": true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "quotes",
+										severity: 'error',
+										description: 'Strings must use doublequote.',
+										start: 13,
+										end: 21
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// yoda --------------------------------------------
+					describe('yoda', function() {
+						var RULE_ID = "yoda";
+						it("flag invalid yoda comparison", function(callback) {
+							var topic = "if (\"red\" === color) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the right side of ===.',
+										start: 4,
+										end: 19
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid yoda comparison 2", function(callback) {
+							var topic = "if (true === flag) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the right side of ===.',
+										start: 4,
+										end: 17
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid yoda comparison 3", function(callback) {
+							var topic = "if (5 > count) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the right side of >.',
+										start: 4,
+										end: 13
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid yoda comparison 4", function(callback) {
+							var topic = "if (-1 < count) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the right side of <.',
+										start: 4,
+										end: 14
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid yoda comparison 5", function(callback) {
+							var topic = "if (0 <= x && x < 1) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the right side of <=.',
+										start: 4,
+										end: 10
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid yoda comparison 6", function(callback) {
+							var topic = "if (color === \"blue\") {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the left side of ===.',
+										start: 4,
+										end: 20
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid yoda comparison 7", function(callback) {
+							var topic = "if (\"red\" === color) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {onlyEquality: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "yoda",
+										severity: 'error',
+										description: 'Expected literal to be on the right side of ===.',
+										start: 4,
+										end: 19
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison", function(callback) {
+							var topic = "if (5 & value) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 2", function(callback) {
+							var topic = "if (value === \"red\") {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 3", function(callback) {
+							var topic = "function isReddish(color) {return (color.hue < 60 || 300 < color.hue);}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {exceptRange: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 4", function(callback) {
+							var topic = "if (x < -1 || 1 < x) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {exceptRange: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 5", function(callback) {
+							var topic = "if (count < 10 && (0 <= rand && rand < 1)) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {exceptRange: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 6", function(callback) {
+							var topic = "function howLong(arr) {return (0 <= arr.length && arr.length < 10) ? \"short\" : \"long\";}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {exceptRange: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 7", function(callback) {
+							var topic = "if (x < -1 || 9 < x) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {onlyEquality: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 8", function(callback) {
+							var topic = "if (x !== 'foo' && 'bar' != x) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "never", {onlyEquality: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 9", function(callback) {
+							var topic = "if ('blue' == value) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid yoda comparison 10", function(callback) {
+							var topic = "if (-1 < str.indexOf(substr)) {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, "always"];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-param-reassign --------------------------------------------
+					describe('no-param-reassign', function() {
+						var RULE_ID = "no-param-reassign";
+						it("flag invalid param reassign", function(callback) {
+							var topic = "function foo(bar) {bar = 13;}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-param-reassign",
+										severity: 'error',
+										description: "Assignment to function parameter \'bar\'.",
+										start: 19,
+										end: 22
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid param reassign 2", function(callback) {
+							var topic = "function foo(bar) {bar++;}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-param-reassign",
+										severity: 'error',
+										description: "Assignment to function parameter \'bar\'.",
+										start: 19,
+										end: 22
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid param reassign 3", function(callback) {
+							var topic = "function foo(bar) {bar.prop = 'value';}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-param-reassign",
+										severity: 'error',
+										description: "Assignment to property of function parameter \'bar\'.",
+										start: 19,
+										end: 22
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid param reassign 4", function(callback) {
+							var topic = "function foo(bar) {delete bar.aaa}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-param-reassign",
+										severity: 'error',
+										description: "Assignment to property of function parameter \'bar\'.",
+										start: 26,
+										end: 29
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid param reassign 5", function(callback) {
+							var topic = "function foo(bar) {bar.aaaa++;}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-param-reassign",
+										severity: 'error',
+										description: "Assignment to property of function parameter \'bar\'.",
+										start: 19,
+										end: 22
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid param reassign", function(callback) {
+							var topic = "function foo(bar) {bar.prop = 'value';}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: false}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid param reassign 2", function(callback) {
+							var topic = "function foo(bar) {delete bar.aaa}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: false}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid param reassign 3", function(callback) {
+							var topic = "function foo(bar) {bar.aaaa++;}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: false}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid param reassign 4", function(callback) {
+							var topic = "function foo(bar) {var baz = bar; baz++;}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {props: false}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-native-reassign --------------------------------------------
+					describe('no-native-reassign', function() {
+						var RULE_ID = "no-native-reassign";
+						it("flag invalid native reassign", function(callback) {
+							var topic = "Object = null";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-native-reassign",
+										severity: 'error',
+										description: 'Read-only global \'Object\' should not be modified.',
+										start: 0,
+										end: 6
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid native reassign 2", function(callback) {
+							var topic = "undefined = 1";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-native-reassign",
+										severity: 'error',
+										description: 'Read-only global \'undefined\' should not be modified.',
+										start: 0,
+										end: 9
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid native reassign 3", function(callback) {
+							var topic = "/* eslint-env browser */ window = {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-native-reassign",
+										severity: 'error',
+										description: 'Read-only global \'window\' should not be modified.',
+										start: 25,
+										end: 31
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid native reassign 4", function(callback) {
+							var topic = "/* eslint-env browser */ top = {}";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-native-reassign",
+										severity: 'error',
+										description: 'Read-only global \'top\' should not be modified.',
+										start: 25,
+										end: 28
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid native reassign 5", function(callback) {
+							var topic = "/*globals a:false*/ a = 1";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-native-reassign",
+										severity: 'error',
+										description: 'Read-only global \'a\' should not be modified.',
+										start: 20,
+										end: 21
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid native reassign", function(callback) {
+							var topic = "Object = null";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {exceptions: ["Object"]}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag native reassign 2", function(callback) {
+							var topic = "/*globals a:true*/ a = 1";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-unused-expressions --------------------------------------------
+					describe('no-unused-expressions', function() {
+						var RULE_ID = "no-unused-expressions";
+						it("flag invalid unused expressions", function(callback) {
+							var topic = "var a = 1; a + 3;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-unused-expressions",
+										severity: 'error',
+										description: 'Expected an assignment or function call and instead saw an expression.',
+										start: 11,
+										end: 17
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid unused expressions 2", function(callback) {
+							var topic = "a || b";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, { "allowShortCircuit": true }];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-unused-expressions",
+										severity: 'error',
+										description: 'Expected an assignment or function call and instead saw an expression.',
+										start: 0,
+										end: 6
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid unused expressions 3", function(callback) {
+							var topic = "a ? b : 0";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, { "allowTernary": true }];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-unused-expressions",
+										severity: 'error',
+										description: 'Expected an assignment or function call and instead saw an expression.',
+										start: 0,
+										end: 9
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid unused expressions 4", function(callback) {
+							var topic = "a ? b : c()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, { "allowTernary": true }];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-unused-expressions",
+										severity: 'error',
+										description: 'Expected an assignment or function call and instead saw an expression.',
+										start: 0,
+										end: 11
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid unused expressions", function(callback) {
+							var topic = "var a = 1; a = 3;";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid unused expressions 2", function(callback) {
+							var topic = "a && b()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {allowShortCircuit: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid unused expressions 3", function(callback) {
+							var topic = "a() || (b = c)";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {allowShortCircuit: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid unused expressions 4", function(callback) {
+							var topic = "a ? b() : c()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {allowTernary: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid unused expressions 5", function(callback) {
+							var topic = "a ? (b = c) : d()";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {allowTernary: true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, []);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("should not flag invalid unused expressions 6", function(callback) {
+							var topic =
+								"/*eslint-env amd */\n" +
+								"define([\n" +
+								"'module\n" +
+								"], function(module) {});";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = 2;
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										severity: 'error',
+										description: 'Unterminated string constant',
+										start: 29,
+										end: 30
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+					});
+					// no-trailing-spaces --------------------------------------------
+					describe('no-trailing-spaces', function() {
+						var RULE_ID = "no-trailing-spaces";
+						it("flag invalid trailing spaces", function(callback) {
+							var topic =
+									"			\n" +
+									"var f = 10;             \n" +
+									"			";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {"skipBlankLines" : false}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-trailing-spaces",
+										severity: 'error',
+										description: 'Trailing spaces not allowed.',
+										start: 0,
+										end: 3
+									},
+									{
+										id: "no-trailing-spaces",
+										severity: 'error',
+										description: 'Trailing spaces not allowed.',
+										start: 15,
+										end: 28
+									},
+									{
+										id: "no-trailing-spaces",
+										severity: 'error',
+										description: 'Trailing spaces not allowed.',
+										start: 29,
+										end: 32
+									}]);
+								},
+								function (error) {
+									worker.getTestState().callback(error);
+								});
+						});
+						it("flag invalid trailing spaces", function(callback) {
+							var topic =
+									"			\n" +
+									"var f = 10;             \n" +
+									"			";
+							var config = { rules: {} };
+							config.rules[RULE_ID] = [2, {"skipBlankLines" : true}];
+							
+							validate({buffer: topic, callback: callback, config: config}).then(
+								function (problems) {
+									assertProblems(problems, [
+									{
+										id: "no-trailing-spaces",
+										severity: 'error',
+										description: 'Trailing spaces not allowed.',
+										start: 15,
+										end: 28
 									}]);
 								},
 								function (error) {

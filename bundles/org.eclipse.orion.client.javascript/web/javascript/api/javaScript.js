@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation and others.
+ * Copyright (c) 2015, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -10,50 +10,32 @@
  ******************************************************************************/
 /*eslint-env amd */
 define([
-	"javascript/api/ternServer",
-	"javascript/occurrences",
-	"esprima/esprima",
-	"javascript/astManager",
-	"javascript/cuProvider"
-], function(TernServer, Occurrences, Esprima, ASTManager, CUProvider) {
+	"javascript/api/ternServer"
+], function(TernServer) {
 	
 	var useworker = false,
 		scriptresolver,
-		ternserver,
-		occurrences;
+		ternserver;
 	
 	/**
 	 * @name JavaScript
 	 * @description Creates a new TernServer
 	 * @param {ScriptResolver} scriptResolver The resolver used to find scripts for getFile
+	 * @param {JavaScriptProject} jsProject The optional backing JavaScript project - used for reading / finding resources.
 	 * @param {Boolean} useWorker If the backing TernServer instance should be run in a worker
 	 * @returns {TernServer} A new TernServer instance
 	 * @since 11.0
 	 */
-	function JavaScript(scriptResolver, useWorker) {
+	function JavaScript(scriptResolver, jsProject, useWorker) {
 		scriptresolver = scriptResolver;
 		useworker = useWorker;
 		if(!useworker) {
-			ternserver = new TernServer(scriptresolver);
+			ternserver = new TernServer(scriptresolver, jsProject);
 			ternserver.startServer(null, function() {
 				//just fire it up for now
 			});
 		}
-		occurrences = new Occurrences.JavaScriptOccurrences(new ASTManager.ASTManager(Esprima), CUProvider);
 	}
-	
-	/**
-	 * @name JavaScript.prototype.getOccurrences
-	 * @description Finds all the occurrences for the given offset
-	 * @function
-	 * @param {Object} editorContext The editor context object
-	 * @param {Object} args The arguments to pass in
-	 * @returns {Promise} A Promise to compute the occurrences
-	 * @see https://wiki.eclipse.org/Orion/Documentation/Developer_Guide/Plugging_into_the_editor#The_Occurrence_object
-	 */
-	JavaScript.prototype.getOccurrences = function getOccurrences(editorContext, args) {
-		return occurrences.computeOccurrences(editorContext, args);
-	};
 	
 	JavaScript.prototype.Tern = Object.create(null);
 	/**
@@ -85,6 +67,18 @@ define([
      */
     JavaScript.prototype.Tern.completions = function completions(file, offset, keywords, files, callback) {
     	ternserver.completions(file, offset, keywords, files, callback);
+    };
+    /**
+     * @description Computes the quickfixes for the given annotation, and optionally the list of similar annotations
+     * @param {String} file The fully qualified name of the file context
+     * @param {Number} offset The offset of the completion
+     * @param {Object} annotation The annotation from the editor which has the minimum form: {start, end, id, fixid}
+     * @param {Array.<Object>} annotations The array of similar annnotatons to the one the request is made to fix
+     * @param {Array.<Object>} files The optional array of file objects
+     * @param {Function} callback The callback which is called to return the results
+     */
+    JavaScript.prototype.Tern.fixes = function fixes(file, annotation, annotations, files, callback) {
+    	ternserver.fixes(file, annotation, annotations, files, callback);
     };
     /**
      * @description Computes the definition of the identifier at the given offset
@@ -159,6 +153,16 @@ define([
      */
     JavaScript.prototype.Tern.outline = function outline(file, files, callback) {
     	ternserver.outline(file, files, callback);
+    };
+    /**
+     * @description Computes occurrences for the given position
+     * @param {String} file The fully qualified name of the file context
+     * @param {Number} offset The offset of the cursor
+     * @param {Array.<Object>} files The optional array of file objects
+     * @param {Function} callback The callback which is called to return the results
+     */
+    JavaScript.prototype.Tern.occurrences = function outline(file, offset, files, callback) {
+    	ternserver.occurrences(file, offset, files, callback);
     };
     /**
      * @description Computes a rename array for the identifier at the given offset

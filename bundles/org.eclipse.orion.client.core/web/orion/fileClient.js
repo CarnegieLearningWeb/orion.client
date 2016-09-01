@@ -262,10 +262,26 @@ define([
 			var i = this._getServiceIndex(itemLocation);
 			return i === -1 ? _allFileSystemsService.Location : _fileSystemsRoots[i].Location;
 		};
+		
+		this._frozenEvent = {type: "Changed"};
+		this._eventFrozenMode = false;
+		
 		serviceRegistry.registerService("orion.core.file.client", this); //$NON-NLS-1$
 	}
 	
 	FileClient.prototype = /**@lends orion.fileClient.FileClient.prototype */ {
+		freezeChangeEvents: function() {
+			this._frozenEvent = {type: "Changed"};
+			this._eventFrozenMode = true;
+		},
+		thawChangeEvents: function() {
+			this._eventFrozenMode = false;
+			this.dispatchEvent(this._frozenEvent); //$NON-NLS-0$
+		},
+		isEventFrozen: function() {
+			return this._eventFrozenMode;
+		},
+		
 		/**
 		 * Returns the file service managing this location
 		 * @param {String} itemLocation The location of the item
@@ -339,6 +355,24 @@ define([
 			return _doServiceCall(this._getService(workspaceLocation), "loadWorkspace", arguments); //$NON-NLS-1$
 		},
 		
+		changeWorkspace: function(workspaceLocation) {
+			return _doServiceCall(this._getService(), "changeWorkspace", arguments); //$NON-NLS-1$
+		},
+		
+		_createArtifact: function(parentLocation, funcName, eventData, funcArgs) {
+			return _doServiceCall(this._getService(parentLocation), funcName, funcArgs).then(function(result){ //$NON-NLS-0$
+				if(this.isEventFrozen()) {
+					if(!this._frozenEvent.created) {
+						this._frozenEvent.created = [];
+					}
+					this._frozenEvent.created.push({parent: parentLocation, result: result, eventData: eventData});
+				} else {
+					this.dispatchEvent({ type: "Changed", created: [{parent: parentLocation, result: result, eventData: eventData}]}); //$NON-NLS-0$
+				}
+				return result;
+			}.bind(this));
+		},
+		
 		/**
 		 * Adds a project to a workspace.
 		 * @param {String} url The workspace location
@@ -350,37 +384,54 @@ define([
 		 */
 		createProject: function(url, projectName, serverPath, create) {
 			return _doServiceCall(this._getService(url), "createProject", arguments); //$NON-NLS-1$
+			//return this._createArtifact(url, "createProject", arguments);
 		},
 		/**
 		 * Creates a folder.
 		 * @param {String} parentLocation The location of the parent folder
 		 * @param {String} folderName The name of the folder to create
+		 * @param {Object} eventData The event data that will be sent back.
 		 * @return {Object} JSON representation of the created folder
 		 * @public
 		 * @return {Deferred} A deferred that will create a new folder in the workspace
 		 */
-		createFolder: function(parentLocation, folderName) {
-			return _doServiceCall(this._getService(parentLocation), "createFolder", arguments); //$NON-NLS-1$
+		createFolder: function(parentLocation, folderName, eventData) {
+			//return _doServiceCall(this._getService(parentLocation), "createFolder", arguments); //$NON-NLS-1$
+			return this._createArtifact(parentLocation, "createFolder", eventData, arguments);
 		},
 		/**
 		 * Create a new file in a specified location. Returns a deferred that will provide
 		 * The new file object when ready.
 		 * @param {String} parentLocation The location of the parent folder
 		 * @param {String} fileName The name of the file to create
+		 * @param {Object} eventData The event data that will be sent back.
 		 * @public
 		 * @return {Deferred} A deferred that will provide the new file object
 		 */
-		createFile: function(parentLocation, fileName) {
-			return _doServiceCall(this._getService(parentLocation), "createFile", arguments); //$NON-NLS-1$
+		createFile: function(parentLocation, fileName, eventData) {
+			//return _doServiceCall(this._getService(parentLocation), "createFile", arguments); //$NON-NLS-1$
+			return this._createArtifact(parentLocation, "createFile", eventData, arguments);
 		},
 		/**
 		 * Deletes a file, directory, or project.
 		 * @param {String} deleteLocation The location of the file or directory to delete.
+		 * @param {Object} eventData The event data that will be sent back.
 		 * @public
 		 * @returns {Deferred} A deferred that will delete the given file
 		 */
-		deleteFile: function(deleteLocation) {
-			return _doServiceCall(this._getService(deleteLocation), "deleteFile", arguments); //$NON-NLS-1$
+		deleteFile: function(deleteLocation, eventData) {
+			//return _doServiceCall(this._getService(deleteLocation), "deleteFile", arguments); //$NON-NLS-1$
+			return _doServiceCall(this._getService(deleteLocation), "deleteFile", arguments).then(function(result){ //$NON-NLS-0$
+				if(this.isEventFrozen()) {
+					if(!this._frozenEvent.deleted) {
+						this._frozenEvent.deleted = [];
+					}
+					this._frozenEvent.deleted.push({deleteLocation: deleteLocation, eventData: eventData});
+				} else {
+					this.dispatchEvent({ type: "Changed", deleted: [{deleteLocation: deleteLocation, eventData: eventData}]}); //$NON-NLS-0$
+				}
+				return result;
+			}.bind(this));
 		},
 		
 		/**		 
@@ -396,7 +447,18 @@ define([
 			var targetService = this._getService(targetLocation);
 			
 			if (sourceService === targetService) {
-				return _doServiceCall(sourceService, "moveFile", arguments);				 //$NON-NLS-1$
+				//return _doServiceCall(sourceService, "moveFile", arguments);
+				return _doServiceCall(sourceService, "moveFile", arguments).then(function(result){ //$NON-NLS-0$
+					if(this.isEventFrozen()) {
+						if(!this._frozenEvent.moved) {
+							this._frozenEvent.moved = [];
+						}
+						this._frozenEvent.moved.push({source: sourceLocation, target: targetLocation, result: result});
+					} else {
+						this.dispatchEvent({ type: "Changed", moved: [{source: sourceLocation, target: targetLocation, result: result}]}); //$NON-NLS-0$
+					}
+					return result;
+				}.bind(this));
 			}
 			
 			var isDirectory = sourceLocation[sourceLocation.length -1] === "/";
@@ -439,7 +501,18 @@ define([
 			var targetService = this._getService(targetLocation);
 			
 			if (sourceService === targetService) {
-				return _doServiceCall(sourceService, "copyFile", arguments);				 //$NON-NLS-1$
+				//return _doServiceCall(sourceService, "copyFile", arguments);				 //$NON-NLS-1$
+				return _doServiceCall(sourceService, "copyFile", arguments).then(function(result){ //$NON-NLS-0$
+					if(this.isEventFrozen()) {
+						if(!this._frozenEvent.copied) {
+							this._frozenEvent.copied = [];
+						}
+						this._frozenEvent.copied.push({source: sourceLocation, target: targetLocation, result: result});
+					} else {
+						this.dispatchEvent({ type: "Changed", copied: [{source: sourceLocation, target: targetLocation, result: result}]}); //$NON-NLS-0$
+					}
+					return result;
+				}.bind(this));
 			}
 			
 			var isDirectory = sourceLocation[sourceLocation.length -1] === "/";
@@ -500,7 +573,18 @@ define([
 		 * @return {Deferred} A deferred for chaining events after the write completes with new metadata object
 		 */		
 		write: function(writeLocation, contents, args) {
-			return _doServiceCall(this._getService(writeLocation), "write", arguments); //$NON-NLS-1$
+			//return _doServiceCall(this._getService(writeLocation), "write", arguments); //$NON-NLS-1$
+			return _doServiceCall(this._getService(writeLocation), "write", arguments).then(function(result){ //$NON-NLS-0$
+				if(this.isEventFrozen()) {
+					if(!this._frozenEvent.modified) {
+						this._frozenEvent.modified = [];
+					}
+					this._frozenEvent.modified.push(writeLocation);
+				} else {
+					this.dispatchEvent({ type: "Changed", modified: [writeLocation]}); //$NON-NLS-0$
+				}
+				return result;
+			}.bind(this));
 		},
 
 		/**
@@ -511,8 +595,19 @@ define([
 		 * @public
 		 * @return {Deferred} A deferred for chaining events after the import completes
 		 */		
-		remoteImport: function(targetLocation, options) {
-			return _doServiceCall(this._getService(targetLocation), "remoteImport", arguments); //$NON-NLS-1$
+		remoteImport: function(targetLocation, options, parentLocation) {
+			//return _doServiceCall(this._getService(targetLocation), "remoteImport", arguments); //$NON-NLS-1$
+			return _doServiceCall(this._getService(targetLocation), "remoteImport", arguments).then(function(result){ //$NON-NLS-0$
+				if(this.isEventFrozen()) {
+					if(!this._frozenEvent.copied) {
+						this._frozenEvent.copied = [];
+					}
+					this._frozenEvent.copied.push({target: parentLocation});
+				} else {
+					this.dispatchEvent({ type: "Changed", copied: [{target: parentLocation}]}); //$NON-NLS-0$
+				}
+				return result;
+			}.bind(this));
 		},
 
 		/**
@@ -525,6 +620,18 @@ define([
 		 */		
 		remoteExport: function(sourceLocation, options) {
 			return _doServiceCall(this._getService(sourceLocation), "remoteExport", arguments); //$NON-NLS-1$
+		},
+		
+		/**
+		 * Find a string inside a file
+		 *
+		 * @param {String} sourceLocation The location of the folder to export from
+		 * @param {String} findStr The string to search
+		 * @public
+		 * @return {Deferred} A deferred for chaining events after the export completes
+		 */		
+		find: function(sourceLocation, findStr, option) {
+			return _doServiceCall(this._getService(location), "find", arguments); //$NON-NLS-0$
 		},
 		
 		/**

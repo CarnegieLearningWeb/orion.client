@@ -32,6 +32,13 @@ define([
         this.cache = new LRU(10);
     }
 
+	function getKey(loc, _name) {
+		if(loc) {
+			return loc+_name;
+		}
+		return _name;
+	}
+
     Objects.mixin(ScriptResolver.prototype, {
        /**
         * Returns an array of workspace file that match the given logical name and options
@@ -51,23 +58,23 @@ define([
           }
           return new Deferred().resolve(null);
        },
-	   getFileClient: function() {
+	   getFileClient: function getFileClient() {
 	   		if(!this.fileclient) {
 	   			this.fileclient = this.serviceRegistry.getService("orion.core.file.client"); //$NON-NLS-1$
 	   		}
 	   		return this.fileclient;
 	   },
-       setSearchLocation: function(searchLocation) {
+       setSearchLocation: function setSearchLocation(searchLocation) {
        		this.searchLocation = searchLocation;
        },
-	   getSearchLocation: function() {
+	   getSearchLocation: function getSearchLocation() {
 	   		if(typeof this.searchLocation === 'string' && this.searchLocation.length > 0) {
 	   			return new Deferred().resolve(this.searchLocation);
 	   		}
 	   		return this.getFileClient().fileServiceRootURL();
 	   },
-       _getFile : function _getFile(name, options) {
-           var files = this.cache.get(name);
+       _getFile: function _getFile(name, options) {
+       		var files = this.cache.get(getKey(this.searchLocation, name));
            if(files) {
                return new Deferred().resolve(files);
            }
@@ -83,38 +90,40 @@ define([
            var searchname = filename.slice(idx+1);
 
            // Search for it
-           return this.getFileClient().search(
-                {
-                	'resource': that.searchLocation || "",
-                    'keyword': searchname,
-                    'sort': 'Name asc', //$NON-NLS-1$
-                    'nameSearch': true,
-                    'fileType': ext,
-                    'start': 0,
-                    'rows': 30
-                }
-           ).then(function(res) {
-               var r = res.response;
-               var len = r.docs.length;
-               if(r.numFound > 0) {
-                   files = [];
-                   var testname = filename.replace(/(?:\.?\.\/)*/, '');
-                   testname = testname.replace(new RegExp("\\"+dotext+"$"), ''); //$NON-NLS-1$
-                   testname = testname.replace(/\//g, "\\/"); //$NON-NLS-1$
-                   for(var i = 0; i < len; i++) {
-                       var file = r.docs[i];
-                       //TODO haxxor - only keep ones that end in the logical name or the mapped logical name
-                       var regex = ".*(?:"+testname+")$"; //$NON-NLS-1$ //$NON-NLS-2$
-                       if(new RegExp(regex).test(file.Location.slice(0, file.Location.length-dotext.length))) {
-                           files.push(that._newFileObj(file.Name, file.Location, that._trimName(file.Path), icon, type));
-                       }
-                   }
-                   if(files.length > 0) {
-                       that.cache.put(filename, files);
-                       return files;
-                   }
-               }
-               return null;
+           return this.getSearchLocation().then(function(searchLocation) {
+	           return that.getFileClient().search(
+	                {
+	                	'resource': searchLocation,
+	                    'keyword': searchname,
+	                    'sort': 'Name asc', //$NON-NLS-1$
+	                    'nameSearch': true,
+	                    'fileType': ext,
+	                    'start': 0,
+	                    'rows': 30
+	                }
+	           ).then(function(res) {
+	               var r = res.response;
+	               var len = r.docs.length;
+	               if(r.numFound > 0) {
+	                   files = [];
+	                   var testname = filename.replace(/(?:\.?\.\/)*/, '');
+	                   testname = testname.replace(new RegExp("\\"+dotext+"$"), ''); //$NON-NLS-1$
+	                   testname = testname.replace(/\//g, "\\/"); //$NON-NLS-1$
+	                   for(var i = 0; i < len; i++) {
+	                       var file = r.docs[i];
+	                       //TODO haxxor - only keep ones that end in the logical name or the mapped logical name
+	                       var regex = ".*(?:"+testname+")$"; //$NON-NLS-1$ //$NON-NLS-2$
+	                       if(new RegExp(regex).test(file.Location.slice(0, file.Location.length-dotext.length))) {
+	                           files.push(that._newFileObj(file.Name, file.Location, that._trimName(file.Path), icon, type));
+	                       }
+	                   }
+	                   if(files.length > 0) {
+	                       that.cache.put(getKey(that.searchLocation, filename), files);
+	                       return files;
+	                   }
+	               }
+	               return null;
+	           });
            });
        },
 
@@ -156,7 +165,7 @@ define([
 	                //resolve the realtive path
 	                var rel = /^\.\.\//.exec(_p);
 	                if(rel) {
-    	                while(rel != null) {
+    	                while(rel !== null) {
     	                    filepath = filepath.slice(0, filepath.lastIndexOf('/'));
     	                    _p = _p.slice(3);
     	                    rel = /^\.\.\//.exec(_p);
@@ -201,17 +210,17 @@ define([
         * @returns {Boolean} If the paths are the same
         */
        _samePaths: function _samePaths(file, path2, meta) {
-       		if(file == null) {
-       			return path2 == null;
+       		if(file === null) {
+       			return path2 === null;
        		}
-       		if(typeof(file) === 'undefined') {
-       			return typeof(path2) === 'undefined';
+       		if(typeof file === 'undefined') {
+       			return typeof path2 === 'undefined';
        		}
-       		if(path2 == null) {
-       			return file == null;
+       		if(path2 === null) {
+       			return file === null;
        		}
-       		if(typeof(path2) === 'undefined') {
-       			return typeof(file) === 'undefined';
+       		if(typeof path2 === 'undefined') {
+       			return typeof file === 'undefined';
        		}
    			//get rid of extensions and compare the names
    			var loc = file.location ? file.location : file.Location;
@@ -249,7 +258,7 @@ define([
         * @since 8.0
         */
        _appendPath: function _appendPath(path, addition) {
-            if(typeof(path) === 'string' && typeof(addition) === 'string') {
+            if(typeof path === 'string' && typeof addition === 'string') {
                 var newpath = path;
                 if(newpath.charAt(newpath.length-1) !== '/') {
 	               newpath += '/';

@@ -16,8 +16,7 @@ define([
 	'orion/editor/editor',
 	'orion/editor/eventTarget',
 	'orion/editor/textView',
-	'orion/editor/textModel',
-	'orion/editor/projectionTextModel',
+	'orion/editor/textModelFactory',
 	'orion/editor/editorFeatures',
 	'orion/hover',
 	'orion/editor/contentAssist',
@@ -44,18 +43,21 @@ define([
 	'orion/Deferred',
 	'orion/webui/contextmenu',
 	'orion/metrics',
-	'orion/objects'
+	'orion/commonPreferences',
+	'embeddedEditor/helper/memoryFileSysConst',
+	'orion/objects',
+	'orion/formatter'	
 ], function(
 	messages,
-	mEditor, mEventTarget, mTextView, mTextModel, mProjectionTextModel, mEditorFeatures, mHoverFactory, mContentAssist,
+	mEditor, mEventTarget, mTextView, mTextModelFactory, mEditorFeatures, mHoverFactory, mContentAssist,
 	mEmacs, mVI, mEditorPreferences, mThemePreferences, mThemeData, EditorSettings,
 	mSearcher, mEditorCommands, mGlobalCommands,
 	mDispatcher, EditorContext, Highlight,
 	mMarkOccurrences, mSyntaxchecker, LiveEditSession,
 	mProblems, mBlamer, mDiffer,
-	mKeyBinding, util, Deferred, mContextMenu, mMetrics, objects
+	mKeyBinding, util, Deferred, mContextMenu, mMetrics, mCommonPreferences, memoryFileSysConst, objects, mFormatter
 ) {
-	var fPattern = "/__embed/"; //$NON-NLS-1$
+	var inMemoryFilePattern = memoryFileSysConst.MEMORY_FILE_PATTERN;
 	var Dispatcher = mDispatcher.Dispatcher;
 
 	function parseNumericParams(input, params) {
@@ -121,6 +123,7 @@ define([
 			}.bind(this));
 		}
 		this.settings = {};
+		this._editorConfig = options.editorConfig;
 		this._init();
 	}
 	EditorView.prototype = /** @lends orion.EditorView.prototype */ {
@@ -143,13 +146,13 @@ define([
 				textView.addKeyMode(this.vi);
 			}
 		},
-		setContents: function(contents, contentType) {
+		setContents: function(contents, contentType, options) {
 			var cType = this.contentTypeRegistry.getContentType(contentType);
 			var fileExt = "txt"; //$NON-NLS-1$
 			if(cType && cType.extension && cType.extension.length > 0) {
 				fileExt = cType.extension[0];
 			}
-			var currentLocation = fPattern + this.id + "/foo." + fileExt; //$NON-NLS-1$
+			var currentLocation = inMemoryFilePattern + this.id + "/foo." + fileExt; //$NON-NLS-1$
 			var def;
 			var sameFile = currentLocation === this.lastFileLocation;
 			if(sameFile || !this.lastFileLocation) {
@@ -160,10 +163,11 @@ define([
 			return def.then(function() {
 				return this.fileClient.write(currentLocation, contents).then(function(){
 					this.lastFileLocation = currentLocation;
+					var noFocus = options && options.noFocus ? true: undefined;
 					if (sameFile) {
-						this.inputManager.load();
+						this.inputManager.load(undefined, noFocus);
 					} else {
-						this.inputManager.setInput(currentLocation);
+						this.inputManager.setInput(currentLocation, noFocus);
 					}
 				}.bind(this));
 			}.bind(this));
@@ -216,8 +220,11 @@ define([
 			var inputManager = this.inputManager;
 			inputManager.setAutoLoadEnabled(prefs.autoLoad);
 			inputManager.setAutoSaveTimeout(prefs.autoSave ? prefs.autoSaveTimeout : -1);
-			inputManager.setSaveDiffsEnabled(prefs.saveDiffs);
-			this.differ.setEnabled(this.settings.diffService);
+			inputManager.setFormatOnSave(prefs.formatOnSave ? prefs.formatOnSave : false);
+			if(this.differ) {
+				inputManager.setSaveDiffsEnabled(prefs.saveDiffs);
+				this.differ.setEnabled(this.settings.diffService);
+			}
 			this.updateStyler(prefs);
 			var textView = editor.getTextView();
 			if (textView) {
@@ -263,6 +270,7 @@ define([
 							return sessionStorage.editorViewSection ? JSON.parse(sessionStorage.editorViewSection) : {}; 
 						},
 						apply: function(animate) {
+							if (!metadata.Location) return;
 							var session = this.get();
 							var locationSession = session[metadata.Location];
 							if (locationSession && locationSession.ETag === metadata.ETag) {
@@ -271,6 +279,7 @@ define([
 							}
 						},
 						save: function() {
+							if (!metadata.Location) return;
 							var session = this.get();
 							session[metadata.Location] = {
 								ETag: metadata.ETag,
@@ -315,7 +324,7 @@ define([
 				var options = that.updateViewOptions(that.settings);
 				objects.mixin(options, {
 					parent: that._parent,
-					model: new mProjectionTextModel.ProjectionTextModel(that.model || new mTextModel.TextModel()),
+					model: new mTextModelFactory.TextModelFactory().createProjectionTextModel(that.model, {serviceRegistry: that.serviceRegistry}),
 					wrappable: true
 				});
 				var textView = new mTextView.TextView(options);
@@ -327,7 +336,12 @@ define([
 			 */
 			var keyBindingFactory = function(editor, keyModeStack, undoStack, contentAssist) {
 
-				var localSearcher = that.textSearcher = mSearcher.TextSearcher ? new mSearcher.TextSearcher(editor, serviceRegistry, commandRegistry, undoStack) : null;
+				//Allow extended TextModelFactory to pass default find options
+				var defaultFindOptions, factory = new mTextModelFactory.TextModelFactory();
+				if(typeof factory.getDefaultFindOptions === "function") {
+					defaultFindOptions = factory.getDefaultFindOptions();
+				}
+				var localSearcher = that.textSearcher = mSearcher.TextSearcher ? new mSearcher.TextSearcher(editor, serviceRegistry, commandRegistry, undoStack, defaultFindOptions) : null;
 
 				var keyBindings = new mEditorFeatures.KeyBindingsFactory().createKeyBindings(editor, undoStack, contentAssist, localSearcher);
 				that.updateSourceCodeActions(that.settings, keyBindings.sourceCodeActions);
@@ -378,7 +392,7 @@ define([
 							var id = serviceRef.getProperty("service.id").toString();  //$NON-NLS-0$
 							var charTriggers = serviceRef.getProperty("charTriggers"); //$NON-NLS-0$
 							var excludedStyles = serviceRef.getProperty("excludedStyles");  //$NON-NLS-0$
-
+							var autoApply = serviceRef.getProperty("autoApply");
 							if (charTriggers) {
 								charTriggers = new RegExp(charTriggers);
 							}
@@ -387,7 +401,7 @@ define([
 								excludedStyles = new RegExp(excludedStyles);
 							}
 
-							return {provider: service, id: id, charTriggers: charTriggers, excludedStyles: excludedStyles};
+							return {provider: service, id: id, charTriggers: charTriggers, excludedStyles: excludedStyles, autoApply: autoApply};
 						}
 						return null;
 					}).filter(function(providerInfo) {
@@ -500,6 +514,7 @@ define([
 
 			this.blamer = new mBlamer.Blamer(serviceRegistry, inputManager, editor);
 			this.differ = new mDiffer.Differ(serviceRegistry, inputManager, editor);
+			this.formatter = new mFormatter.Formatter(serviceRegistry, inputManager, editor);
 
 			this.problemService = new mProblems.ProblemService(serviceRegistry, this.problemsServiceID);
 			var markerService = serviceRegistry.getService(this.problemsServiceID);
@@ -527,7 +542,9 @@ define([
 					editor.reportStatus(messages.readonly, "error"); //$NON-NLS-0$
 				}
 			}
-
+			this.refreshSyntaxCheck = function() {
+				syntaxCheck(inputManager.getInput());
+			}
 			editor.addEventListener("InputChanged", function(evt) {
 				syntaxCheck(evt.title, evt.message, evt.contents);
 			});
@@ -556,7 +573,7 @@ define([
 			};
 			contextImpl.syntaxCheck = function(title, message, contents) {
 				syntaxCheck(title, message, contents);
-			}
+			};
 			/**
 			 * @description Opens the given location
 			 * @function
@@ -588,6 +605,9 @@ define([
 			this.editor.install();
 			if(this.editorPreferences) {
 				this.editorPreferences.getPrefs(this.updateSettings.bind(this));
+			} else if(this._editorConfig) {
+				var prefs = mCommonPreferences.mergeSettings(this._editorConfig, {});
+				this.updateSettings(prefs);
 			}
 			
 			// Create a context menu...

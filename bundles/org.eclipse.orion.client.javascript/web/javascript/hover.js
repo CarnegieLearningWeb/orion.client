@@ -145,7 +145,7 @@ define([
 	        hover += '\n\n\n  [Jump to declaration]('+href+')';*/
 	    }
 	    catch(e) {
-	        //do nothing, show what we have
+	       hover = '';
 	    }
 	    var result = {content: hover, type:'markdown'}; //$NON-NLS-1$
 	    if (offsetRange){
@@ -268,7 +268,7 @@ define([
 		        }
 		        return editorContext.getText().then(function(text) {
 	            	var cu = that.cuprovider.getCompilationUnit(function(){
-	            			Finder.findScriptBlocks(text);
+	            			return Finder.findScriptBlocks(text);
 	            		}, meta);
 		            if(cu.validOffset(ctxt.offset)) {
     		            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
@@ -328,11 +328,22 @@ define([
 			                });
                         }
                     }
+                } else if(parent.type === 'ImportDeclaration') {
+                	path = node.value;
+                	return that.resolver.getWorkspaceFile(path).then(function(files) {
+                        if(!/\.js$/.test(path)) {
+                            path += '.js'; //$NON-NLS-1$
+                        }
+                        var rels = that.resolver.resolveRelativeFiles(path, files, meta);
+                        if(rels && rels.length > 0) {
+	                        return that._formatFilesHover(node.value, rels);
+	                    }
+	                });
                 }
                 return null;
 		    }
 			deferred = new Deferred();
-			var files = [{type: 'full', name: meta.location, text: htmlsource ? htmlsource : ast.source}]; //$NON-NLS-1$
+			var files = [{type: 'full', name: meta.location, text: htmlsource ? htmlsource : ast.sourceFile.text}]; //$NON-NLS-1$
 			this.ternworker.postMessage(
 				{request:'documentation', args:{params:{offset: ctxt.offset, docFormat: 'full'}, files: files, meta:{location: meta.location}}}, //$NON-NLS-1$ //$NON-NLS-2$
 				function(response) {
@@ -380,8 +391,6 @@ define([
 		    return null;
 		}
 	});
-
-	JavaScriptHover.prototype.contructor = JavaScriptHover;
 
 	return {
 		JavaScriptHover: JavaScriptHover,

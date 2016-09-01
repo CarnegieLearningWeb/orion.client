@@ -134,6 +134,7 @@ define([
 		this.serviceRegistry = options.serviceRegistry;
 		this.commandService = options.commandRegistry;
 		this.fileClient = options.fileClient;
+		this.preferences = options.preferences;
 		this.inputManager = options.inputManager;
 		this.renderToolbars = options.renderToolbars;
 		this.toolbarId = options.toolbarId;
@@ -148,6 +149,7 @@ define([
 		this.editorPreferences = options.editorPreferences;
 		this.differ = options.differ;
 		this.blamer = options.blamer;
+		this.formatter = options.formatter;
 		var that = this;
 		this.listener = {
 			onServiceAdded: function(event) {
@@ -176,8 +178,30 @@ define([
 			this._createClipboardCommands();
 			this._createDelimiterCommands();
 			this._createEncodingCommand();
+			this._createFormatterCommand();
 			this._createSaveCommand();
+			this._createOpenFolderCommand();
+			this._createOpenRecentCommand();
 			return this._createEditCommands();
+		},
+		updateWorkspacePrefs:function(workspaceAddress){
+			var that = this;
+			return this.preferences.get("/workspace").then(function(prefs) {
+				return prefs.recentWorkspaces ? prefs.recentWorkspaces : [];
+			}).then(function(recentworkspaces){
+				var RECENT_ARRAY_LENGTH = 10;
+				var oldIndex = recentworkspaces.indexOf(workspaceAddress);
+				if(oldIndex !== -1){
+					recentworkspaces.splice(oldIndex,1);
+				}
+				if(recentworkspaces.length < RECENT_ARRAY_LENGTH){
+					recentworkspaces.unshift(workspaceAddress);
+				}else if(recentworkspaces.length === RECENT_ARRAY_LENGTH){
+					recentworkspaces.pop();
+					recentworkspaces.unshift(workspaceAddress);
+				}
+				return that.preferences.put("/workspace",{recentWorkspaces: recentworkspaces, currentWorkspace: workspaceAddress});
+			})
 		},
 		//TODO: We need a better way invoke side bar action 
 		setSideBar: function(sideBar) {
@@ -201,6 +225,7 @@ define([
 			this.localSettings = target.localSettings;
 			this.differ = target.differ;
 			this.blamer = target.blamer;
+			this.formatter = target.formatter;
 			this.textSearcher = target.textSearcher;
 			
 			if (this._recreateEditCommands) {
@@ -236,10 +261,13 @@ define([
 			commandRegistry.registerCommandContribution("settingsActions", "orion.edit.settings", 1, null, false, new mKeyBinding.KeyBinding("s", true, true), null, this); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.toolbarId, "orion.edit.undo", 400, this.editToolbarId ? "orion.menuBarEditGroup/orion.edit.undoGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('z', true), null, this); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.toolbarId, "orion.edit.redo", 401, this.editToolbarId ? "orion.menuBarEditGroup/orion.edit.undoGroup" : null, !this.editToolbarId, util.isMac ? new mKeyBinding.KeyBinding('z', true, true) : new mKeyBinding.KeyBinding('y', true), null, this); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-4$
+			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.openFolder", 1, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('o', true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.openRecent", 3, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('r', true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.openResource", 1, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('f', true, true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.save", 2, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('s', true), null, this); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.pageNavId, "orion.edit.gotoLine", 3, this.editToolbarId ? "orion.menuBarEditGroup/orion.findGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('l', !util.isMac, false, false, util.isMac), new mCommandRegistry.URLBinding("gotoLine", "line"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.pageNavId, "orion.edit.find", 0, this.editToolbarId ? "orion.menuBarEditGroup/orion.findGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('f', true), new mCommandRegistry.URLBinding("find", "find"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
+			commandRegistry.registerCommandContribution(this.editToolbarId || this.pageNavId , "orion.edit.format", 2, this.editToolbarId ? "orion.menuBarEditGroup/orion.edit.formatGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('f', false, true, true), new mCommandRegistry.URLBinding("format", "format"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 			commandRegistry.registerCommandContribution(this.toolbarId, "orion.keyAssist", 0, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding(191, false, true, true)); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.showTooltip", 1, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding(113), null, this);//$NON-NLS-1$ //$NON-NLS-2$ 
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.blame", 2, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding('b', true, true), new mCommandRegistry.URLBinding("blame", "blame"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
@@ -294,6 +322,7 @@ define([
 			commandRegistry.registerCommandContribution(this.editorContextMenuId, "orion.edit.gotoLine", index++, "orion.editorContextMenuGroup/orion.findGroup", false); //$NON-NLS-1$ //$NON-NLS-2$
 			commandRegistry.registerCommandContribution(this.editorContextMenuId, "orion.quickSearch", index++, "orion.editorContextMenuGroup/orion.findGroup", false); //$NON-NLS-1$ //$NON-NLS-2$
 			commandRegistry.registerCommandContribution(this.editorContextMenuId, "orion.openSearch", index++, "orion.editorContextMenuGroup/orion.findGroup", false); //$NON-NLS-1$ //$NON-NLS-2$
+			commandRegistry.registerCommandContribution(this.editorContextMenuId , "orion.edit.format", index++, "orion.editorContextMenuGroup/orion.edit.formatGroup", false); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$
 
 			// 'Tools' cascade
 			commandRegistry.addCommandGroup(this.editorContextMenuId, "orion.editorContextMenuToolsGroup", 400, messages["Tools"], "orion.editorContextMenuGroup"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
@@ -326,11 +355,13 @@ define([
 				var textView = editor.getTextView();
 				textView.setKeyBinding(new mKeyBinding.KeyBinding('s', true), "save"); //$NON-NLS-1$ //$NON-NLS-2$
 				var saveCommand = that.commandService.findCommand("orion.edit.save"); //$NON-NLS-0$
-				textView.setAction("save", function() { //$NON-NLS-0$
-					saveCommand.callback.call({inputManager: that.inputManager});
-					return true;
-				}, saveCommand); //$NON-NLS-0$
-			
+				if (saveCommand) {
+					textView.setAction("save", function() { //$NON-NLS-0$
+						saveCommand.callback.call({inputManager: that.inputManager});
+						return true;
+					}, saveCommand); //$NON-NLS-0$
+				}
+
 				textView.setAction("gotoLine", function (data) { //$NON-NLS-0$
 					if (data) {
 						editor.onGotoLine(data.line - 1, 0, undefined, data.callback);
@@ -507,7 +538,7 @@ define([
 		_createClipboardCommands: function() {
 			
 			//TODO - test to see whether copy/cut/paste is supported instead of IE
-			if (util.isIE) {
+			if (util.isIE || util.isElectron) {
 				var that = this;
 				
 				var copyCommand = new mCommands.Command({
@@ -616,6 +647,64 @@ define([
 				}
 			});
 			this.commandService.addCommand(saveCommand);
+		},
+		_createOpenFolderCommand: function() {
+			var that = this;
+			var openFolderCommand = new mCommands.Command({
+				name: messages.OpenFolder,
+				tooltip: messages.OpenFolderTip,
+				id: "orion.edit.openFolder", //$NON-NLS-0$
+				visibleWhen: /** @callback */ function(items, data) {
+					return util.isElectron;
+				},
+				callback: function() {
+					window.__electron.remote.dialog.showOpenDialog({properties: ['openDirectory']}, function(result) {
+						if (!result) return;
+						that.fileClient.changeWorkspace(result[0]).then(function() {
+							return that.updateWorkspacePrefs(result[0]);
+						}).then(function(){
+							delete sessionStorage.lastFile;
+							window.location.hash = "";
+							window.location.reload();
+						})				
+					});
+				}
+			});
+			this.commandService.addCommand(openFolderCommand);
+		},
+		_createOpenRecentCommand: function() {
+			var that = this;		
+			if(this.preferences){
+				this.preferences.get("/workspace").then(function(prefs) {
+					return prefs.recentWorkspaces;
+				}).then(function(recentworkspaces){
+					var openRecentCommand = new mCommands.Command({
+						name: messages.OpenRecent,
+						selectionClass: "dropdownSelection", //$NON-NLS-0$
+						id: "orion.edit.openRecent", //$NON-NLS-0$
+						visibleWhen: /** @callback */ function(items, data) {
+							return util.isElectron && !!recentworkspaces;
+						},
+						choiceCallback: function() {
+							return recentworkspaces.map(function(folderLocation) {
+								return {
+									name: folderLocation,
+									callback: function() {
+										that.fileClient.changeWorkspace(folderLocation).then(function() {
+											return that.updateWorkspacePrefs(folderLocation);
+										}).then(function(){
+											delete sessionStorage.lastFile;
+											window.location.hash = "";
+											window.location.reload();
+										})	
+									}
+								};
+							});
+						}
+					});
+				that.commandService.addCommand(openRecentCommand);
+			});
+			}
 		},
 		_createEncodingCommand: function() {
 			var that = this;
@@ -765,6 +854,12 @@ define([
 						}
 					}
 					if(parsedParam){
+						//If the incoming resource does not match the current inputManager's, we should ignore it.
+						//This could happen when clicking on a file and then clicking on another in the global search result page.
+						var fileMetadata = (this.inputManager || that.inputManager).getFileMetadata();
+						if(!fileMetadata || parsedParam.resource !== fileMetadata.Location) {
+							return;
+						}
 						textSearcher.setOptions({regex: parsedParam.regEx, caseInsensitive: !parsedParam.caseSensitive, wholeWord: parsedParam.wholeWord});
 						var tempOptions = {};
 						if(parsedParam.atLine){
@@ -818,6 +913,32 @@ define([
 				}
 			});
 			this.commandService.addCommand(blameCommand);
+		},
+
+		_createFormatterCommand: function(){
+			var that = this;
+			var formatterCommand = new mCommands.Command({
+				name: messages.Format,
+				tooltip: messages.FormatTooltip,
+				id: "orion.edit.format", //$NON-NLS-0$
+				parameters: new mCommandRegistry.ParametersDescription([new mCommandRegistry.CommandParameter('formatter', 'boolean')], {clientCollect: true}), //$NON-NLS-1$ //$NON-NLS-0$
+				visibleWhen: /** @callback */ function(items, data) {
+					var inputManager = data.handler.inputManager || that.inputManager;
+					if (inputManager && inputManager.getReadOnly()) {
+						return false;
+					}
+					var editor = data.handler.editor || that.editor;
+					var formatter = data.handler.formatter || that.formatter;
+					return editor && editor.installed && formatter && formatter.isVisible();
+				},
+				callback: function(data) {
+					var editor = this.editor || that.editor;
+					var formatter = this.formatter || that.formatter;
+					formatter.doFormat();
+					editor.focus();
+				}
+			});
+			this.commandService.addCommand(formatterCommand);
 		},
 
 		_createDiffCommand: function(){
@@ -971,7 +1092,8 @@ define([
 						var context = {
 							contentType: inputManager.getContentType(),
 							input: inputManager.getInput(),
-							offset: editor.getCaretOffset()
+							offset: editor.getCaretOffset(),
+							readonly: inputManager.getReadOnly()
 						};
 						
 						// Provide the quick fix command with the selected annotation
@@ -1034,9 +1156,9 @@ define([
 							options1.done = processEditorResult;
 							options1.status = handleStatus;
 							createDelegatedUI(options1);
-						} else if (result && result.searchParams && result.refResult) {
+						} else if (result && result.searchParams) {
 							if(that.sideBar) {
-								that.sideBar.fillSearchPane(result.searchParams.keyword, {Location: result.searchParams.resource}, result);
+								that.sideBar.fillSearchPane(result.searchParams, result.refResult ? result : null);
 							}
 						} else if (result && (result.Status || result.status)) {
 							handleStatus(result.Status || result.status);

@@ -326,6 +326,15 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			return this._annotationRuler;
 		},
 		/**
+		 * Returns the whether annotation ruler of the editor is showning.
+		 *
+		 * @returns {Boolean}
+		 * @since 12
+		 */
+		getAnnotationRulerVisible: function() {
+			return this._annotationRulerVisible;
+		},
+		/**
 		 * Returns the annotation styler of the editor.
 		 *
 		 * @returns {orion.editor.AnnotationStyler}
@@ -350,12 +359,30 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			return this._foldingRuler;
 		},
 		/**
+		 * Returns the whether folding ruler of the editor is showning.
+		 *
+		 * @returns {Boolean}
+		 * @since 12
+		 */
+		getFoldingRulerVisible: function() {
+			return this._foldingRulerVisible;
+		},
+		/**
 		 * Returns the line number ruler of the editor.
 		 *
 		 * @returns {orion.editor.LineNumberRuler}
 		 */
 		getLineNumberRuler: function() {
 			return this._lineNumberRuler;
+		},
+		/**
+		 * Returns the whether lines ruler of the editor is showning.
+		 *
+		 * @returns {Boolean}
+		 * @since 12
+		 */
+		getLineNumberRulerVisible: function() {
+			return this._lineNumberRulerVisible;
 		},
 		/**
 		 * Returns the Tooltip instance for this editor
@@ -372,6 +399,15 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		 */
 		getZoomRuler: function() {
 			return this._zoomRuler;
+		},
+		/**
+		 * Returns the whether zoom ruler of the editor is showning.
+		 *
+		 * @returns {Boolean}
+		 * @since 12
+		 */
+		getZoomRulerVisible: function() {
+			return this._zoomRulerVisible;
 		},
 		/**
 		 * Returns the base text model of this editor.
@@ -474,6 +510,12 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		 */
 		setFoldingRulerVisible: function(visible, force) {
 			if (this._foldingRulerVisible === visible && !force) { return; }
+			if (!visible) {
+				var textActions = this.getTextActions();
+				if (textActions) {
+					textActions.expandAnnotations(true);
+				}
+			}
 			this._foldingRulerVisible = visible;
 			if (!this._foldingRuler) { return; }
 			var textView = this._textView;
@@ -1290,7 +1332,16 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 				this._highlightCurrentLine(this._textView.getSelections());
 			}
 		},
-
+		
+		/**
+		 * Sets the editor's noFocus flag.
+		 *
+		 * @param {Boolean} if true, does not set focus on the editor.
+		 * @param {Boolean} noFocus
+		 */
+		setNoFocus: function(noFocus) {
+			this._noFocus = noFocus;
+		},
 		/**
 		 * Sets the editor's contents.
 		 *
@@ -1302,7 +1353,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		 */
 		setInput: function(title, message, contents, contentsSaved, noFocus) {
 			BaseEditor.prototype.setInput.call(this, title, message, contents, contentsSaved);
-			if (this._textView && !contentsSaved && !noFocus) {
+			if (this._textView && !contentsSaved && !noFocus && !this._noFocus) {
 				this._textView.focus();
 			}
 		},

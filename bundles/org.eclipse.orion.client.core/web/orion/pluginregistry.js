@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2015 IBM Corporation and others.
+ * Copyright (c) 2010, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -191,7 +191,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
     function Plugin(_url, _manifest, _internalRegistry) {
         var _this = this;
         _manifest = _manifest || {};
-        var _created = _manifest.created || new Date().getTime();
+        var _created = _manifest.created || Date.now();
         var _headers = _manifest.headers || {};
         var _services = _manifest.services || [];
         var _autostart = _manifest.autostart;
@@ -749,7 +749,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                     _state = "starting";
                     _internalRegistry.dispatchEvent(new PluginEvent("lazy activation", _this));
                 }
-                var now = new Date().getTime();
+                var now = Date.now();
 		        if (!this.getLastModified() || now > this.getLastModified() + 86400000) { // 24 hours
 	                 return this.update();
                 }
@@ -843,7 +843,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
 
             if (!input) {
                 if (_lastModified === 0) {
-                    _lastModified = new Date().getTime();
+                    _lastModified = Date.now();
                     _persist();
                 }
                 return _internalRegistry.loadManifest(_url).then(_update, function() {
@@ -866,7 +866,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
             if (input.lastModified) {
                 _lastModified = input.lastModified;
             } else {
-                _lastModified = new Date().getTime();
+                _lastModified = Date.now();
                 _persist();
             }
 
@@ -1049,7 +1049,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
                 };
 
                 function log(state) {
-                    if (localStorage.pluginLogging) console.log(state + "(" + (new Date().getTime() - channel._startTime) + "ms)=" + url); //$NON-NLS-1$ //$NON-NLS-0$
+                    if (localStorage.pluginLogging) console.log(state + "(" + (Date.now() - channel._startTime) + "ms)=" + url); //$NON-NLS-1$ //$NON-NLS-0$
                 }
 
                 function sendTimeout(message) {
@@ -1100,7 +1100,7 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
 
                 channel.url = url;
                 channel._updateTimeout();
-                channel._startTime = new Date().getTime();
+                channel._startTime = Date.now();
                 if (isWorker) {
                     var worker;
                     if (isSharedWorker) {
@@ -1348,24 +1348,24 @@ define(["orion/Deferred", "orion/EventTarget", "orion/URL-shim"], function(Defer
 
             if (configuration.plugins) {
                 Object.keys(configuration.plugins).forEach(function(url) {
-                    url = _normalizeURL(url);
-                    //                    if (!httpOrHttps.test(url)) {
-                    //                        console.log("Illegal Plugin URL: " + url);
-                    //                        return;
-                    //                    }
-                    var plugin = this.getPlugin(url);
-                    if (!plugin) {
-                        var manifest = configuration.plugins[url];
-                        if (typeof manifest !== "object") {
-                        	manifest = internalRegistry.getPersisted(url) || {};
-                        }
-                        manifest.autostart = manifest.autostart || configuration.defaultAutostart || "lazy";
-                        plugin = new Plugin(url, manifest, internalRegistry);
-                        plugin._default = true;
-                        _plugins.push(plugin);
-                    } else {
-                        plugin._default = true;
-                    }
+		            url = _normalizeURL(url);
+		            //                    if (!httpOrHttps.test(url)) {
+		            //                        console.log("Illegal Plugin URL: " + url);
+		            //                        return;
+		            //                    }
+		            var plugin = this.getPlugin(url);
+		            if (!plugin) {
+		                var manifest = configuration.plugins[url];
+		                if (typeof manifest !== "object") {
+		                	manifest = internalRegistry.getPersisted(url) || {};
+		                }
+		                manifest.autostart = manifest.autostart || configuration.defaultAutostart || "lazy";
+		                plugin = new Plugin(url, manifest, internalRegistry);
+		                plugin._default = true;
+		                _plugins.push(plugin);
+		            } else {
+		                plugin._default = true;
+		            }
                 }.bind(this));
             }
             _plugins.sort(function(a, b) {

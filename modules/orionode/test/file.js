@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013 IBM Corporation and others.
+ * Copyright (c) 2013, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -8,7 +8,7 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-/*eslint-env node, mocha*/
+/*eslint-env node, mocha, assert, express*/
 var assert = require('assert');
 var express = require('express');
 var nodeUtil = require('util');
@@ -17,17 +17,16 @@ var stream = require('stream');
 var supertest = require('supertest');
 var testData = require('./support/test_data');
 
-var CONTEXT_PATH = '/orion', PREFIX = CONTEXT_PATH + '/file';
+var CONTEXT_PATH = '';
+var PREFIX = CONTEXT_PATH + '/file';
 var WORKSPACE = path.join(__dirname, '.test_workspace');
 
 var app = express()
-			.use(function() {
-				req.user = {workspace: WORKSPACE};
-			})
-			.use(CONTEXT_PATH, require('../lib/file')({
-				root: '/file',
-				workspaceRoot: '/workspace',
-			}));
+.use(/* @callback */ function(req, res, next) {
+	req.user = { workspaceDir: WORKSPACE };
+	next();
+})
+.use(PREFIX + "*", require('../lib/file')({root: '/file'}));
 var request = supertest.bind(null, app);
 
 function byName(a, b) {
@@ -53,7 +52,7 @@ nodeUtil.inherits(BufStream, stream.Writable);
 BufStream.prototype._write = function(chunk, enc, cb) {
 	this.bufs.push(Buffer.isBuffer(chunk) ? chunk : new Buffer(chunk, enc));
 	cb();
-}
+};
 BufStream.prototype.data = function() {
 	return Buffer.concat(this.bufs);
 };
@@ -65,17 +64,6 @@ BufStream.prototype.data = function() {
 describe('File API', function() {
 	beforeEach(function(done) { // testData.setUp.bind(null, parentDir)
 		testData.setUp(WORKSPACE, done);
-	});
-
-	describe('get /file', function(done) {
-		request()
-			.get(PREFIX)
-			.expect(403, function(err, res) {
-				throwIfError(err);
-				request()
-					.get(PREFIX)
-					.expect(403, done);
-			});
 	});
 
 	/**
@@ -98,7 +86,7 @@ describe('File API', function() {
 				});
 			});
 			it('put file contents', function(done) {
-				var newContents = 'The time is now ' + new Date().getTime();
+				var newContents = 'The time is now ' + Date.now();
 				request()
 				.put(PREFIX + '/project/fizz.txt')
 				.send(newContents)
@@ -154,7 +142,7 @@ describe('File API', function() {
 					.put(url)
 					.set('If-Match', etag + '_blort')
 					.expect(412)
-					.end(function(err, res) {
+					.end(/* @callback */ function(err, res) {
 						throwIfError(err, "Failed to PUT " + url);
 						request(url)
 						.put(url)
@@ -173,7 +161,7 @@ describe('File API', function() {
 					.type('json')
 					.send({ diff: [{ start: 0, end: 1, text: "j" }] })
 					.expect(200)
-					.end(function(err, res) {
+					.end(/* @callback */ function(err, res) {
 						throwIfError(err);
 						request().get(url).expect(200, 'jello world', done);
 					});
@@ -186,7 +174,7 @@ describe('File API', function() {
 					.type('application/json;charset=UTF-8')
 					.send({ diff: [{ start: 0, end: 1, text: "j" }] })
 					.expect(200)
-					.end(function(err, res) {
+					.end(/* @callback */ function(err, res) {
 						throwIfError(err);
 						request().get(url).expect(200, 'jello world', done);
 					});
@@ -199,7 +187,7 @@ describe('File API', function() {
 					.type('text')
 					.send(JSON.stringify({}))
 					.expect(200)
-					.end(function(err, res) {
+					.end(/* @callback */ function(err, res) {
 						throwIfError(err);
 						done();
 					});
@@ -252,8 +240,8 @@ describe('File API', function() {
 					assert.equal(body.Name, 'fizz.txt');
 					assert.equal(body.Parents.length, 1);
 					assert.deepEqual(body.Parents[0], {
-						ChildrenLocation: PREFIX + '/project?depth=1',
-						Location: PREFIX + '/project',
+						ChildrenLocation: PREFIX + '/project/?depth=1',
+						Location: PREFIX + '/project/',
 						Name: 'project'
 					});
 					done();
@@ -279,8 +267,8 @@ describe('File API', function() {
 				throwIfError(err);
 				assert.ok(res.body.Parents);
 				assert.equal(res.body.Parents.length, 3);
-				assert.equal(res.body.Parents[0].ChildrenLocation, PREFIX + '/project/my%20folder/my%20subfolder?depth=1');
-				assert.equal(res.body.Parents[0].Location, PREFIX + '/project/my%20folder/my%20subfolder');
+				assert.equal(res.body.Parents[0].ChildrenLocation, PREFIX + '/project/my folder/my subfolder/?depth=1');
+				assert.equal(res.body.Parents[0].Location, PREFIX + '/project/my folder/my subfolder/');
 				assert.equal(res.body.Parents[0].Name, 'my subfolder');
 				assert.equal(res.body.Parents[1].Name, 'my folder');
 				assert.equal(res.body.Parents[2].Name, 'project');
@@ -335,10 +323,10 @@ describe('File API', function() {
 					throwIfError(err);
 					var body = res.body;
 					assert.equal(body.Children, null, 'Children should be absent');
-					assert.equal(body.ChildrenLocation, PREFIX + '/project/my%20folder?depth=1');
+					assert.equal(body.ChildrenLocation, PREFIX + '/project/my folder/?depth=1');
 					assert.equal(body.Directory, true);
 					assert.equal(body.Name, 'my folder');
-					assert.equal(body.Location, PREFIX + '/project/my%20folder/');
+					assert.equal(body.Location, PREFIX + '/project/my folder/');
 					done();
 				});
 			});
@@ -350,8 +338,8 @@ describe('File API', function() {
 					throwIfError(err);
 					assert.ok(res.body.Parents);
 					assert.equal(res.body.Parents.length, 2);
-					assert.equal(res.body.Parents[0].ChildrenLocation, PREFIX + '/project/my%20folder?depth=1');
-					assert.equal(res.body.Parents[0].Location, PREFIX + '/project/my%20folder');
+					assert.equal(res.body.Parents[0].ChildrenLocation, PREFIX + '/project/my folder/?depth=1');
+					assert.equal(res.body.Parents[0].Location, PREFIX + '/project/my folder/');
 					assert.equal(res.body.Parents[0].Name, 'my folder');
 					assert.equal(res.body.Parents[1].Name, 'project');
 					done();
@@ -368,17 +356,17 @@ describe('File API', function() {
 				.end(function(err, res) {
 					throwIfError(err);
 					var body = res.body;
-					assert.equal(body.ChildrenLocation, PREFIX + '/project/my%20folder?depth=1');
+					assert.equal(body.ChildrenLocation, PREFIX + '/project/my folder/?depth=1');
 					assert.equal(Array.isArray(body.Children), true);
 					body.Children.sort(byName);
 					assert.equal(body.Children.length, 2);
 					assert.equal(body.Children[0].Name, 'buzz.txt');
 					assert.equal(body.Children[0].Directory, false);
-					assert.equal(body.Children[0].Location, PREFIX + '/project/my%20folder/buzz.txt');
+					assert.equal(body.Children[0].Location, PREFIX + '/project/my folder/buzz.txt');
 					assert.equal("ChildrenLocation" in body.Children[0], false, "Child file has no ChildrenLocation");
 					assert.equal(body.Children[1].Name, 'my subfolder');
 					assert.equal(body.Children[1].Directory, true);
-					assert.equal(body.Children[1].Location, PREFIX + '/project/my%20folder/my%20subfolder/');
+					assert.equal(body.Children[1].Location, PREFIX + '/project/my folder/my subfolder/');
 					assert.equal("ChildrenLocation" in body.Children[1], true, "Child folder has ChildrenLocation"); 
 					done();
 				});
@@ -399,7 +387,7 @@ describe('File API', function() {
 				.end(function(err, res) {
 					throwIfError(err);
 					assert.equal(res.body.Directory, true);
-					assert.equal(res.body.Location, PREFIX + '/project/new%20directory/'); //FIXME
+					assert.equal(res.body.Location, PREFIX + '/project/new directory/'); //FIXME
 					assert.equal(res.body.Name, 'new directory');
 					done();
 				});
@@ -413,7 +401,7 @@ describe('File API', function() {
 				.end(function(err, res) {
 					throwIfError(err);
 					assert.equal(res.body.Directory, true);
-					assert.equal(res.body.Location, PREFIX + '/project/new%20directory/'); // FIXME
+					assert.equal(res.body.Location, PREFIX + '/project/new directory/'); // FIXME
 					assert.equal(res.body.Name, 'new directory');
 					done();
 				});
@@ -427,7 +415,7 @@ describe('File API', function() {
 				.end(function(err, res) {
 					throwIfError(err);
 					assert.equal(res.body.Directory, true);
-					assert.equal(res.body.Location, PREFIX + '/project/new%20directory/'); // FIXME
+					assert.equal(res.body.Location, PREFIX + '/project/new directory/'); // FIXME
 					assert.equal(res.body.Name, 'new directory');
 					done();
 				});
@@ -442,7 +430,7 @@ describe('File API', function() {
 				.end(function(err, res) {
 					throwIfError(err);
 					assert.equal(res.body.Directory, false);
-					assert.equal(res.body.Location, PREFIX + '/project/Not%20a%20directory'); //FIXME
+					assert.equal(res.body.Location, PREFIX + '/project/Not a directory'); //FIXME
 					assert.equal(res.body.Name, 'Not a directory');
 					done();
 				});
@@ -460,7 +448,7 @@ describe('File API', function() {
 			request()
 			.del(PREFIX + '/project/my%20folder/buzz.txt')
 			.expect(204)
-			.end(function(err, res) {
+			.end(/* @callback */ function(err, res) {
 				throwIfError(err, "failed to DELETE file");
 				// subsequent requests should 404
 				request()
@@ -473,13 +461,13 @@ describe('File API', function() {
 			request()
 			.del(PREFIX + '/project/my%20folder')
 			.expect(204)
-			.end(function(err, res) {
+			.end(/* @callback */ function(err, res) {
 				throwIfError(err, "Failed to DELETE folder");
 				// the directory is gone:
 				request()
 				.get(PREFIX + '/project/my%20folder')
 				.expect(404)
-				.end(function(err, res) {
+				.end(/* @callback */ function(err, res) {
 					throwIfError(err);
 					// and its contents are gone:
 					request()
@@ -502,7 +490,7 @@ describe('File API', function() {
 				.del(url)
 				.set('If-Match', etag + '_blort')
 				.expect(412)
-				.end(function(err, res) {
+				.end(/* @callback */ function(err, res) {
 					throwIfError(err, "Expected precondition to fail");
 					request(url)
 					.del(url)
@@ -552,11 +540,12 @@ describe('File API', function() {
 			});
 		});
 		it('copy a directory', function(done) {
+					debugger;
 			request()
 			.post(PREFIX + '/project/')
 			.set('Slug', 'copy_of_my_folder')
 			.set('X-Create-Options', 'copy')
-			.send({ Location: PREFIX + '/project/my%20folder' })
+			.send({ Location: PREFIX + '/project/my folder' })
 			.expect(201)
 			.end(function(err, res) {
 				throwIfError(err);

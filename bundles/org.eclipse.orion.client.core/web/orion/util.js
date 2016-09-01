@@ -23,6 +23,7 @@ define(function() {
 	var isIPad = userAgent.indexOf("iPad") !== -1; //$NON-NLS-0$
 	var isIPhone = userAgent.indexOf("iPhone") !== -1; //$NON-NLS-0$
 	var isIOS = isIPad || isIPhone;
+	var isElectron = userAgent.indexOf("Electron") !== -1; //$NON-NLS-0$
 	var isMac = navigator.platform.indexOf("Mac") !== -1; //$NON-NLS-0$
 	var isWindows = navigator.platform.indexOf("Win") !== -1; //$NON-NLS-0$
 	var isLinux = navigator.platform.indexOf("Linux") !== -1; //$NON-NLS-0$
@@ -42,11 +43,26 @@ define(function() {
 		}
 		return document.createElement(tagName);
 	}
+	function confineDialogTab(firstElement, lastElement) {
+		lastElement.addEventListener("keydown", function(evt) {
+			if(evt.keyCode === 9 && !evt.shiftKey) {
+				evt.preventDefault();
+				firstElement.focus();
+			}
+		});
+		firstElement.addEventListener("keydown", function(evt) {
+			if(evt.keyCode === 9 && evt.shiftKey) {
+				evt.preventDefault();
+				lastElement.focus();
+			}
+		});
+	}
 
 	return {
 		formatMessage: formatMessage,
 		
 		createElement: createElement,
+		confineDialogTab: confineDialogTab,
 		
 		/** Browsers */
 		isIE: isIE,
@@ -59,6 +75,7 @@ define(function() {
 		isIPad: isIPad,
 		isIPhone: isIPhone,
 		isIOS: isIOS,
+		isElectron: isElectron,
 		
 		/** OSs */
 		isMac: isMac,

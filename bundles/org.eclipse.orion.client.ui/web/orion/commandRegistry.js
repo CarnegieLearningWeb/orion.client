@@ -15,6 +15,7 @@ define([
 	'orion/keyBinding',
 	'orion/explorers/navigationUtils',
 	'orion/i18nUtil',
+	'orion/bidiUtils',
 	'orion/PageUtil',
 	'orion/uiUtils',
 	'orion/webui/littlelib',
@@ -24,7 +25,7 @@ define([
 	'orion/metrics',
 	'orion/Deferred',
 	'orion/EventTarget'
-], function(Commands, mKeyBinding, mNavUtils, i18nUtil, PageUtil, UIUtil, lib, mDropdown, mTooltip, SubMenuButtonFragment, mMetrics, mDeferred, mEventTarget) {
+], function(Commands, mKeyBinding, mNavUtils, i18nUtil, bidiUtils, PageUtil, UIUtil, lib, mDropdown, mTooltip, SubMenuButtonFragment, mMetrics, mDeferred, mEventTarget) {
 
 	/**
 	 * Constructs a new command registry with the given options.
@@ -61,12 +62,12 @@ define([
 			/**
 			 * @name addEventListener
 			 * 
-			 * @description  This is an override of the normal addEventListener to allow it to
+			 * @description This is an override of the normal addEventListener to allow it to
 			 * keep listeners synch'd with the current binding overrides whether or not they get added before or
 			 * after the actual binding overrides have been retrieved from the preference store.
 			 * 
 			 * Once the overrides preference is loaded any currently registered listeners are informed of the current
-			 * binding overrides. Subsequent listeners are also imformed when they get added.
+			 * binding overrides. Subsequent listeners are also informed when they get added.
 			 * @param eventType The type of event being listened on.
 			 * @param listener The listener to call when the event is dispatched.
 			 */
@@ -240,7 +241,24 @@ define([
 		 * will be called with boolean indicating whether the command was confirmed.
 		 */
 		confirm: function(node, message, yesString, noString, modal, onConfirm) {
-			var result = false;
+			this._popupDialog(true, node, message, yesString, noString, modal, onConfirm);
+		},
+		
+		/**
+		 * Open a parameter collector to confirm a command or collect user input.
+		 *
+		 * @param {Boolean} isConfirm that determinds the popup dialog's type.
+		 * @param {DOMElement} node the dom node that is displaying the command
+		 * @param {String} message the message to show when confirming the command
+		 * @param {String} yesString the label to show on a yes/true choice
+		 * @param {String} noString the label to show on a no/false choice
+		 * @param {Boolean} modal indicates whether the confirmation prompt should be modal.
+		 * @param {Function} onConfirm a function that will be called when the user confirms the command.  The function
+		 * @param {String} default message in the input box.
+		 * will be called with boolean indicating whether the command was confirmed.
+		 */
+		_popupDialog: function(isConfirm, node, message, yesString, noString, modal, onConfirm, defaultInput) {
+			var result = isConfirm ? false : "";
 			if (this._parameterCollector && !modal) {
 				var self = this;
 				var okCallback = function() {onConfirm(result);};
@@ -249,11 +267,17 @@ define([
 					var label = document.createElement("span"); //$NON-NLS-0$
 					label.classList.add("parameterPrompt"); //$NON-NLS-0$
 					label.textContent = message;
-					
 					parent.appendChild(label);
+					if(!isConfirm){
+						var input = document.createElement("input");
+						input.setAttribute("value", defaultInput);
+						input.classList.add("parameterInput");
+						bidiUtils.initInputField(input);
+						parent.appendChild(input);
+					}
 					var yesButton = document.createElement("button"); //$NON-NLS-0$
 					yesButton.addEventListener("click", function(event) { //$NON-NLS-0$
-						result = true;
+						result = isConfirm ? true : input.value;
 						okCallback();
 						closeFunction();
 					}, false);
@@ -262,7 +286,7 @@ define([
 					yesButton.className = "dismissButton"; //$NON-NLS-0$
 					var button = document.createElement("button"); //$NON-NLS-0$
 					button.addEventListener("click", function(event) { //$NON-NLS-0$
-						result = false;
+						result = isConfirm ? false : "";
 						closeFunction();
 					}, false);
 					buttonParent.appendChild(button);
@@ -271,7 +295,10 @@ define([
 					return yesButton;
 				};
 				this._parameterCollector.close();
-				var opened = this._parameterCollector.open(node, fillFunction, function(){});
+				if(isConfirm || !isConfirm && !node ){
+					// Do this if this is a confirm or if this is a prompt but without node specified.
+					var opened = this._parameterCollector.open(node, fillFunction, function(){});
+				}
 				if (!opened) {
 					var tooltip = new mTooltip.Tooltip({
 						node: node,
@@ -279,7 +306,7 @@ define([
 							this.destroy();
 						},
 						trigger: "click", //$NON-NLS-0$
-						position: ["below", "right", "above", "left"] //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
+						position: isConfirm ? ["below", "right", "above", "left"] : ["right","above", "below", "left"]//$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
 					});
 					var parameterArea = tooltip.contentContainer();
 					parameterArea.classList.add("parameterPopup"); //$NON-NLS-0$
@@ -314,6 +341,22 @@ define([
 			} 
 			result = window.confirm(message);
 			onConfirm(result);
+		},
+		
+		/**
+		 * Open a tolltip parameter collector to collect user input.
+		 *
+		 * @param {DOMElement} node the dom node that is displaying the command
+		 * @param {String} message the message to show when confirming the command
+		 * @param {String} yesString the label to show on a yes/true choice
+		 * @param {String} noString the label to show on a no/false choice
+		 * @param {String} default message in the input box.
+		 * @param {Boolean} modal indicates whether the confirmation prompt should be modal.
+		 * @param {Function} onConfirm a function that will be called when the user confirms the command.  The function
+		 * will be called with boolean indicating whether the command was confirmed.
+		 */
+		prompt: function(node, message, yesString, noString, defaultInput, modal, onConfirm) {
+			this._popupDialog(false, node, message, yesString, noString, modal, onConfirm ,defaultInput);
 		},
 		
 		/**
@@ -509,7 +552,7 @@ define([
 		 * @param id The id of the Command or Text Action being overridden
 		 * @param newBinding The new binding to use
 		 * @param prevBinding The binding (if any) being overridden. Note that this is needed to ensure that
-		 * we override the correct Text Action (which can havemultiple bindings for the same id).
+		 * we override the correct Text Action (which can have multiple bindings for the same id).
 		 */
 		createBindingOverride: function(id, newBinding, prevBinding) {
 			if (!this._bindingOverrides) {
@@ -532,12 +575,12 @@ define([
 
 		/**
 		 * @name _registerRenderedCommand
-		 * @description Keeps a record of the 'invocation' object for a renderred command. The invocation contains
+		 * @description Keeps a record of the 'invocation' object for a rendered command. The invocation contains
 		 * a lot of information about the rendered item (including the DOM element created to show it). This is currently
 		 * used to update the menu item's key binding info if its binding changes.
 		 * 
 		 * @param actionID The actionID of the menu item
-		 * @param scopeID The scopeID of this particular invocation (two different menus can be created using teh same commands)
+		 * @param scopeID The scopeID of this particular invocation (two different menus can be created using the same commands)
 		 * @param invocation The invocation record to store
 		 */
 		_registerRenderedCommand: function(actionID, scopeID, invocation) {
@@ -643,8 +686,8 @@ define([
 		 * the <code>title</code> will be used as the tooltip.
 		 * @param {String} [selectionClass] CSS class to be appended when the command button is selected. Optional.
 		 * @param {String} or {boolean} [defaultActionId] Id of an action from this group that should be invoked when the group is selected. This will add an
-		 * arrow to the grup that will open the dropdown. Optionally this can be set to <code>true</code> instead of adding a particular action.
-		 * If set to <code>true</code> the group will be renderer as if there was a default action, but instead of invoking the default action it will
+		 * arrow to the group that will open the dropdown. Optionally this can be set to <code>true</code> instead of adding a particular action.
+		 * If set to <code>true</code> the group will be rendered as if there was a default action, but instead of invoking the default action it will
 		 * open the dropdown. Optional.
 		 * @param {String} [extraClasses] A string containing space separated css classes that will be applied to group button
 		 */	
@@ -750,7 +793,7 @@ define([
 					this._updateBindingOverrides();
 				}.bind(this));
 	
-				// listen for changes form other pages
+				// listen for changes from other pages
 				this._prefService.addEventListener("changed", function (e) {
 					if (e.namespace === "/KeyBindings") { //$NON-NLS-1$
 						// Refresh the binding overrides
@@ -1230,6 +1273,7 @@ define([
 								id = renderType + command.id + index; // using the index ensures unique ids within the DOM when a command repeats for each item
 								var commandDiv = document.createElement("div"); //$NON-NLS-0$
 								parent.appendChild(commandDiv);
+								parent.classList.add('quickFixList');
 								element = Commands.createQuickfixItem(commandDiv, command, invocation, onClick, self._prefService);
 							} else {
 								id = renderType + command.id + index;  // // using the index ensures unique ids within the DOM when a command repeats for each item
@@ -1399,7 +1443,7 @@ define([
 	 * @param {String} name the name of the event
 	 * @param {Function} handler the event handler function. The handler is provided two parameters on invocation, i. e.
 	 * 			the DOM event and the undergoing commandInvocation objects.
-	 * @param {Boolean} [capture] the (optional) flag used to determine whether to caputre the event or not
+	 * @param {Boolean} [capture] the (optional) flag used to determine whether to capture the event or not
 	 */
 	function CommandEventListener (event, handler, capture) {
 		this.event = event;
@@ -1450,7 +1494,7 @@ define([
 	 * A ParametersDescription defines the parameters required by a command, and whether there are additional
 	 * optional parameters that can be specified.  The command registry will attempt to collect required parameters
 	 * before calling a command callback.  The command is expected to provide UI for optional parameter, when the user has
-	 * signalled a desire to provide optional information.
+	 * signaled a desire to provide optional information.
 	 *
 	 * @param {orion.commands.CommandParameter[]} parameters an array of CommandParameters that are required
 	 * @param {Object} options The parameters description options object.

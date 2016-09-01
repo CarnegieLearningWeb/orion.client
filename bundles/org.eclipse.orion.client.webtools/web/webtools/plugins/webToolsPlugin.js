@@ -12,13 +12,13 @@
 /*eslint-env browser, amd*/
 define(['orion/plugin',
 'orion/serviceregistry',
-'orion/metrics',
 'javascript/scriptResolver',
 'webtools/htmlAstManager',
 'webtools/htmlHover',
 'webtools/htmlContentAssist',
 'webtools/htmlOccurrences',
 'webtools/htmlOutliner',
+'webtools/htmlValidator',
 'orion/editor/stylers/text_html/syntax',
 'webtools/cssContentAssist',
 'webtools/cssValidator',
@@ -27,9 +27,11 @@ define(['orion/plugin',
 'webtools/cssQuickFixes',
 'webtools/cssResultManager',
 'orion/editor/stylers/text_css/syntax',
-'i18n!webtools/nls/messages'
-], function(PluginProvider, mServiceRegistry, Metrics, ScriptResolver, HtmlAstManager, htmlHover, htmlContentAssist, htmlOccurrences, htmlOutliner,
-            mHTML, cssContentAssist, mCssValidator, mCssOutliner, cssHover, cssQuickFixes, cssResultManager, mCSS, messages) {
+'i18n!webtools/nls/messages',
+'webtools/htmlFormatter',
+'webtools/cssFormatter',
+], function(PluginProvider, mServiceRegistry, ScriptResolver, HtmlAstManager, htmlHover, htmlContentAssist, htmlOccurrences, htmlOutliner, htmlValidator,
+            mHTML, cssContentAssist, mCssValidator, mCssOutliner, cssHover, cssQuickFixes, cssResultManager, mCSS, messages, HtmlFormatter, CssFormatter) {
 
 	/**
 	 * Plug-in headers
@@ -61,7 +63,8 @@ define(['orion/plugin',
     			}
     		]
     	});
-        var cssResultMgr = new cssResultManager();
+        var cssResultMgr = new cssResultManager(serviceRegistry);
+        var htmlAstManager = new HtmlAstManager.HtmlAstManager(serviceRegistry);
 
     	/**
     	 * Register result manager as model changed listener
@@ -74,23 +77,33 @@ define(['orion/plugin',
     		contentType: ["text/css", "text/html"],  //$NON-NLS-1$ //$NON-NLS-2$
     		types: ["ModelChanging", 'Destroy', 'onSaving', 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
     	});
-
-        provider.registerService("orion.edit.contentassist", //$NON-NLS-1$
-    		new cssContentAssist.CssContentAssistProvider(cssResultMgr),
-    		{	name: messages["cssContentAssist"],
-    			contentType: ["text/css", "text/html"] //$NON-NLS-1$ //$NON-NLS-2$
-    		});
+    	
+    	/**
+    	 * Register AST manager as Model Change listener
+    	 */
+    	provider.registerService("orion.edit.model", {  //$NON-NLS-1$
+    		onModelChanging: htmlAstManager.onModelChanging.bind(htmlAstManager),
+    		onInputChanged: htmlAstManager.onInputChanged.bind(htmlAstManager)
+    	},
+    	{
+    		contentType: ["text/html"],  //$NON-NLS-1$
+    		types: ["ModelChanging", 'Destroy', 'onSaving', 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+    	});
 
     	/**
     	 * Register validators
     	 */
+    	provider.registerService(["orion.edit.validator", "orion.cm.managedservice"], new htmlValidator(htmlAstManager), //$NON-NLS-1$ //$NON-NLS-2$
+    		{
+    			contentType: ["text/html"], //$NON-NLS-1$
+    		}
+    	);
     	provider.registerService(["orion.edit.validator", "orion.cm.managedservice"], new mCssValidator(cssResultMgr), //$NON-NLS-1$ //$NON-NLS-2$
     		{
     			contentType: ["text/css", "text/html"], //$NON-NLS-1$ //$NON-NLS-2$
     			pid: 'csslint.config'  //$NON-NLS-1$
-    		});
-
-    	var htmlAstManager = new HtmlAstManager.HtmlAstManager();
+    		}
+    	);
 
     	/**
     	 * Register content assist providers
@@ -103,7 +116,13 @@ define(['orion/plugin',
     			excludedStyles: "(comment.*|string.*)" //$NON-NLS-1$
     		}
     	);
-    	
+    	 provider.registerService("orion.edit.contentassist", //$NON-NLS-1$
+    		new cssContentAssist.CssContentAssistProvider(cssResultMgr),
+    		{	name: messages["cssContentAssist"],
+    			contentType: ["text/css", "text/html"] //$NON-NLS-1$ //$NON-NLS-2$
+    		}
+    	);
+
 	  	/**
     	 * Register occurrence providers
     	 */
@@ -113,18 +132,6 @@ define(['orion/plugin',
     			contentType: ["text/html"] //$NON-NLS-1$
     		}
     	);
-
-    	/**
-    	 * Register AST manager as Model Change listener
-    	 */
-    	provider.registerService("orion.edit.model", {  //$NON-NLS-1$
-    		onModelChanging: htmlAstManager.onModelChanging.bind(htmlAstManager),
-    		onInputChanged: htmlAstManager.onInputChanged.bind(htmlAstManager)
-    	},
-    	{
-    		contentType: ["text/html"],  //$NON-NLS-1$
-    		types: ["ModelChanging", 'Destroy', 'onSaving', 'onInputChanged']  //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-    	});
 
     	/**
     	* Register outliners
@@ -192,7 +199,8 @@ define(['orion/plugin',
 	    		id : "quickfix-empty-rules",  //$NON-NLS-1$
 	    		contentType: ['text/css','text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
 	    		validationProperties: [
-    				{source: "annotation:id", match: "empty-rules"} //$NON-NLS-1$ //$NON-NLS-2$
+    				{source: "annotation:id", match: "empty-rules"},//$NON-NLS-1$ //$NON-NLS-2$
+    				{source: "readonly", match: false}
     		    ]
     		}
     	);
@@ -204,7 +212,8 @@ define(['orion/plugin',
 	    		id : "quickfix-important",  //$NON-NLS-1$
 	    		contentType: ['text/css','text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
 	    		validationProperties: [
-    		    	{source: "annotation:id", match: "important"} //$NON-NLS-1$ //$NON-NLS-2$
+    		    	{source: "annotation:id", match: "important"}, //$NON-NLS-1$ //$NON-NLS-2$
+    				{source: "readonly", match: false}
     		    ]
     		}
     	);
@@ -216,10 +225,245 @@ define(['orion/plugin',
 	    		id : "quickfix-zero-units",  //$NON-NLS-1$
 	    		contentType: ['text/css','text/html'],  //$NON-NLS-1$ //$NON-NLS-2$
 	    		validationProperties: [
- 		        	{source: "annotation:id", match: "zero-units"} //$NON-NLS-1$ //$NON-NLS-2$
+ 		        	{source: "annotation:id", match: "zero-units"}, //$NON-NLS-1$ //$NON-NLS-2$
+    				{source: "readonly", match: false}
     		    ]
     		}
     	);
+
+		var htmlFormatter = new HtmlFormatter.HtmlFormatter();
+		provider.registerServiceProvider("orion.edit.format",
+			htmlFormatter,
+			{
+				contentType: ["text/html"], //$NON-NLS-1$
+				id: "orion.format.html.formatter", //$NON-NLS-1$
+				name: messages["htmlFormatter"],//$NON-NLS-1$
+			}
+		);
+
+		var cssFormatter = new CssFormatter.CssFormatter();
+		provider.registerServiceProvider("orion.edit.format",
+			cssFormatter,
+			{
+				contentType: ["text/css"],//$NON-NLS-1$
+				id: "orion.format.css.formatter", //$NON-NLS-1$
+				name: messages["cssFormatter"],//$NON-NLS-1$
+			}
+		);
+
+		provider.registerService("orion.cm.managedservice", cssFormatter, {pid: 'jsbeautify.config.css'}); //$NON-NLS-1$ //$NON-NLS-2$
+
+		// html formatter needs to listen to all formatting preference changes because html source can contain css and javascript
+		provider.registerService("orion.cm.managedservice", htmlFormatter, {pid: 'jsbeautify.config.html'}); //$NON-NLS-1$ //$NON-NLS-2$
+		provider.registerService("orion.cm.managedservice", htmlFormatter, {pid: 'jsbeautify.config.css'}); //$NON-NLS-1$ //$NON-NLS-2$
+		provider.registerService("orion.cm.managedservice", htmlFormatter, {pid: 'jsbeautify.config.js'}); //$NON-NLS-1$ //$NON-NLS-2$
+
+		/**
+		 * CSS formatting settings
+		 */
+		var unix = "\n";
+		var mac = "\r";
+		var windows = "\n\r";
+		var eof_characters = [
+			{label: messages.indentation_unix,  value: unix},
+			{label: messages.indentation_mac, value: mac},
+			{label: messages.indentation_windows, value: windows}
+		];
+
+		var space = ' ';
+		var tab= '\t';
+		var indentation_characters = [
+			{label: messages.indentation_space,  value: space},
+			{label: messages.indentation_tab,  value: tab},
+		];
+		var collapse_preserve_inline = 'collapse-preserve-inline';
+		var collapse = 'collapse';
+		var expand = 'expand';
+		var end_expand = 'end-expand';
+		var none = 'none';
+		var brace_styles = [
+			{ label: messages.collapse_preserve_inline , value: collapse_preserve_inline},
+			{ label: messages.collapse , value: collapse},
+			{ label: messages.expand , value: expand},
+			{ label: messages.end_expand , value: end_expand},
+			{ label: messages.none , value: none},
+		];
+
+		provider.registerServiceProvider("orion.core.setting", {}, {
+			settings: [
+				{
+					pid: 'jsbeautify.config.css',
+					name: messages['cssFormattingSettings'],
+					tags: 'beautify css formatting'.split(' '),
+					category: 'cssFormatting',
+					categoryLabel: messages['cssFormatting'],
+					properties: [
+						{
+							id: 'css_indent_size',  //$NON-NLS-1$
+							name: messages['css_indent_size'],
+							type: 'number', //$NON-NLS-1$
+							defaultValue: 4
+						},
+						{
+							id: 'css_indent_char',  //$NON-NLS-1$
+							name: messages['css_indent_char'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: space,
+							options: indentation_characters
+						},
+						{
+							id: 'css_eol',  //$NON-NLS-1$
+							name: messages['css_eol'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: unix,
+							options: eof_characters
+						},
+						{
+							id: 'css_end_with_newline',  //$NON-NLS-1$
+							name: messages['css_end_with_newline'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: false
+						},
+						{
+							id: 'selector_separator_newline',  //$NON-NLS-1$
+							name: messages['selector_separator_newline'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: true
+						},
+						{
+							id: 'newline_between_rules',  //$NON-NLS-1$
+							name: messages['newline_between_rules'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: true
+						},
+						{
+							id: 'space_around_selector_separator',  //$NON-NLS-1$
+							name: messages['space_around_selector_separator'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: false
+						}
+					]
+				}]
+		});
+
+		/**
+		 * Html formatting settings
+		 */
+		var keep = 'keep';
+		var separate = 'separate';
+		var normal = 'normal';
+		var indent_scripts_values = [
+			{ label: messages.normal, value: normal},
+			{ label: messages.keep, value: keep},
+			{ label: messages.separate, value: separate},
+		];
+		var auto = 'auto';
+		var force = 'force';
+		var wrap_attributes_values = [
+			{ label: messages.auto, value: auto},
+			{ label: messages.force, value: force},
+		];
+		provider.registerServiceProvider("orion.core.setting", {}, {
+			settings: [
+				{
+					pid: 'jsbeautify.config.html',
+					name: messages['htmlFormattingOptions'],
+					tags: 'beautify html formatting'.split(' '),
+					category: 'htmlFormatting',
+					categoryLabel: messages['htmlFormatting'],
+					properties: [
+						{
+							id: 'html_indent_size',  //$NON-NLS-1$
+							name: messages['html_indent_size'],
+							type: 'number', //$NON-NLS-1$
+							defaultValue: 4
+						},
+						{
+							id: 'html_indent_char',  //$NON-NLS-1$
+							name: messages['html_indent_char'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: space,
+							options: indentation_characters
+						},
+						{
+							id: 'html_eol',  //$NON-NLS-1$
+							name: messages['html_eol'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: unix,
+							options: eof_characters
+						},
+						{
+							id: 'html_end_with_newline',  //$NON-NLS-1$
+							name: messages['html_end_with_newline'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: false
+						},
+						{
+							id: 'html_preserve_new_lines',  //$NON-NLS-1$
+							name: messages['html_preserve_new_lines'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: true
+						},
+						{
+							id: 'html_max_preserve_new_lines',  //$NON-NLS-1$
+							name: messages['html_max_preserve_new_lines'],
+							type: 'number', //$NON-NLS-1$
+							defaultValue: 32786
+						},
+						{
+							id: 'html_brace_style',  //$NON-NLS-1$
+							name: messages['html_brace_style'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: collapse,
+							options: brace_styles
+						},
+						{
+							id: 'html_wrap_line_length',  //$NON-NLS-1$
+							name: messages['html_wrap_line_length'],
+							type: 'number', //$NON-NLS-1$
+							defaultValue: 0
+						},
+						{
+							id: 'indent_inner_html',  //$NON-NLS-1$
+							name: messages['indent_inner_html'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: false
+						},
+						{
+							id: 'indent_handlebars',  //$NON-NLS-1$
+							name: messages['indent_handlebars'],
+							type: 'boolean', //$NON-NLS-1$
+							defaultValue: false
+						},
+						{
+							id: 'wrap_attributes',  //$NON-NLS-1$
+							name: messages['wrap_attributes'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: 'auto',
+							options: wrap_attributes_values
+						},
+						{
+							id: 'wrap_attributes_indent_size',  //$NON-NLS-1$
+							name: messages['wrap_attributes_indent_size'],
+							type: 'number', //$NON-NLS-1$
+							defaultValue: 1
+						},
+						{
+							id: 'extra_liners',  //$NON-NLS-1$
+							name: messages['extra_liners'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: 'head,body,html'
+						},
+						{
+							id: 'indent-scripts',  //$NON-NLS-1$
+							name: messages['indent_scripts'],
+							type: 'string', //$NON-NLS-1$
+							defaultValue: normal,
+							options: indent_scripts_values
+						}
+					]
+				}]
+		});
 
         /**
     	 * CSSLint settings
@@ -480,13 +724,7 @@ define(['orion/plugin',
     	);
 
     	provider.connect(function() {
-    		/**
-	    	 * Re-init
-	    	 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=462878
-	    	 */
-			Metrics.initFromRegistry(serviceRegistry);
-			
 			var fc = serviceRegistry.getService("orion.core.file.client"); //$NON-NLS-1$
-	    	fc.addEventListener("FileContentChanged", htmlAstManager.onFileChanged.bind(htmlAstManager));
+	    	fc.addEventListener("Changed", htmlAstManager.onFileChanged.bind(htmlAstManager));
  		});
 });

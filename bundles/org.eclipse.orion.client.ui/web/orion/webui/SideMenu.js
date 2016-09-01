@@ -10,7 +10,7 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 /*global URL*/
-define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'orion/URL-shim'], function(messages, lib, PageUtil) {
+define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'orion/webui/tooltip', 'orion/URL-shim'], function(messages, lib, PageUtil, mTooltip) {
 	var LOCAL_STORAGE_NAME = "sideMenuNavigation";
 	var OPEN_STATE = "open";
 	var CLOSED_STATE = "closed";
@@ -128,8 +128,6 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 				
 				var sideMenuList = document.createElement("ul"); //$NON-NLS-0$
 				sideMenuList.classList.add("sideMenuList"); //$NON-NLS-0$
-				sideMenuList.setAttribute("role", "navigation"); //$NON-NLS-1$ //$NON-NLS-2$
-				sideMenuList.setAttribute("aria-label", messages.navigationBar); //$NON-NLS-1$
 				this._sideMenuList = sideMenuList;
 
 				this._categoryInfos.forEach(function(categoryInfo) {
@@ -155,6 +153,12 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 					}
 					listItem.appendChild(anchor);
 					sideMenuList.appendChild(listItem);
+					anchor.setAttribute("aria-label", listItem.categoryName);
+					anchor.commandTooltip = new mTooltip.Tooltip({
+						node: anchor,
+						text: listItem.categoryName,
+						position: ["above", "below", "right", "left"] //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+					});
 					this._categorizedAnchors[categoryInfo.id] = anchor;
 				}, this);
 				
@@ -203,6 +207,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 
 				this._updateCategoryAnchors();
 				this._show = function() {
+					this._parentNode.setAttribute("aria-label", messages.sidebar); //$NON-NLS-1$
 					this._parentNode.appendChild(sideMenuHome);
 					this._parentNode.appendChild(this._topScrollButton);
 					this._parentNode.appendChild(sideMenuList);
@@ -314,7 +319,6 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 					anchor.onclick = function() {
 						return false;
 					};
-					anchor.title = anchor.parentElement.categoryName;
 					return;
 				}
 
@@ -326,7 +330,6 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 				}
 				if (links.length === 0 || (scmInScope.length !== 0 && (category === "git" || category.match(/-scm$/)) && scmInScope.indexOf(category) === -1)) {
 					anchor.href = "";
-					anchor.title = anchor.parentElement.categoryName;
 					anchor.parentElement.style.display = "none";
 				} else {
 					anchor.parentElement.style.display = "";
@@ -340,7 +343,6 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 					});
 					var bestLink = links.shift();
 					anchor.href = bestLink.href;
-					anchor.title = bestLink.title;
 				}
 				
 				//Added by Jon

@@ -119,7 +119,7 @@ define([
 				this.sidebarNavInputManager.dispatchEvent({
 					type: "editorInputMoved", //$NON-NLS-0$
 					parent: newValue ? (newValue.ChildrenLocation || newValue.ContentLocation) : null,
-					newInput: newValue ? (newValue.ChildrenLocation || newValue.ContentLocation) : null
+					newInput: newValue ? {resource: newValue.ChildrenLocation || newValue.ContentLocation} : null
 				});
 				return;
 			}
@@ -145,14 +145,6 @@ define([
 				if(!redisplay &&  parentProject && parentProject.Location === this.projectLocation){
 					return;
 				}
-				var sidebar = this.sidebar;
-				var handleDisplay = function (event) {
-					if(event.item === metadata) {
-						sidebar.sidebarNavInputManager.removeEventListener("projectDisplayed", handleDisplay); //$NON-NLS-0$
-						sidebar.sidebarNavInputManager.dispatchEvent({type:"projectOpened", item: metadata}); //$NON-NLS-0$
-					}
-				};
-				sidebar.sidebarNavInputManager.addEventListener("projectDisplayed", handleDisplay); //$NON-NLS-0$
 				return this.projectClient.readProject(fileMetadata, this.workspaceMetadata).then(function(projectData){
 					this.projectLocation = parentProject ? parentProject.Location : null;
 					projectData.type = "Project"; //$NON-NLS-0$
@@ -160,8 +152,6 @@ define([
 					projectData.fileMetadata = fileMetadata;
 					return CommonNavExplorer.prototype.display.call(this, projectData, redisplay).then(function() {
 						return this.expandItem(fileMetadata);
-					}.bind(this)).then(function () {
-						this.sidebarNavInputManager.dispatchEvent({type:"projectDisplayed", item: fileMetadata}); //$NON-NLS-0$
 					}.bind(this));
 				}.bind(this));
 			}.bind(this));
@@ -253,7 +243,7 @@ define([
 				var span = lib.$(".mainNavColumn", col); //$NON-NLS-0$
 				span.classList.add("projectInformationNode"); //$NON-NLS-0$
 				var nameText = item.Dependency ? item.Dependency.Name : (item.Project ? item.Project.Name : item.Name);
-				if (bidiUtils.isBidiEnabled) {
+				if (bidiUtils.isBidiEnabled()) {
 					nameText = bidiUtils.enforceTextDirWithUcc(nameText);
 				}
 				var itemNode = lib.$("a", col); //$NON-NLS-0$

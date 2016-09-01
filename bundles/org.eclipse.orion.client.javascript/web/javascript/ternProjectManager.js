@@ -36,6 +36,8 @@ define([
 		this.registry = serviceRegistry;
 		this.starting = setStarting;
 		this.json = null;
+		this.modified = false;
+		this.ineditor = false;
 	}
 
 	Objects.mixin(TernProjectManager.prototype, {
@@ -68,71 +70,21 @@ define([
 		},
 		
 		/**
-		 * Returns a deferred to find the location of the .tern-project file for the given project if one exists
-		 * @returns {String} The fully qualified path to the .tern-project file
-		 */
-		getTernProjectFileLocation: function() {
-			return this.currentFile;
-		},
-		
-		/**
-		 * @description Returns the current project file path or null
+		 * @description Refreshes the held info in the manager and sends out a server start request
+		 * as needed
 		 * @function
-		 * @returns {String} The current project file path, or null
+		 * @param {String} file The fully qualified name of the file
 		 */
-		getProjectFile: function() {
-			return this.projectLocation;
-		},
-		
-		/**
-		 * @description Returns the JSON parsed from the current project file or null
-		 * @function
-		 * @returns {Object} Returns the parsed JSON or null
-		 */
-		getJSON: function() {
-			return this.json;
-		},
-		
-		refresh : function(file) {
-			if(file) {
-				if (file.endsWith(".tern-project")) {
-					this.currentFile = file;
-				}
-				this.starting();
-				return this.parseTernJSON(file).then(function(jsonOptions){
-					this.json = jsonOptions;
-					return this.loadTernProjectOptions(jsonOptions);
-				}.bind(this));
+		refresh : function(file, contents) {
+			this.currentFile = file;
+			try {
+				this.json = contents ? JSON.parse(contents) : Object.create(null);
+				this._simpleValidate(this.json);
+			} catch(err) {
+				this._report(Messages['errorParsing'], err);
+				this.json = Object.create(null);
 			}
-		},
-		/**
-		 * Returns a deferred that reads the file at the given location and returns the parsed JSON contents
-		 * @param {String} fileLocation The location of the file to parse
-		 * @returns {Deferred} Deferred to get a parsed JSON object or an empty object if there is an error
-		 */
-		parseTernJSON: function(fileLocation) {
-			if(!fileLocation) {
-				return new Deferred().resolve({});
-			}
-			return this.scriptResolver.getFileClient().read(fileLocation).then(function(content) {
-				try {
-					var json = content ? JSON.parse(content) : {};
-					// create a copy of json in order to prevent the addition of the projectLoc property.
-					// the returned value is now cached into the getJSON() function.
-					var copyJson = Object.create(null);
-					for (var prop in json) {
-						if (json.hasOwnProperty(prop)) {
-							copyJson[prop] = json[prop];
-						}
-					}
-					copyJson.projectLoc = fileLocation.slice(0, fileLocation.lastIndexOf('/')+1);
-					this._simpleValidate(copyJson);
-					return json;
-				} catch(e) {
-					this._report(Messages['errorParsing'], e);
-					return {};
-				}
-			}.bind(this));
+			return this.loadTernProjectOptions(this.json);
 		},
 		
 		/**
@@ -165,20 +117,25 @@ define([
 		 * Loads the given jsonOptions into Tern, either by restarting the Tern server with new initialization options
 		 * or by adding additional type information to the running Tern server.  The messages sent to Tern are processed
 		 * asynchronously and will not be complete when this function returns.
-		 * @param jsonOptions {Object} options to load into Tern
+		 * @param {Object} jsonOptions options to load into Tern
 		 */
 		loadTernProjectOptions: function(jsonOptions) {
-			if (Array.isArray(jsonOptions.loadEagerly) && jsonOptions.loadEagerly.length > 0) {
+			var opts = jsonOptions || Object.create(null);
+			opts.projectLoc = this.projectLocation;
+			if (Array.isArray(opts.loadEagerly) && opts.loadEagerly.length > 0) {
 				var fileLoadPromises = [];
 				this._fileLoadWarnings = [];
 				var filesToLoad = [];
-				for (var i = 0; i < jsonOptions.loadEagerly.length; i++) {
-					var filename = jsonOptions.loadEagerly[i];
+				for (var i = 0; i < opts.loadEagerly.length; i++) {
+					var filename = opts.loadEagerly[i];
 					var ext = 'js'; //$NON-NLS-1$
 					if (filename.match(/\.html$/)){
 						ext = 'html'; //$NON-NLS-1$
 					} else if (filename.match(/\.htm$/)){
 						ext = 'htm'; //$NON-NLS-1$
+					}
+					if(this.projectLocation) {
+						this.scriptResolver.setSearchLocation(this.projectLocation);
 					}
 					fileLoadPromises.push(this.scriptResolver.getWorkspaceFile(filename, {ext: ext}).then(function(_filename, files) {
 						if (Array.isArray(files) && files.length > 0){
@@ -194,8 +151,7 @@ define([
 				if (!this._hasValidationProblem){
 					this.registry.getService("orion.page.message").setProgressMessage(Messages['fileMatchProgress']); //$NON-NLS-1$
 				}
-				var currentOptions = jsonOptions;
-				currentOptions.loadEagerly = filesToLoad;
+				opts.loadEagerly = filesToLoad;
 				if(fileLoadPromises.length > 0) {
 					return Deferred.all(fileLoadPromises).then(function(){
 						if (!this._hasValidationProblem){  // Don't hide validation warnings
@@ -212,43 +168,95 @@ define([
 							}
 						}
 						this._fileLoadWarnings = [];
-						this.ternWorker.postMessage({request: "start_server", args: {options: currentOptions}}); //$NON-NLS-1$
+						this.ternWorker.postMessage({request: "start_server", args: {options: opts}}); //$NON-NLS-1$
 					}.bind(this));
 				}
-				this.ternWorker.postMessage({request: "start_server", args: {options: currentOptions}}); //$NON-NLS-1$
+				this.ternWorker.postMessage({request: "start_server", args: {options: opts}}); //$NON-NLS-1$
 			} else {
-				this.ternWorker.postMessage({request: "start_server", args: {options: currentOptions}}); //$NON-NLS-1$
+				this.ternWorker.postMessage({request: "start_server", args: {options: opts}}); //$NON-NLS-1$
 			}
 		},
-		
 		/**
-		 * Callback from the orion.edit.model service
-		 * @param {Object} event An <tt>orion.edit.model</tt> event.
-		 * @see https://wiki.eclipse.org/Orion/Documentation/Developer_Guide/Plugging_into_the_editor#orion.edit.model
+		 * @callback 
 		 */
-		onInputChanged: function onInputChanged(evnt) {
-			this.inEditor = ".tern-project" === evnt.file.name;
-			if(this.inEditor) {
-				this.projectLocation = null;
-			} else {
-				var file = evnt.file,
-					project;
-				if(file) {
-					var parents = file.parents ? file.parents : file.Parents;
-					if (parents && parents.length > 0){
-						project = parents[parents.length-1];
+		onDeleted: function onDeleted(jsProject, qualifiedName, fileName) {
+			if(fileName === jsProject.TERN_PROJECT && qualifiedName.indexOf(jsProject.getProjectPath()) === 0) {
+				this.loadTernProjectOptions();
+			}
+		},
+		/**
+		 * @callback
+		 */
+		onMoved: function onMoved(jsProject, qualifiedName, fileName, toQualified, toName) {
+			if(fileName === jsProject.TERN_PROJECT && qualifiedName.indexOf(jsProject.getProjectPath()) === 0) {
+				//same as a delete
+				this.loadTernProjectOptions();
+			}
+			if(toName === jsProject.TERN_PROJECT && toQualified.indexOf(jsProject.getProjectPath()) === 0) {
+				//same as adding
+				return jsProject.getFile(jsProject.TERN_PROJECT).then(function(file) {
+					if(file && file.contents) {
+						this.refresh(file.name, file.contents);
+					} else {
+						this.loadTernProjectOptions();
 					}
-				}
-				if (project && (!this.projectLocation || project.Location !== this.projectLocation)){
-					this.projectLocation = project.Location;
-					this.scriptResolver.setSearchLocation(project.Location);
-					var c = project.Children;
-					for(var i = 0, len = c.length; i < len; i++) {
-						if(".tern-project" === c[i].Name) {
-							return this.refresh(c[i].Location);
-						}
+				}.bind(this));
+			}
+		},
+		/**
+		 * @callback 
+		 */
+		onModified: function onModified(jsProject, fullPath, shortName) {
+			this.modified = shortName === jsProject.TERN_PROJECT;
+			if(this.modified && !this.ineditor) {
+				this.modified = false;
+				this.starting();
+				//contents changed while not editing, restart
+				return jsProject.getFile(jsProject.TERN_PROJECT).then(function(file) {
+					if(file && file.contents) {
+						this.refresh(file.name, file.contents);
+					} else {
+						this.loadTernProjectOptions();
 					}
+				}.bind(this));
+			}
+		},
+		/**
+		 * @callback 
+		 */
+		onInputChanged: function onInputChanged(jsProject, evnt, projectName) {
+			this.ineditor = evnt.file.name === jsProject.TERN_PROJECT;
+			if(this.modified && !this.ineditor) {
+				this.modified = false;
+				this.starting();
+				return jsProject.getFile(jsProject.TERN_PROJECT).then(function(file) {
+					if(file && file.contents) {
+						this.refresh(file.name, file.contents);
+					} else {
+						this.loadTernProjectOptions();
+					}
+				}.bind(this));
+			}
+		},	
+		/**
+		 * @callback
+		 */
+		onProjectChanged: function onProjectChanged(jsProject, evnt, projectName) {
+			this.projectLocation = projectName;
+			this.ineditor = this.modified = evnt.file.name === jsProject.TERN_PROJECT;
+			this.scriptResolver.setSearchLocation(projectName);
+			if(!this.ineditor) {
+				this.starting();
+				if(!projectName) {
+					return this.loadTernProjectOptions(); // code editor sends out bogus events for files that have no projects
 				}
+				return jsProject.getFile(jsProject.TERN_PROJECT).then(function(file) {
+					if(file && file.contents) {
+						this.refresh(file.name, file.contents);
+					} else {
+						this.loadTernProjectOptions();
+					}
+				}.bind(this));
 			}
 		}
 	});

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation and others.
+ * Copyright (c) 2015, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -15,7 +15,6 @@ define([
 ], function(mTemplates) {
 	
 	var _resolved = Object.create(null);
-	
 	/**
 	 * @description Resolves the computed dependencies
 	 * @param {TernServer} server The Tern server
@@ -58,8 +57,8 @@ define([
 		};
   		server.startAsyncAction();
   		_resolved[key].pending = true;
-  		_resolved[key].timeout = setTimeout(resetPending, 4000, key);
-		server.options.getFile({logical: key, file: loc}, function(err, _file) {
+  		_resolved[key].timeout = setTimeout(resetPending, 10000, key);
+		server.options.getFile({logical: key, file: loc, env: _resolved[key].env}, function(err, _file) {
 			clearTimeout(_resolved[key].timeout);
 			_resolved[key].file = _file.file;
 	   		_resolved[key].contents = typeof _file.contents === 'string' ? _file.contents : '';
@@ -140,7 +139,9 @@ define([
 						continue;
 					}
 					_resolved[_d] = Object.create(null);
+					_resolved[_d].env = ast.dependencies[i].env;
 				}
+				
 			}
 			resolveDependencies(server, ast.sourceFile ? ast.sourceFile.name : null);
 		}  	
@@ -169,90 +170,9 @@ define([
 		return _resolved[_name];
 	}
 	
-	/**
-	 * @description Returns the corresponding {orion.editor.Template} object for the given metadata
-	 * @private
-	 * @param {Object} meta The metadata about the template
-	 * @returns {orion.editor.Template} The corresponding template object
-	 * @since 9.0
-	 */
-	function _getTemplate(meta) {
-		if(meta.t) {
-			return meta.t;
-		}
-		var t = new mTemplates.Template(meta.prefix, meta.description, meta.template, meta.name);
-		meta.t = t;
-		return t;
-	}
-	
-	/**
-	 * @description Gets the template kind of node
-	 * @param {Object} node The AST node
-	 * @param {Number} offset The offset into the AST 
-	 * @returns {Object} The kind object or null
-	 * @since 9.0
-	 */
-	function _getKind(node, offset) {
-		if(node) {
-    		if(node.parents && node.parents.length > 0) {
-	    		var prnt = node.parents.pop();
-	    		switch(prnt.type) {
-					case 'MemberExpression': {
-						return { kind : 'member'}; //$NON-NLS-1$
-					}
-					case 'VariableDeclarator': {
-						return null;
-					}
-					case 'FunctionDelcaration':
-					case 'FunctionExpression': {
-						if(offset < prnt.body.range[0]) {
-							return null;						
-						}
-						break;
-					}
-					case 'Property': {
-						if(offset-1 >= prnt.value.range[0] && offset-1 <= prnt.value.range[1]) {
-							return { kind : 'prop'}; //$NON-NLS-1$
-						}
-						return null;
-					}
-					case 'SwitchStatement': {
-						return {kind: 'swtch'}; //$NON-NLS-1$
-					}
-				}
-			}
-    	}
-		return {kind:'top'}; //$NON-NLS-1$
-	}
-
-	/**
-	 * @description Returns the templates that apply to the given completion kind
-	 * @public
-	 * @param {Array.<Object>} templates The array of raw template data 
-	 * @param {String} kind The kind of the completion
-	 * @param {Number} offset The offset to get the templates for
-	 * @returns {Array} The array of templates that apply to the given completion kind
-	 * @since 9.0
-	 */
-	function getTemplatesForNode(templates, node, offset) {
-		var kind = _getKind(node, offset);
-		if(kind && kind.kind) {
-			var tmplates = [];
-			var len = templates.length;
-			for(var i = 0; i < len; i++) {
-				var template = templates[i];
-				if(template.nodes && template.nodes[kind.kind]) {
-					tmplates.push(template);
-				}
-			}
-			return tmplates.map(_getTemplate, this);
-		}
-	}
-	
 	return {
 		doPostParse: doPostParse,
 		doPreInfer: doPreInfer,
-		getResolved: getResolved,
-		getTemplatesForNode: getTemplatesForNode
+		getResolved: getResolved
 	};
 });

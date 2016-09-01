@@ -27,8 +27,8 @@ function router(options) {
 	function getStatus(req, res) {
 		return clone.getRepo(req)
 		.then(function(repo) {
-			var fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
-			repo.getStatusExt({
+			var fileDir = clone.getfileDir(repo,req);
+			return repo.getStatusExt({
 				flags: 
 					git.Status.OPT.INCLUDE_UNTRACKED | 
 					git.Status.OPT.RECURSE_UNTRACKED_DIRS
@@ -77,7 +77,7 @@ function router(options) {
 					}
 					
 					if (bit & git.Status.STATUS.INDEX_NEW) {
-						added.push(returnContent(file));
+						added.push(returnContent(file, "Cached"));
 					}
 					
 					if (bit & git.Status.STATUS.INDEX_MODIFIED) {
@@ -120,15 +120,10 @@ function router(options) {
 					"Type": "Status",
 					"Untracked": untracked   
 				});
-			})
-			.catch(function(err) {
-				console.log(err);
-				writeError(403, res);
 			});
 		})
 		.catch(function(err) {
-			console.log(err);
-			writeError(403, res);
+			writeError(400, res, err);
 		});
 	}
 }

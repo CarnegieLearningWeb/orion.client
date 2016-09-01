@@ -126,17 +126,6 @@ module.exports = function(grunt) {
 						replacement: "requirejs/require.min.js"
 					}]
 				}
-			},
-			orionclient: {
-				files: {
-					"index.js": "index.js"
-				},
-				options: {
-					replacements: [{
-						pattern: /(ORION_CLIENT.+)['""]\.\.\/\.\.\/['"]/,
-						replacement: "$1'./lib/orion.client/'"
-					}]
-				}
 			}
 		},
 		simplemocha: {
@@ -179,5 +168,6 @@ module.exports = function(grunt) {
 	grunt.registerTask("test", ["simplemocha"]);
 	grunt.registerTask("optimize", ["printBuild", "copy:stage", "requirejs", "string-replace", "copy:unstage"]);
 	grunt.registerTask("default", ["checkDirs", "clean", "copy:orionclient", "optimize", "test"]);
+	grunt.registerTask("notest", ["checkDirs", "clean", "copy:orionclient", "optimize"]);
 	grunt.registerTask("nomin",   ["checkDirs", "clean", "copy:orionclient", "string-replace:orionclient", "test"]);
 };

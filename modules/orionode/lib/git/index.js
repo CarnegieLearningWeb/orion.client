@@ -13,6 +13,7 @@ var api = require('../api'), writeError = api.writeError;
 var git = require('nodegit');
 var clone = require('./clone');
 var path = require('path');
+var fs = require('fs');
 var express = require('express');
 var bodyParser = require('body-parser');
 
@@ -31,22 +32,19 @@ module.exports.router = function(options) {
 function getIndex(req, res) {
 	var repo;
 	var index;
-	var filePath = path.join(req.user.workspaceDir, req.params["0"]);
+	var filePath;
 
 	return clone.getRepo(req)
 	.then(function(repoResult) {
 		repo = repoResult;
-		filePath = filePath.substring(repo.workdir().length);
+		filePath = clone.getfileRelativePath(repo,req);
 		return repo;
 	})
 	.then(function(repo) {
-		return repo.openIndex();
+		return repo.refreshIndex();
 	})
 	.then(function(indexResult) {
 		index = indexResult;
-		return index.read(1);
-	})
-	.then(function() {
 		var indexEntry = index.getByPath(filePath);
 		return git.Blob.lookup(repo, indexEntry.id);
 	})
@@ -60,26 +58,27 @@ function getIndex(req, res) {
 }
 
 function putIndex(req, res) {
-	var index;
-	var filePath = path.join(req.user.workspaceDir, req.params["0"]);
+	var index, repo;
+	var filePath; 
 
 	return clone.getRepo(req)
-	.then(function(repo) {
-		filePath = filePath.substring(repo.workdir().length);
-		return repo.openIndex();
+	.then(function(_repo) {
+		repo = _repo;
+		filePath = clone.getfileRelativePath(repo,req);
+		return repo.refreshIndex();
 	})
 	.then(function(indexResult) {
 		index = indexResult;
-		return index.read(1);
-	})
-	.then(function() {
-		if (req.body.Path) {
-			req.body.Path.forEach(function(path) {
-				index.addByPath(path);
-			});
-		} else {
-			return index.addByPath(filePath);
+		function doPath(p) {
+			if (fs.existsSync(path.join(repo.workdir(), p))) {
+				return index.addByPath(p);
+			}
+			return index.removeByPath(p);
 		}
+		if (req.body.Path) {
+			return Promise.all(req.body.Path.map(doPath));
+		}
+		return doPath(filePath);
 	})
 	.then(function() {
 		// this will write both files to the index
@@ -88,29 +87,25 @@ function putIndex(req, res) {
 	.then(function() {
 		return index.writeTree();
 	})
-	.done(function() {
+	.then(function() {
 		res.status(200).end();
+	}).catch(function(err) {
+		writeError(404, res, err.message);
 	});
 }
 
 function postIndex(req, res) {
 	var repo;
 	var resetType = req.body.Reset;
-	var filePath = path.join(req.user.workspaceDir, req.params["0"]);
+	var filePath = clone.getfileAbsolutePath(req); 
 	
 	return clone.getRepo(req)
 	.then(function(_repo) {
 		repo = _repo;
-		filePath = filePath.substring(repo.workdir().length);
-		return repo.getReferenceCommit(req.body.Commit || "HEAD")
-		.then(function(commit) {
-			return commit;
-		}).catch(function() {
-			return repo.getCommit(req.body.Commit || "HEAD");
-		});
+		return git.AnnotatedCommit.fromRevspec(repo, req.body.Commit || "HEAD");
 	})
 	.then(function(commit) {
-		return repo.getCommit(commit);
+		return repo.getCommit(commit.id());
 	})
 	.then(function(commit) {
 		if (req.body.Path) {
@@ -137,8 +132,10 @@ function postIndex(req, res) {
 			
 		return git.Reset.default(repo, commit, [filePath]);
 	})
-	.done(function() {
+	.then(function() {
 		res.status(200).end();
+	}).catch(function(err) {
+		writeError(404, res, err.message);
 	});
 }
 };

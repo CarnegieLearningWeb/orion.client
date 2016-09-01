@@ -32,11 +32,14 @@ define([
 	'orion/widgets/settings/ThemeSettings',
 	'orion/widgets/settings/UserSettings',
 	'orion/widgets/settings/GlobalizationSettings',
+	'orion/widgets/settings/GeneralSettings',
 	'orion/editorPreferences',
-	'orion/metrics'
+	'orion/generalPreferences',
+	'orion/metrics',
+	'orion/util'
 ], function(messages, mGlobalCommands, PageUtil, lib, objects, URITemplate, 
 		ThemeBuilder, SettingsList, mThemePreferences, editorThemeData, editorThemeImporter, SplitSelectionLayout, PluginList, 
-		GitSettings, EditorSettings, ThemeSettings, UserSettings, GlobalizationSettings, mEditorPreferences, mMetrics) {
+		GitSettings, EditorSettings, ThemeSettings, UserSettings, GlobalizationSettings, GeneralSettings, mEditorPreferences, mGeneralPreferences, mMetrics, util) {
 
 	/**
 	 * @param {Object} options
@@ -71,7 +74,7 @@ define([
 				_self.settingsCategories = [];
 			
 				var categories = prefs[ 'categories' ] || {};
-				if (categories.showUserSettings === undefined || categories.showUserSettings) {
+				if (!util.isElectron && (categories.showUserSettings === undefined || categories.showUserSettings)) {
 					_self.settingsCategories.push({
 						id: "userSettings", //$NON-NLS-0$
 						textContent: messages["User Profile"],
@@ -116,6 +119,14 @@ define([
 						id: "Globalization", //$NON-NLS-0$
 						textContent: messages.Globalization,
 						show: _self.showGlobalizationSettings
+					});
+				}
+
+				if (categories.showGeneralSettings === undefined || categories.showGeneralSettings) {
+					_self.settingsCategories.push({
+						id: "General", //$NON-NLS-0$
+						textContent: messages.General,
+						show: _self.showGeneralSettings
 					});
 				}
 
@@ -330,6 +341,36 @@ define([
 			this.globalizationWidget.show();
 		},
 		
+		showGeneralSettings: function(id){
+
+			this.selectCategory(id);
+
+			lib.empty(this.table);
+
+			if (this.generalWidget) {
+				this.generalWidget.destroy();
+			}
+
+			this.updateToolbar(id);
+			
+			var userNode = document.createElement('div'); //$NON-NLS-0$
+			this.table.appendChild(userNode);
+			
+			var generalPreferences = new mGeneralPreferences.GeneralPreferences (this.preferences);
+
+			this.generalWidget = new GeneralSettings({
+				registry: this.registry,
+				settings: this.settingsCore,
+				preferences: generalPreferences,
+				statusService: this.preferencesStatusService,
+				dialogService: this.preferenceDialogService,
+				commandService: this.commandService,
+				userClient: this.userClient	
+			}, userNode);
+			
+			this.generalWidget.show();
+		},
+		
 		initPlugins: function(id){
 			lib.empty(this.table);
 
@@ -381,7 +422,8 @@ define([
 				serviceRegistry: this.registry,
 				commandRegistry: this.commandService,
 				settings: settingsInCategory,
-				title: title
+				title: title,
+				fileClient: this.fileClient
 			});
 		},
 
@@ -418,8 +460,10 @@ define([
 			var params = PageUtil.matchResourceParameters();
 			if (params.category !== id) {
 				params.category = id;
+				var resource = params.resource;
 				delete params.resource;
-				window.location = new URITemplate("#,{params*}").expand({ //$NON-NLS-0$
+				window.location = new URITemplate("#{,resource,params*}").expand({ //$NON-NLS-0$
+					resource: resource,
 					params: params
 				});
 			}

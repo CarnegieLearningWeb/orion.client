@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012, 2015 IBM Corporation and others.
+ * Copyright (c) 2012, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -27,12 +27,32 @@ define([
 	function equals(type, value, defaultValue) {
 		if (type === 'string') //$NON-NLS-0$
 			return value === defaultValue || (value === '' && defaultValue === null);
-		else
-			return value === defaultValue;
+		return value === defaultValue;
 	}
 
 	function getStringOrNull(obj, property) {
 		return typeof obj[property] === 'string' ? obj[property] : null;
+	}
+	
+	function checkAttributeDefinition(attributeDefinition, properties, defaultProperties) {
+		var attributeId = attributeDefinition.getId();
+		if (!hasOwnProperty.call(properties, attributeId)) {
+			// check if the current attributeDefinition has children
+			var children = attributeDefinition.children;
+			if (Array.isArray(children) && children.length !== 0) {
+				return children.every(function(attributeDefinition) {
+					return checkAttributeDefinition(attributeDefinition, properties, defaultProperties);
+				});
+			}
+			return true; // Attribute not set, so consider as equal to default
+		}
+		var value = properties[attributeId], defaultValue;
+		if (hasOwnProperty.call(defaultProperties, attributeId)) {
+			defaultValue = defaultProperties[attributeId];
+		} else {
+			defaultValue = attributeDefinition.getDefaultValue();
+		}
+		return equals(attributeDefinition.getType(), value, defaultValue);
 	}
 
 	/**
@@ -98,7 +118,7 @@ define([
 		this.category = json.category || null;
 		this.categoryLabel = json.categoryLabel || null;
 		this.tags = json.tags;
-		this.order = typeof(json.order) === 'number' && json.order > -1 ? json.order : 0;
+		this.order = typeof json.order === 'number' && json.order > -1 ? json.order : 0;
 		if (!this.pid) { throw new Error('Missing "pid" property'); } //$NON-NLS-0$
 	}
 	SettingImpl.prototype = {
@@ -133,15 +153,7 @@ define([
 		isDefaults: function(properties, defaultProperties) {
 			defaultProperties = defaultProperties || {};
 			return this.getAttributeDefinitions().every(function(attributeDefinition) {
-				var attributeId = attributeDefinition.getId();
-				if (!(hasOwnProperty.call(properties, attributeId)))
-					return true; // Attribute not set, so consider as equal to default
-				var value = properties[attributeId], defaultValue;
-				if (hasOwnProperty.call(defaultProperties, attributeId))
-					defaultValue = defaultProperties[attributeId];
-				else
-					defaultValue = attributeDefinition.getDefaultValue();
-				return equals(attributeDefinition.getType(), value, defaultValue);
+				return checkAttributeDefinition(attributeDefinition, properties, defaultProperties);
 			});
 		}
 	};
@@ -232,7 +244,7 @@ define([
 		 */
 		getSettings: function(category) {
 			var settingsMap = this.settingsMap;
-			var pids = (typeof category === 'string') ? this.categories[category] : Object.keys(settingsMap); //$NON-NLS-0$
+			var pids = typeof category === 'string' ? this.categories[category] : Object.keys(settingsMap); //$NON-NLS-0$
 			if (!pids) {
 				return [];
 			}

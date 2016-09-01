@@ -14,68 +14,89 @@ define([
 	'orion/Deferred',
 	'orion/objects',
 	'javascript/lru',
-	'orion/metrics',
-	"javascript/util"
-], function(Deferred, Objects, LRU, Metrics, Util) {
-	/**
-	 * @description Object of error types
-	 * @since 5.0
-	 */
-	var ErrorTypes = {
-		/**
-		 * @description Something unexpected has been found while parsing, most commonly a syntax error
-		 */
-		Unexpected: 1,
-		/**
-		 * @description A Syntax problem that reports the last entered token as the problem
-		 */
-		EndOfInput: 2
-	};
+	"acorn/dist/acorn",
+	"acorn/dist/acorn_loose",
+	"javascript/orionAcorn",
+], function(Deferred, Objects, LRU, acorn, acorn_loose, OrionAcorn) {
+	var registry;
 
 	/**
 	 * Provides a shared AST.
 	 * @name javascript.ASTManager
 	 * @class Provides a shared AST.
 	 * @param {Object} esprima The esprima parser that this ASTManager will use.
+	 * @param {Object} serviceRegistry The platform service registry
 	 */
-	function ASTManager(esprima) {
-		this.parser = esprima;
+	function ASTManager(serviceRegistry, jsProject) {
 		this.cache = new LRU(10);
-		if (!this.parser) {
-			throw new Error("Missing parser"); //$NON-NLS-1$
+		this.orionAcorn = new OrionAcorn();
+		this.jsProject = jsProject;
+		registry = serviceRegistry;
+	}
+	
+	/**
+	 * @description Delegate to log timings to the metrics service
+	 * @param {Number} end The end time
+	 * @since 12.0
+	 */
+	function logTiming(end) {
+		if(registry) {
+			var metrics = registry.getService("orion.core.metrics.client"); //$NON-NLS-1$
+			if(metrics) {
+				metrics.logTiming('language tools', 'parse', end, 'application/javascript'); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			}
 		}
 	}
-
+	
 	Objects.mixin(ASTManager.prototype, /** @lends javascript.ASTManager.prototype */ {
 		/**
 		 * @param {orion.editor.EditorContext} editorContext
 		 * @returns {orion.Promise} A promise resolving to the AST.
 		 */
 		getAST: function(editorContext) {
-			var _self = this;
 			return editorContext.getFileMetadata().then(function(metadata) {
-				var loc = _self._getKey(metadata);
-				var ast = _self.cache.get(loc);
+				var loc = this._getKey(metadata);
+				var ast = this.cache.get(loc);
 				if (ast) {
 					return new Deferred().resolve(ast);
 				}
 				return editorContext.getText().then(function(text) {
-					ast = _self.parse(text, metadata ? metadata.location : 'unknown'); //$NON-NLS-1$
-					_self.cache.put(loc, ast);
+					var options = Object.create(null);
+					if(this.jsProject) {
+						return this.jsProject.getFile(this.jsProject.TERN_PROJECT).then(function(file) {
+							if(file && file.contents) {
+								var json = JSON.parse(file.contents);
+								if (json) {
+									options.ecmaVersion = json.ecmaVersion;
+									if (json.sourceType) {
+										options.sourceType = json.sourceType;
+									}
+								}
+							}
+							ast = this.parse(text, metadata ? metadata.location : 'unknown', options); //$NON-NLS-1$
+							this.cache.put(loc, ast);
+							return ast;
+						}.bind(this));
+					}
+					ast = this.parse(text, metadata ? metadata.location : 'unknown', options); //$NON-NLS-1$
+					this.cache.put(loc, ast);
 					return ast;
-				});
-			});
+				}.bind(this));
+			}.bind(this));
 		},
 		/**
 		 * Returns the key to use when caching
-		 * @param {Object} metadata The file infos
+		 * @param {Object|String} metadata The file infos
 		 * @since 8.0
 		 */
 		_getKey: function _getKey(metadata) {
-		      if(!metadata || !metadata.location) {
-		          return 'unknown'; //$NON-NLS-1$
-		      }
-		      return metadata.location;
+			if(typeof metadata === 'string') {
+				return metadata;
+			}
+			if(!metadata || !metadata.location) {
+				return 'unknown'; //$NON-NLS-1$
+			}
+			return metadata.location;
 		},
 		/**
 		 * @private
@@ -83,26 +104,17 @@ define([
 		 * @param {String} file The file name that we parsed
 		 * @returns {Object} The AST.
 		 */
-		parse: function(text, file) {
-		    var start = Date.now();
+		parse: function(text, file, options) {
+			this.orionAcorn.initialize();
+			var start = Date.now();
+			this.orionAcorn.preParse(text, options, acorn, acorn_loose, file);
 			try {
-				var ast = this.parser.parse(text, {
-					range: true,
-					loc: true,
-					tolerant: true,
-					tokens: true,
-					attachComment: true,
-					directSourceFile: file,
-					deps: true
-				});
-			} catch (e) {
-				ast = Util.errorAST(e, file, text);
+				var ast = acorn.parse.call(acorn, text, options);
+			} catch(e) {
+				ast = acorn_loose.parse_dammit.call(acorn_loose, text, options);
 			}
-			var end = Date.now() - start;
-			Metrics.logTiming('language tools', 'parse', end, 'application/javascript'); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-			ast.errors = Util.serializeAstErrors(ast);
-		    ast.fileLocation = file;
-			ast.source = text;
+			this.orionAcorn.postParse(ast, text);
+			logTiming(Date.now() - start);
 			return ast;
 		},
 		
@@ -112,13 +124,13 @@ define([
 		 * @see https://wiki.eclipse.org/Orion/Documentation/Developer_Guide/Plugging_into_the_editor#orion.edit.model
 		 */
 		onModelChanging: function(event) {
-		    if(this.inputChanged) {
-		        //TODO haxxor, eat the first model changing event which immediately follows
-		        //input changed
-		        this.inputChanged = null;
-		    } else {
-		        this.cache.remove(this._getKey(event.file));
-		    }
+			if(this.inputChanged) {
+				//TODO haxxor, eat the first model changing event which immediately follows
+				//input changed
+				this.inputChanged = null;
+			} else {
+				this.cache.remove(this._getKey(event.file));
+			}
 		},
 		/**
 		 * Callback from the orion.edit.model service
@@ -126,24 +138,21 @@ define([
 		 * @see https://wiki.eclipse.org/Orion/Documentation/Developer_Guide/Plugging_into_the_editor#orion.edit.model
 		 */
 		onInputChanged: function(event) {
-		    this.inputChanged = event;
+			this.inputChanged = event;
 		},
 		/**
 		 * Callback from the FileClient
-		 * @param {Object} event a <tt>fileChanged</tt> event
+		 * @param {Object} event a <tt>Changed</tt> event
 		 */
 		onFileChanged: function(event) {
-			if(event && event.type === 'FileContentChanged' && Array.isArray(event.files)) {
-				//event = {type, files: [{name, location, metadata: {contentType}}]}
-				event.files.forEach(function(file) {
-					if(file.metadata && file.metadata.contentType === 'application/javascript') {
+			if(event && event.type === 'Changed' && Array.isArray(event.modified)) {
+				event.modified.forEach(function(file) {
+					if(typeof file === 'string') {
 						this.cache.remove(this._getKey(file));
 					}
 				}.bind(this));
 			}
 		}
 	});
-	return {
-			ASTManager : ASTManager,
-			ErrorTypes : ErrorTypes};
+	return { ASTManager : ASTManager };
 });

@@ -12,6 +12,7 @@
 define([
 	'orion/objects',
 	'orion/webui/littlelib',
+	'orion/bidiUtils',
 	'text!orion/search/InlineSearchPane.html',
 	'orion/inlineSearchResultExplorer',
 	'orion/searchUtils',
@@ -21,7 +22,7 @@ define([
 	'i18n!orion/search/nls/messages',
 	'orion/webui/Slideout'
 ], function(
-	objects, lib, InlineSearchPaneTemplate, InlineSearchResultExplorer, 
+	objects, lib, bidiUtils, InlineSearchPaneTemplate, InlineSearchResultExplorer, 
 	mSearchUtils, Deferred, DirectoryPrompterDialog, ComboTextInput, messages, mSlideout
 ) {
 	var SearchAnnoTypes = {};
@@ -148,6 +149,7 @@ define([
 		
 		search: function(){
 			this._searchBox.enable(true);
+			this._showSearchOptBLocks();
 			this._submitSearch();
 		},
 		
@@ -412,8 +414,12 @@ define([
 			lib.$("#searchScopeSelectButton", this._searchWrapper).title = messages["Choose a Folder"]; //$NON-NLS-1$ //$NON-NLS-0$
 		},
 		
-		setSearchScope: function(targetFolder) {
-			this._targetFolder = targetFolder;
+		setSearchScope: function(scope) {
+			this._targetFolder = scope;
+			var targetFolder = scope;
+			if(typeof scope === "string") {
+				targetFolder = {Location: scope};
+			}
 			if (targetFolder && targetFolder.fileMetadata) {
 				targetFolder = targetFolder.fileMetadata;
 			}
@@ -438,6 +444,20 @@ define([
 			this._searchBox.setTextInputValue(str);
 		},
 		
+		setCheckBox: function(searchParams) {
+			this._caseSensitiveCB.checked = searchParams.caseSensitive ? true : false;
+			this._wholeWordCB.checked = searchParams.wholeWord ? true : false;
+			this._regExCB.checked = searchParams.regEx ? true : false;
+		},
+		
+		setFileNamePatterns: function(fNamePattern) {
+			if(Array.isArray(fNamePattern)) {
+				this._fileNamePatternsBox.setTextInputValue(fNamePattern.join(", ")); //$NON-NLS-0$
+			} else {
+				this._fileNamePatternsBox.setTextInputValue("");
+			}
+		},
+		
 		_initSearchScope: function() {
 			this._rootURL = this._fileClient.fileServiceRootURL();
 			this._searchLocations = [this._rootURL];
@@ -446,14 +466,23 @@ define([
 			this._searchScopeSelectButton = lib.$("#searchScopeSelectButton", this._searchOptWrapperDiv); //$NON-NLS-0$
 			
 			this._searchScopeSelectButton.addEventListener("click", function(){ //$NON-NLS-0$
-				var searchScopeDialog = new DirectoryPrompterDialog.DirectoryPrompterDialog({
-					title: messages["Choose a Folder"], //$NON-NLS-0$
-					serviceRegistry: this._serviceRegistry,
-					fileClient: this._fileClient,
-					targetFolder: this._targetFolder,
-					func: this.setSearchScope.bind(this)
-				});
-				searchScopeDialog.show();
+				var deferred;
+				if(typeof this._targetFolder === "string") {
+					deferred = this._fileClient.read(this._targetFolder, true);
+				} else {
+					deferred = new Deferred().resolve(this._targetFolder);
+				}
+				deferred.then(function(scopeMetadata){
+					this._targetFolder = scopeMetadata;
+					var searchScopeDialog = new DirectoryPrompterDialog.DirectoryPrompterDialog({
+						title: messages["Choose a Folder"], //$NON-NLS-0$
+						serviceRegistry: this._serviceRegistry,
+						fileClient: this._fileClient,
+						targetFolder: scopeMetadata,
+						func: this.setSearchScope.bind(this)
+					});
+					searchScopeDialog.show();
+				}.bind(this));
 			}.bind(this));
 		},
 		
@@ -551,6 +580,9 @@ define([
 				scopeElementWrapper.title = decodedLocation;
 				
 				locationElement.appendChild(document.createTextNode(scopeString));
+				if (bidiUtils.isBidiEnabled()) {
+					locationElement.dir = bidiUtils.getTextDirection(scopeString);
+				}
 				scopeElementWrapper.appendChild(locationElement);	
 			}, this);
 		},

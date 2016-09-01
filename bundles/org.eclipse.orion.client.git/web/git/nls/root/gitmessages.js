@@ -229,6 +229,7 @@ define({//Default message bundle
 	"CloneGitRepositoryDialog": "Clone Git Repository", //$NON-NLS-0$  //$NON-NLS-1$
 	"Repository URL:": "Repository URL: ", //$NON-NLS-0$  //$NON-NLS-1$
 	"Existing directory:": "Existing folder:", //$NON-NLS-0$  //$NON-NLS-1$
+	"Clone submodules automatically": "Clone submodules automatically", //$NON-NLS-0$  //$NON-NLS-1$
 	"New folder:": "New folder:", //$NON-NLS-0$  //$NON-NLS-1$
 	"ChooseFolderDialog": "Choose a Folder", //$NON-NLS-0$  //$NON-NLS-1$
 	"Message:": "Message:", //$NON-NLS-0$  //$NON-NLS-1$
@@ -506,7 +507,7 @@ define({//Default message bundle
 	"Create new repository" : "Create new repository", //$NON-NLS-0$  //$NON-NLS-1$
 	"Attach the remote to one of your existing repositories" : "Attach the remote to one of your existing repositories", //$NON-NLS-0$  //$NON-NLS-1$
 	"You are reviewing contribution ${0} from ${1}" : "You are reviewing contribution ${0} from ${1}", //$NON-NLS-0$  //$NON-NLS-1$
-	"CommitNotFoundInWorkspace" : "Unfortunately the commit can not be found in your workspace. To see it try one of the following: ", //$NON-NLS-0$  //$NON-NLS-1$
+	"CommitNotFoundInWorkspace" : "Unfortunately the commit cannot be found in your workspace. To see it try one of the following: ", //$NON-NLS-0$  //$NON-NLS-1$
  	"To review the commit you can also:" : "To review the commit you can also:", //$NON-NLS-0$  //$NON-NLS-1$
 	"Contribution Review Request for ${0} on ${1}" : "Contribution Review Request for ${0} on ${1}", //$NON-NLS-0$  //$NON-NLS-1$
 	"Failing paths: ${0}": "Failing paths: ${0}", //$NON-NLS-0$  //$NON-NLS-1$
@@ -623,5 +624,6 @@ define({//Default message bundle
 	"OpenGithubPullRequest": "Open Github Page", //$NON-NLS-0$  //$NON-NLS-1$
 	"OpenGithubPullRequestMsg": "Open the Github page for this Pull Request.", //$NON-NLS-0$  //$NON-NLS-1$
 	"AllowPopUpMsg": "Please allow popups for this site.", //$NON-NLS-0$  //$NON-NLS-1$
-	"ToggleGraph":"Toggles the graphical representation of the commit history" //$NON-NLS-0$  //$NON-NLS-1$
+	"ToggleGraph":"Toggles the graphical representation of the commit history", //$NON-NLS-0$  //$NON-NLS-1$
+	"Annotated":"Annotated" //$NON-NLS-0$  //$NON-NLS-1$
 });

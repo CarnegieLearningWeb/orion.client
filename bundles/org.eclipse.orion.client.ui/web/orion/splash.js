@@ -264,6 +264,7 @@ loader.prototype.update = function(){
 	if (!Array.isArray(message)) message = [message];
 	if (!Array.isArray(detailedMessage)) detailedMessage = [detailedMessage];
 	message.forEach(function(msg, i) {
+		if (!msg) return;
 		var msgDiv = document.createElement("div");
 		msgDiv.className = "splashMessage";
 		msgDiv.textContent = msg;
@@ -304,7 +305,7 @@ loader.prototype.setPluginRegistry = function(pluginRegistry) {
 	this.pluginRegistry = pluginRegistry; 
 	var listener = this._pluginListener = function(evt) {
 		var s = this.getStep();
-		if (!s || s.id != "orion.splash.plugins") return;
+		if (!s || s.id !== "orion.splash.plugins") return;
 		var pluginName = evt.plugin.getName();
 		if (!pluginName) return;
 		s.message = i18nUtil.formatMessage(messages["plugin_" + evt.type], pluginName);

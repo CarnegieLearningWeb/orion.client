@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -10,26 +10,31 @@
  *     IBM Corporation - initial API and implementation
  ******************************************************************************/
 /*eslint-env amd, mocha, browser*/
-/* eslint-disable missing-nls */
+/*eslint-disable missing-nls*/
 define([
 'javascript/astManager',
 'javascript/contentAssist/ternAssist',
 'javascript/cuProvider',
-'esprima/esprima',
 'chai/chai',
 'orion/Deferred',
 'mocha/mocha' //must stay at the end, not a module
-], function(ASTManager, TernAssist, CUProvider, Esprima, chai, Deferred) {
+], function(ASTManager, TernAssist, CUProvider, chai, Deferred) {
 	var assert = chai.assert;
 
 	return function(worker) {
 		var ternAssist;
 		var envs = Object.create(null);
-		var astManager = new ASTManager.ASTManager(Esprima);
+		var astManager = new ASTManager.ASTManager();
 		var jsFile = 'tern_content_assist_test_script.js';
 		var htmlFile = 'tern_content_assist_test_script.html';
 		var timeoutReturn = ['Content assist timed out'];
-	
+		var jsProject = {
+			getEcmaLevel: function getEcmaLevel() {},
+			getESlintOptions: function getESlintOptions() {
+				return new Deferred().resolve(null);
+			}
+		};
+		
 		/**
 		 * @description Sets up the test
 		 * @param {Object} options The options the set up with
@@ -37,12 +42,12 @@ define([
 		 */
 		function setup(options) {
 			var state = Object.create(null);
-			var buffer = state.buffer = typeof(options.buffer) === 'undefined' ? '' : options.buffer;
-			var prefix = state.prefix = typeof(options.prefix) === 'undefined' ? '' : options.prefix;
-			var offset = state.offset = typeof(options.offset) === 'undefined' ? 0 : options.offset;
-			var line = state.line = typeof(options.line) === 'undefined' ? '' : options.line;
-			var keywords = typeof(options.keywords) === 'undefined' ? false : options.keywords;
-			var templates = typeof(options.templates) === 'undefined' ? false : options.templates;
+			var buffer = state.buffer = typeof options.buffer === 'undefined' ? '' : options.buffer;
+			var prefix = state.prefix = typeof options.prefix === 'undefined' ? '' : options.prefix;
+			var offset = state.offset = typeof options.offset === 'undefined' ? 0 : options.offset;
+			var line = state.line = typeof options.line === 'undefined' ? '' : options.line;
+			var keywords = typeof options.keywords === 'undefined' ? false : options.keywords;
+			var templates = typeof options.templates === 'undefined' ? false : options.templates;
 			
 			var contentType = options.contenttype ? options.contenttype : 'application/javascript';
 			var	file = state.file = jsFile;				
@@ -50,6 +55,10 @@ define([
 				// Tern plug-ins don't have the content type, only the name of the file
 				file = state.file = htmlFile;
 			}
+			var ecma = options.ecma ? options.ecma : 5;
+			jsProject.getEcmaLevel = function() {
+				return new Deferred().resolve(ecma);
+			};
 			assert(options.callback, 'You must provide a test callback for worker-based tests');
 			state.callback = options.callback;
 			worker.setTestState(state);
@@ -58,13 +67,13 @@ define([
 			worker.postMessage({request: 'delFile', args:{file: jsFile}});
 			worker.postMessage({request: 'delFile', args:{file: htmlFile}});
 			
-			envs = typeof(options.env) === 'object' ? options.env : Object.create(null);
+			envs = typeof options.env === 'object' ? options.env : Object.create(null);
 			var editorContext = {
 				/*override*/
 				getText: function() {
 					return new Deferred().resolve(buffer);
 				},
-	
+				/** @callback */
 				getFileMetadata: function() {
 				    var o = Object.create(null);
 				    o.contentType = Object.create(null);
@@ -74,7 +83,7 @@ define([
 				}
 			};
 			astManager.onModelChanging({file: {location: file}});
-			var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, timeout: options.timeout ? options.timeout : 20000, timeoutReturn: timeoutReturn};
+			var params = {offset: offset, prefix : prefix, keywords: keywords, template: templates, line: line, indentation: options.indentation, timeout: options.timeout ? options.timeout : 20000, timeoutReturn: timeoutReturn};
 			return {
 				editorContext: editorContext,
 				params: params
@@ -89,7 +98,7 @@ define([
 		function stringifyExpected(expectedProposals) {
 			var text = "";
 			for (var i = 0; i < expectedProposals.length; i++)  {
-				text += expectedProposals[i][0] + " : " + expectedProposals[i][1] + "\n";
+				text += "['" + expectedProposals[i][0] + "', '" + expectedProposals[i][1] + "'],\n";
 			}
 			return text;
 		}
@@ -103,9 +112,10 @@ define([
 			var text = "";
 			for (var i = 0; i < actualProposals.length; i++) {
 				if (actualProposals[i].name) {
-					text += actualProposals[i].proposal + " : " + actualProposals[i].name + actualProposals[i].description + "\n"; //$NON-NLS-1$ //$NON-NLS-0$
+					var desc = actualProposals[i].description ? actualProposals[i].description : "";
+					text += "['" + actualProposals[i].proposal + "', '" + actualProposals[i].name + desc + "'],\n"; //$NON-NLS-1$ //$NON-NLS-0$
 				} else {
-					text += actualProposals[i].proposal + " : " + actualProposals[i].description + "\n"; //$NON-NLS-1$ //$NON-NLS-0$
+					text += "['" + actualProposals[i].proposal + "', '" + actualProposals[i].description + "'],\n"; //$NON-NLS-1$ //$NON-NLS-0$
 				}
 			}
 			return text;
@@ -136,7 +146,8 @@ define([
 						assert.equal(ap.proposal, text, "Invalid proposal text"); //$NON-NLS-0$
 						if (description) {
 							if (ap.name) {
-								assert.equal(ap.name + ap.description, description, "Invalid proposal description"); //$NON-NLS-0$
+								var desc = ap.description ? ap.description : "";
+								assert.equal(ap.name + desc, description, "Invalid proposal description"); //$NON-NLS-0$
 							} else {
 								assert.equal(ap.description, description, "Invalid proposal description"); //$NON-NLS-0$
 							}
@@ -146,14 +157,13 @@ define([
 						    assert(ap.hover, 'There should be a hover entry for the proposal');
 						    assert(ap.hover.content.indexOf(ep[2]) === 0, "The doc should have started with the given value.\nActual: " + ap.hover.content + '\nExpected: ' + ep[2]);
 						}
-						if (ep.length >= 4 && typeof(ep[3]) === 'object'){
+						if (ep.length >= 4 && typeof ep[3] === 'object'){
 							assert(ap.groups, "Expected template proposal with selection group");
 							assert(ap.groups[0].positions, "Expected template proposal with selection group");
 							var offset = ap.groups[0].positions[0].offset;
 							var len = ap.groups[0].positions[0].length;
-							assert.equal(offset, ep[3].offset, "Template proposal had different offset for selection group");
-							assert.equal(offset, ep[3].offset, "Template proposal had different offset for selection group");
-							assert.equal(len, ep[3].length, "Template proposal had different length for selection group");						
+							assert.equal(offset, ep[3].offset, "Template proposal had different offset for selection group. Actual offset: " + offset + " Actual length: " + len);
+							assert.equal(len, ep[3].length, "Template proposal had different length for selection group. Actual offset: " + offset + " Actual length: " + len);						
 						}
 					}
 					worker.getTestState().callback();
@@ -165,15 +175,15 @@ define([
 				worker.getTestState().callback(error);
 			});
 		}
-	
+		
 		describe('Tern Content Assist Tests', function() {
-			this.timeout(10000);
-			before('Message the server for warm up', function() {
+			this.timeout(20000);
+			before('Message the server for warm up', function(done) {
 				CUProvider.setUseCache(false);
 				ternAssist = new TernAssist.TernContentAssist(astManager, worker, function() {
 					return new Deferred().resolve(envs);
-				}, CUProvider);
-				worker.start(); // Reset the tern server state to remove any prior files
+				}, CUProvider, jsProject);
+				worker.start(done, {options: {libs: ['ecma5', 'ecma6']}}); // Reset the tern server state to remove any prior files
 			});
 		
 			describe('Case-insensitive proposals', function() {
@@ -252,21 +262,6 @@ define([
 						['filter(test, context?)', 'filter(test, context?)']
 					]);
 				});
-				/**
-				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=473786
-				 */
-				it('test casing params 2', function(done) {
-					var options = {
-						buffer: "new TypedArray(10).ev",
-						prefix: "ev",
-						offset: 21,
-						callback: done
-					};
-					testProposals(options, [
-						['', 'ecma6'],
-						['every(callback, thisArg?)', 'every(callback, thisArg?) : bool']
-					]);
-				});
 				it("test loosely match 1", function(done) {
 					var options = {
 						buffer: "var getAnotherThing = 0; gAT",
@@ -274,7 +269,7 @@ define([
 						offset: 28,
 						callback: done};
 					return testProposals(options, [
-						//TODO Tern does not support camel case only ["getAnotherThing", "getAnotherThing : Number"]
+						["getAnotherThing", "getAnotherThing : number"]
 					]);
 				});
 				it("test loosely match 2", function(done) {
@@ -305,6 +300,71 @@ define([
 						callback: done};
 					return testProposals(options, [
 						["getAnotherThing", "getAnotherThing : number"]
+					]);
+				});
+			});
+			describe('Multi line templates', function() {
+				it('For loop no indent', function(done) {
+					var options = {
+						buffer: "fo",
+						prefix: "fo",
+						offset: 2,
+						templates: true,
+						callback: done
+					};
+					testProposals(options, [
+						['', 'Templates'],
+						['for (var i = 0; i < array.length; i++) {\n\t\n}', 'for statement', 'Create a new', {offset: 9, length: 1}],
+						['for (var i = 0; i < array.length; i++) {\n\tvar value = array[i];\n\t\n}', 'for statement (with loop variable)', 'Create a new', {offset: 9, length: 1}],
+						['for (var property in object) {\n\tif (object.hasOwnProperty(property)) {\n\t\t\n\t}\n}', 'for..in statement', 'Create a for', {offset: 9, length: 8}],
+					]);
+				});
+				it('For loop space indent', function(done) {
+					var options = {
+						buffer: "    fo",
+						prefix: "fo",
+						offset: 6,
+						indentation: '    ',
+						templates: true,
+						callback: done
+					};
+					testProposals(options, [
+						['', 'Templates'],
+						['for (var i = 0; i < array.length; i++) {\n    \t\n    }', 'for statement', 'Create a new', {offset: 13, length: 1}],
+						['for (var i = 0; i < array.length; i++) {\n    \tvar value = array[i];\n    \t\n    }', 'for statement (with loop variable)', 'Create a new', {offset: 13, length: 1}],
+						['for (var property in object) {\n    \tif (object.hasOwnProperty(property)) {\n    \t\t\n    \t}\n    }', 'for..in statement', 'Create a for', {offset: 13, length: 8}],
+					]);
+				});
+				it('For loop tabbed indent', function(done) {
+					var options = {
+						buffer: "\t\t\tfo",
+						prefix: "fo",
+						offset: 5,
+						indentation: '\t\t\t',
+						templates: true,
+						callback: done
+					};
+					testProposals(options, [
+						['', 'Templates'],
+						['for (var i = 0; i < array.length; i++) {\n\t\t\t\t\n\t\t\t}', 'for statement', 'Create a new', {offset: 12, length: 1}],
+						['for (var i = 0; i < array.length; i++) {\n\t\t\t\tvar value = array[i];\n\t\t\t\t\n\t\t\t}', 'for statement (with loop variable)', 'Create a new', {offset: 12, length: 1}],
+						['for (var property in object) {\n\t\t\t\tif (object.hasOwnProperty(property)) {\n\t\t\t\t\t\n\t\t\t\t}\n\t\t\t}', 'for..in statement', 'Create a for', {offset: 12, length: 8}],
+					]);
+				});
+				it('For loop mixed indent', function(done) {
+					var options = {
+						buffer: " \t  \t\t fo",
+						prefix: "fo",
+						offset: 9,
+						indentation: ' \t  \t\t ',
+						templates: true,
+						callback: done
+					};
+					testProposals(options, [
+						['', 'Templates'],
+						['for (var i = 0; i < array.length; i++) {\n \t  \t\t \t\n \t  \t\t }', 'for statement', 'Create a new', {offset: 16, length: 1}],
+						['for (var i = 0; i < array.length; i++) {\n \t  \t\t \tvar value = array[i];\n \t  \t\t \t\n \t  \t\t }', 'for statement (with loop variable)', 'Create a new', {offset: 16, length: 1}],
+						['for (var property in object) {\n \t  \t\t \tif (object.hasOwnProperty(property)) {\n \t  \t\t \t\t\n \t  \t\t \t}\n \t  \t\t }', 'for..in statement', 'Create a for', {offset: 16, length: 8}],
 					]);
 				});
 			});
@@ -343,10 +403,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -355,23 +421,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test no dupe 1", function(done) {
@@ -391,7 +457,7 @@ define([
 						callback: done
 					};
 					testProposals(options, [
-						["coo", "coo : any"]
+						["coo", "coo : number"]
 					]);
 				});
 	
@@ -672,8 +738,8 @@ define([
 					return testProposals(options, [
 						["fff", "fff : string"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -689,8 +755,8 @@ define([
 					return testProposals(options, [
 						["fff", "fff : string"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -706,8 +772,8 @@ define([
 					return testProposals(options, [
 						["fff", "fff : string"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -722,8 +788,8 @@ define([
 					return testProposals(options, [
 						["fff", "fff : string"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -739,8 +805,8 @@ define([
 					return testProposals(options, [
 						["fff", "fff : string"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -756,8 +822,8 @@ define([
 					return testProposals(options, [
 						["fff", "fff : string"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -804,6 +870,17 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', 'ArrayBuffer(length)']
 						//TODO bug in Tern? ["aaa", "aaa : string"]
+					]);
+				});
+				//https://bugs.eclipse.org/bugs/show_bug.cgi?id=490925
+				it("test full file inferencing 35", function(done) {
+					var options = {
+						buffer: "function foo(a, c) {var newB = a.slice(1, 2);newB = newB === 'a' ? 'b' : new 	c[\"\"] = {};};",
+						prefix: "new",
+						offset: 77,
+						callback: done};
+					return testProposals(options, [
+						["newB", "newB : string"]
 					]);
 				});
 				it("test property read before", function(done) {
@@ -1062,7 +1139,7 @@ define([
 						offset: 48,
 						callback: done};
 					return testProposals(options, [
-						["xx", "xx : number"],
+						["xx", "xx : string"],
 					]);
 				});
 				it("test @type var type 6", function(done) {
@@ -1237,7 +1314,7 @@ define([
 						offset: 82,
 						callback: done};
 					return testProposals(options, [
-						["xxx()", "xxx()"]
+						["xxx", "xxx : Fun"]
 					]);
 				});
 				it("test @type var type 23", function(done) {
@@ -1368,8 +1445,7 @@ define([
 						offset: 67,
 						callback: done};
 					return testProposals(options, [
-						//TODO we should have a standin type
-						["xxx()", "xxx()"]
+						["xxx", "xxx : Fun"]
 					]);
 				});
 				it("test @type tag union", function(done) {
@@ -1540,7 +1616,7 @@ define([
 						callback: done};
 					return testProposals(options, [
 						["", "ecma5"],
-						["stringify(value)", "stringify(value) : string"]
+						["stringify(value, replacer?, space?)", "stringify(value, replacer?, space?) : string"]
 					]);
 				});
 				it("test multi-dot inferencing 1", function(done) {
@@ -1719,7 +1795,7 @@ define([
 						offset: 53,
 						callback: done};
 					return testProposals(options, [
-						["foo", "foo"]
+						["foo", "foo : number"]
 					]);
 				});
 				// check that function args don't get assigned the same type
@@ -1730,7 +1806,7 @@ define([
 						offset: 53,
 						callback: done};
 					return testProposals(options, [
-						["foo", "foo"]
+						["foo", "foo : string"]
 					]);
 				});
 				it("test nested object expressions 1", function(done) {
@@ -1888,7 +1964,7 @@ define([
 						callback: done};
 					return testProposals(options, [
 						["Ttt()", "Ttt()"],
-						["ttt", "ttt : any"]
+						["ttt", "ttt : Ttt"]
 					]);
 				});
 				it("test complex name 2", function(done) {
@@ -1899,7 +1975,7 @@ define([
 						callback: done};
 					return testProposals(options, [
 						["Ttt()", "Ttt()"],
-						["ttt", "ttt : any"]
+						["ttt", "ttt : Ttt"]
 					]);
 				});
 				it("test complex name 3", function(done) {
@@ -1947,8 +2023,8 @@ define([
 					testProposals(options, [
 						["foo", "foo : foo"],
 						['', 'ecma6'],
-						['Float32Array(length)', 'Float32Array(length)'],
-						['Float64Array(length)', 'Float64Array(length)'],
+						['Float32Array(size)', 'Float32Array(size)'],
+						['Float64Array(size)', 'Float64Array(size)'],
 						['', 'ecma5'],
 						['Function(body)', 'Function(body) : fn()']
 					]);
@@ -1968,10 +2044,10 @@ define([
 						['URIError(message)', 'URIError(message)'],
 						["undefined", "undefined : any"],
 						['', 'ecma6'],
-						['Uint16Array()', 'Uint16Array()'],
-						['Uint32Array()', 'Uint32Array()'],
-						['Uint8Array()', 'Uint8Array()'],
-						['Uint8ClampedArray()', 'Uint8ClampedArray()']
+						['Uint16Array(size)', 'Uint16Array(size)'],
+						['Uint32Array(size)', 'Uint32Array(size)'],
+						['Uint8Array(size)', 'Uint8Array(size)'],
+						['Uint8ClampedArray(size)', 'Uint8ClampedArray(size)']
 					]);
 				});
 				it("test tolerant parsing function 1", function(done) {
@@ -2016,7 +2092,7 @@ define([
 						prefix: "ff",
 						offset: 47,
 						callback: done};
-					return testProposals(options, [["ffffff", "ffffff"]]);
+					return testProposals(options, [["ffffff", "ffffff : bool"]]);
 				});
 	
 				it("test tolerant parsing function 6", function(done) {
@@ -2025,7 +2101,7 @@ define([
 						prefix: "ff",
 						offset: 56,
 						callback: done};
-					return testProposals(options, [["ffffff", "ffffff"]]);
+					return testProposals(options, [["ffffff", "ffffff : bool"]]);
 				});
 	
 				it("test tolerant parsing function 7", function(done) {
@@ -2034,7 +2110,7 @@ define([
 						prefix: "ff",
 						offset: 63,
 						callback: done};
-					return testProposals(options, [["ffffff", "ffffff"]]);
+					return testProposals(options, [["ffffff", "ffffff : bool"]]);
 				});
 	
 				it("test tolerant parsing function 8", function(done) {
@@ -2043,7 +2119,7 @@ define([
 						prefix: "ff",
 						offset: 75,
 						callback: done};
-					return testProposals(options, [["ffffff", "ffffff"]]);
+					return testProposals(options, [["ffffff", "ffffff : bool"]]);
 				});
 	
 				it("test tolerant parsing function 9", function(done) {
@@ -2054,7 +2130,7 @@ define([
 						callback: done};
 					return testProposals(options, [
 						["",  "ecma5"],
-						["stringify(value)", "stringify(value) : string"]
+						["stringify(value, replacer?, space?)", "stringify(value, replacer?, space?) : string"]
 					]);
 				});
 	
@@ -2066,7 +2142,7 @@ define([
 						callback: done};
 					return testProposals(options, [
 						["",  "ecma5"],
-						["stringify(value)", "stringify(value) : string"]
+						["stringify(value, replacer?, space?)", "stringify(value, replacer?, space?) : string"]
 					]);
 				});
 				it("test tolerant parsing function 11", function(done) {
@@ -2124,10 +2200,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -2136,23 +2218,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test Single Var Content Assist", function(done) {
@@ -2185,10 +2267,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -2197,23 +2285,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test Single Var Content Assist 2", function(done) {
@@ -2246,10 +2334,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -2258,23 +2352,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test multi var content assist 1", function(done) {
@@ -2309,10 +2403,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -2321,23 +2421,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test multi var content assist 2", function(done) {
@@ -2382,10 +2482,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -2394,23 +2500,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test multi function content assist 1", function(done) {
@@ -2444,10 +2550,16 @@ define([
 						['encodeURI(uri)', 'encodeURI(uri) : string'],
 						['encodeURIComponent(uri)', 'encodeURIComponent(uri) : string'],
 						['eval(code)', 'eval(code)'],
+						['hasOwnProperty(prop)', 'hasOwnProperty(prop) : bool'],
 						['isFinite(value)', 'isFinite(value) : bool'],
 						['isNaN(value)', 'isNaN(value) : bool'],
+						['isPrototypeOf(obj)', 'isPrototypeOf(obj) : bool'],
 						['parseFloat(string)', 'parseFloat(string) : number'],
 						['parseInt(string, radix?)', 'parseInt(string, radix?) : number'],
+						['propertyIsEnumerable(prop)', 'propertyIsEnumerable(prop) : bool'],
+						['toLocaleString()', 'toLocaleString() : string'],
+						['toString()', 'toString() : string'],
+						['valueOf()', 'valueOf() : number'],
 						['Infinity', 'Infinity : number'],
 						['JSON', 'JSON : JSON'],
 						['Math', 'Math : Math'],
@@ -2456,23 +2568,23 @@ define([
 						['', 'ecma6'],
 						['ArrayBuffer(length)', ''],
 						['DataView(buffer, byteOffset?, byteLength?)', ''],
-						['Float32Array(length)', ''],
-						['Float64Array(length)', ''],
-						['Int16Array(length)', ''],
-						['Int32Array(length)', ''],
-						['Int8Array(length)', ''],
+						['Float32Array(size)', ''],
+						['Float64Array(size)', ''],
+						['Int16Array(size)', ''],
+						['Int32Array(size)', ''],
+						['Int8Array(size)', ''],
 						['Map(iterable?)', ''],
 						['Promise(executor)', ''],
 						['Proxy(target, handler)', ''],
-						['Set(iterable)', ''],
+						['Set(iterable?)', ''],
 						['Symbol(description?)', ''],
-						['TypedArray(length)', ''],
-						['Uint16Array()', ''],
-						['Uint32Array()', ''],
-						['Uint8Array()', ''],
-						['Uint8ClampedArray()', ''],
-						['WeakMap(iterable)', ''],
-						['WeakSet(iterable)', '']
+						['Uint16Array(size)', ''],
+						['Uint32Array(size)', ''],
+						['Uint8Array(size)', ''],
+						['Uint8ClampedArray(size)', ''],
+						['WeakMap(iterable?)', ''],
+						['WeakSet(iterable?)', ''],
+						['Reflect', 'Reflect : Reflect']
 					]);
 				});
 				it("test no dupe 1", function(done) {
@@ -2483,7 +2595,7 @@ define([
 						callback: done
 					};
 					return testProposals(options, [
-						["coo", "coo : any"]
+						["coo", "coo : number"]
 					]);
 				});
 				it("test no dupe 2", function(done) {
@@ -2725,7 +2837,9 @@ define([
 						callback: done
 					};
 					return testProposals(options, [
-						["the", "the : number"]
+						// Tern will fallback on looking at all potential property names if filter is set to true https://github.com/ternjs/tern/issues/790
+						// currently filter is set to false, so no results will be returned
+//						["the", "the : number"]
 					]);
 				});
 				it("test Object Literal outside", function(done) {
@@ -2747,7 +2861,6 @@ define([
 						callback: done
 					};
 					return testProposals(options, [
-						["the", "the : number"]
 					]);
 				});
 				it("test Object Literal outside 2", function(done) {
@@ -3094,13 +3207,13 @@ define([
 				});
 				it("test implicit inference 1", function(done) {
 					var options = {
-						buffer: "xxx;xx",
+						buffer: "var xxx;xx",
 						prefix: "xx",
-						offset: 6,
+						offset: 10,
 						callback: done
 					};
 					return testProposals(options, [
-						//TODO we should find 'xxx' ["xxx", "xxx : any"]
+						["xxx", "xxx : any"]
 					]);
 				});
 				it("test implicit inference 2", function(done) {
@@ -3111,18 +3224,18 @@ define([
 						callback: done
 					};
 					return testProposals(options, [
-						//TODO we should find 'yyy' ["yyy", "yyy : number"]
+						["yyy", "yyy : number"]
 					]);
 				});
 				it("test implicit inference 3", function(done) {
 					var options = {
-						buffer: "xxx; xxx.yyy = 0;xxx.yy",
+						buffer: "var xxx; xxx.yyy = 0;xxx.yy",
 						prefix: "yy",
-						offset: 23,
+						offset: 27,
 						callback: done
 					};
 					return testProposals(options, [
-						//TODO we should find 'yyy' ["yyy", "yyy : number"]
+						["yyy", "yyy : number"]
 					]);
 				});
 				it("test implicit inference 4", function(done) {
@@ -3207,9 +3320,9 @@ define([
 						["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
 						["Infinity", "Infinity : number"],
 						['', 'ecma6'],
-						['Int16Array(length)', 'Int16Array(length)'],
-						['Int32Array(length)', 'Int32Array(length)'],
-						['Int8Array(length)', 'Int8Array(length)']
+						['Int16Array(size)', 'Int16Array(size)'],
+						['Int32Array(size)', 'Int32Array(size)'],
+						['Int8Array(size)', 'Int8Array(size)']
 					]);
 				});
 				it("test for loop 2", function(done) {
@@ -3227,9 +3340,9 @@ define([
 						["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
 						["Infinity", "Infinity : number"],
 						['', 'ecma6'],
-						['Int16Array(length)', 'Int16Array(length)'],
-						['Int32Array(length)', 'Int32Array(length)'],
-						['Int8Array(length)', 'Int8Array(length)']
+						['Int16Array(size)', 'Int16Array(size)'],
+						['Int32Array(size)', 'Int32Array(size)'],
+						['Int8Array(size)', 'Int8Array(size)']
 					]);
 				});
 				it("test for loop 3", function(done) {
@@ -3247,9 +3360,9 @@ define([
 						["isPrototypeOf(obj)", "isPrototypeOf(obj) : bool"],
 						["Infinity", "Infinity : number"],
 						['', 'ecma6'],
-						['Int16Array(length)', 'Int16Array(length)'],
-						['Int32Array(length)', 'Int32Array(length)'],
-						['Int8Array(length)', 'Int8Array(length)']
+						['Int16Array(size)', 'Int16Array(size)'],
+						['Int32Array(size)', 'Int32Array(size)'],
+						['Int8Array(size)', 'Int8Array(size)']
 					]);
 				});
 				it("test while loop 1", function(done) {
@@ -3418,7 +3531,7 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
+							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
 							['', 'Keywords'],
 							["function", "function - Keyword"]
 							]);
@@ -3441,7 +3554,7 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
+							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
 							['', 'Keywords'],
 							["function", "function - Keyword"]
 							]);
@@ -3464,7 +3577,7 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							['ction(parameter) {\n\t\n}', 'function - member function expression'],
+							['function(parameter) {\n\t\n}', 'function expression (as property value)'],
 							['', 'Keywords'],
 							["function", "function - Keyword"]
 							]);
@@ -3487,7 +3600,7 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							['ction(parameter) {\n\t\n}', 'function - member function expression'],
+							['function(parameter) {\n\t\n}', 'function expression (as property value)'],
 							['', 'Keywords'],
 							["function", "function - Keyword"]
 							]);
@@ -3510,7 +3623,7 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function - function declaration"],
+							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
 							['', 'Keywords'],
 							["function", "function - Keyword"]
 							]);
@@ -3534,8 +3647,6 @@ define([
 							['TypeError(message)', 'TypeError(message)'],
 							["toLocaleString()", "toLocaleString() : string"],
 							["toString()", "toString() : string"],
-							['', 'ecma6'],
-							['TypedArray(length)', 'TypedArray(length)'],
 							['', 'Keywords'],
 							["this", "this - Keyword"],
 							['throw', 'throw - Keyword'],
@@ -3586,6 +3697,9 @@ define([
 				});
 			});
 			describe('ESLint Directive Tests', function() {
+				before("Start server for directive tests", function(done) {
+					worker.start(done, {options: {plugins: {amqp:{env:'amqp'}, express:{env:'express'}, mongodb:{env:'mongodb'}, mysql:{env:'mysql'}, postgres:{env:'pg'}, redis:{env:'redis'}}}});
+				});
 				/**
 				 * Tests the eslint* templates in source
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=440569
@@ -3619,10 +3733,10 @@ define([
 						templates: true
 					};
 					testProposals(options, [
-					    ['lint rule-id:0/1 ', 'eslint'],
-					    ['lint-disable rule-id ', 'eslint-disable'],
-					    ['lint-enable rule-id ', 'eslint-enable'],
-					    ['lint-env amd', 'eslint-env']]  // When inside a comment we auto open content assist, selecting the first value
+					    ['eslint rule-id:0/1 ', 'eslint'],
+					    ['eslint-disable rule-id ', 'eslint-disable'],
+					    ['eslint-enable rule-id ', 'eslint-enable'],
+					    ['eslint-env amd', 'eslint-env']]  // When inside a comment we auto open content assist, selecting the first value
 					);
 				});
 				/**
@@ -3638,10 +3752,10 @@ define([
 						templates: true
 					};
 					testProposals(options, [
-					    ['lint rule-id:0/1 ', 'eslint'],
-					    ['lint-disable rule-id ', 'eslint-disable'],
-					    ['lint-enable rule-id ', 'eslint-enable'],
-					    ['lint-env amd', 'eslint-env']]  // When inside a comment we auto open content assist, selecting the first value
+					    ['eslint rule-id:0/1 ', 'eslint'],
+					    ['eslint-disable rule-id ', 'eslint-disable'],
+					    ['eslint-enable rule-id ', 'eslint-enable'],
+					    ['eslint-env amd', 'eslint-env']]  // When inside a comment we auto open content assist, selecting the first value
 					);
 				});
 				/**
@@ -3690,11 +3804,11 @@ define([
 						templates: true
 					};
 					testProposals(options, [
-						['','Templates'],
-					    ['/* eslint rule-id:0/1*/', 'eslint'],
-					    ['/* eslint-disable rule-id */', 'eslint-disable'],
-					    ['/* eslint-enable rule-id */', 'eslint-enable'],
-					    ['/* eslint-env library*/', 'eslint-env']
+//						['','Templates'],
+//					    ['/* eslint rule-id:0/1*/', 'eslint'],
+//					    ['/* eslint-disable rule-id */', 'eslint-disable'],
+//					    ['/* eslint-enable rule-id */', 'eslint-enable'],
+//					    ['/* eslint-env library*/', 'eslint-env']
 					]);
 				});
 				
@@ -3744,10 +3858,10 @@ define([
 						templates: true
 					};
 		            testProposals(options, [
-					    [' rule-id:0/1 ', 'eslint'],
-					    ['-disable rule-id ', 'eslint-disable'],
-					    ['-enable rule-id ', 'eslint-enable'],
-					    ['-env amd', 'eslint-env']] // When inside a comment we auto open content assist, selecting the first value
+					    ['eslint rule-id:0/1 ', 'eslint'],
+					    ['eslint-disable rule-id ', 'eslint-disable'],
+					    ['eslint-enable rule-id ', 'eslint-enable'],
+					    ['eslint-env amd', 'eslint-env']] // When inside a comment we auto open content assist, selecting the first value
 					);
 				});
 				/**
@@ -3764,35 +3878,38 @@ define([
 						templates: true
 					};
 					testProposals(options, [
-					     ['amd', 'amd'],
-					     ['amqp', 'amqp'],
-					     ['applescript' , 'applescript'],
-					     ['browser', 'browser'],
-					     ['commonjs', 'commonjs'],
-					     ['embertest', 'embertest'],
-					     ['es6', 'es6'],
-					     ['express', 'express'],
-					     ['jasmine', 'jasmine'],
-					     ['jest', 'jest'],
-						 ['jquery', 'jquery'],
-						 ['meteor', 'meteor'],
-					     ['mocha', 'mocha'],
-					     ['mongo', 'mongo'],
-					     ['mongodb', 'mongodb'],
-					     ['mysql', 'mysql'],
-					     ['nashorn', 'nashorn'],
-					     ['node', 'node'],
-					     ['pg', 'pg'],
-					     ['phantomjs', 'phantomjs'],
-						 ['prototypejs', 'prototypejs'],
-						 ['protractor', 'protractor'],
-					     ['qunit', 'qunit'],
-						 ['redis', 'redis'],
-						 ['serviceworker', 'serviceworker'],
-						 ['shelljs', 'shelljs'],
-						 ['webextensions', 'webextensions'],
-						 ['worker', 'worker']
-					     ]);
+						['amd', 'amd'],
+						['amqp', 'amqp'],
+						['applescript' , 'applescript'],
+						['atomtest' , 'atomtest'],
+						['browser', 'browser'],
+						['commonjs', 'commonjs'],
+						['embertest', 'embertest'],
+						['es6', 'es6'],
+						['express', 'express'],
+						['greasemonkey', 'greasemonkey'],
+						['jasmine', 'jasmine'],
+						['jest', 'jest'],
+						['jquery', 'jquery'],
+						['meteor', 'meteor'],
+						['mocha', 'mocha'],
+						['mongo', 'mongo'],
+						['mongodb', 'mongodb'],
+						['mysql', 'mysql'],
+						['nashorn', 'nashorn'],
+						['node', 'node'],
+						['pg', 'pg'],
+						['phantomjs', 'phantomjs'],
+						['prototypejs', 'prototypejs'],
+						['protractor', 'protractor'],
+						['qunit', 'qunit'],
+						['redis', 'redis'],
+						['serviceworker', 'serviceworker'],
+						['shared-node-browser', 'shared-node-browser'],
+						['shelljs', 'shelljs'],
+						['webextensions', 'webextensions'],
+						['worker', 'worker']
+					]);
 				});
 				/**
 				 * Tests that eslint-env environs are proposed
@@ -3808,10 +3925,11 @@ define([
 						templates: true
 					};
 					testProposals(options, [
-					     ['amd', 'amd'],
-					     ['amqp', 'amqp'],
-					     ['applescript', 'applescript']
-					     ]);
+						['amd', 'amd'],
+						['amqp', 'amqp'],
+						['applescript', 'applescript'],
+						['atomtest' , 'atomtest'],
+					]);
 				});
 				/**
 				 * Tests that eslint rules are proposed
@@ -3820,9 +3938,9 @@ define([
 				 */
 				it("test eslint rule proposals 1", function(done) {
 					var options = {
-						buffer: "/* eslint c",
-						prefix: "c",
-						offset: 11,
+						buffer: "/* eslint cu",
+						prefix: "cu",
+						offset: 12,
 						callback: done,
 						templates: true
 					};
@@ -3888,9 +4006,9 @@ define([
 				 */
 				it("test eslint rule proposals 5", function(done) {
 					var options = {
-						buffer: "/* eslint-enable no-jslint, c",
-						prefix: "c",
-						offset: 29,
+						buffer: "/* eslint-enable no-jslint, cu",
+						prefix: "cu",
+						offset: 30,
 						callback: done,
 						templates: true
 					};
@@ -3900,6 +4018,9 @@ define([
 				});
 			});
 			describe('MySQl Index Tests', function() {
+				before("Start server for mysql index tests", function(done) {
+					worker.start(done, {options:{plugins:{mysql:{}, node:{}}, libs:['ecma6']}});
+				});
 				/*
 				 * Tests mysql index
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
@@ -3942,14 +4063,14 @@ define([
 				 */
 				it("test mysql index 3", function(done) {
 					var options = {
-						buffer: "/*eslint-env mysql*/ require('mysql').createQ",
-						prefix: "createQ",
+						buffer: "/*eslint-env mysql*/ require('mysql').createC",
+						prefix: "createC",
 						offset: 45,
 						callback: done
 					};
 					testProposals(options, [
 						['', 'mysql'],
-					    ['createQuery(sql)', 'createQuery(sql)']
+					    ['createConnection(connectionUri)', 'createConnection(connectionUri) : mysql.Connection']
 					]);
 				});
 				/*
@@ -3959,12 +4080,14 @@ define([
 				 */
 				it("test mysql index 4", function(done) {
 					var options = {
-						buffer: "/*eslint-env mysql*/ require('mysql').createQuery(null,null,null).sta",
-						prefix: "sta",
-						offset: 69,
+						buffer: "/*eslint-env mysql*/ require('mysql').createQuery(null,null,null).star",
+						prefix: "star",
+						offset: 70,
 						callback:done
 					};
 					testProposals(options, [
+						['', 'node'],
+					    ['start(options)', 'start(options) : events.EventEmitter'],
 						['', 'mysql'],
 					    ['start()', 'start()'],
 					    ['', 'ecma6'],
@@ -3977,16 +4100,21 @@ define([
 				 */
 				it("test mysql empty 1", function(done) {
 					var options = {
-						buffer: "require('mysql').createQuery(null,null,null).",
-						prefix: "sta",
-						offset: 45,
+						buffer: "require('mysql').createC",
+						prefix: "createC",
+						offset: 24,
 						callback:done
 					};
 					testProposals(options, [
+						['', 'mysql'],
+					    ['createConnection(connectionUri)', 'createConnection(connectionUri) : mysql.Connection']
 					]);
 				});
 			});
 			describe('Redis Index Tests', function() {
+				before("Start server for redis index tests", function(done) {
+					worker.start(done, {options:{plugins:{node: {}, redis:{}}}});
+				});
 				/**
 				 * Tests redis index indirect proposals
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
@@ -4035,10 +4163,16 @@ define([
 						offset: 18,
 						callback: done};
 					testProposals(options, [
+						['', 'redis'],
+					    ['createClient(port_arg, host_arg?, options?)', 'createClient(port_arg, host_arg?, options?) : RedisClient'],
+					    ['ClientOpts', 'ClientOpts : any']
 					]);
 				});
 			});
 			describe('Postgres Index Tests', function() {
+				before("Start server for postgres index tests", function(done) {
+					worker.start(done, {options:{plugins:{node:{}, postgres:{}}}});
+				});
 				/**
 				 * Tests pg index indirect proposals
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=426486
@@ -4085,10 +4219,15 @@ define([
 						offset: 16,
 						callback: done};
 					testProposals(options, [
+						['', 'pg'],
+					    ['Client(connection)', 'Client(connection)']
 					]);
 				});
 			});
 			describe('Comment Assist Tests', function() {
+				before("Start server for redis index tests", function(done) {
+					worker.start(done, {options:{libs:['ecma5', 'ecma6', 'browser']}});
+				});
 				/**
 				 * Tests line comments
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=443521
@@ -4217,7 +4356,7 @@ define([
 						['@access', '@access'],
 						['@alias', '@alias'],
 						['@augments', '@augments'],
-					    ['uthor ', '@author']
+					    ['@author ', '@author']
 					]);
 				});
 				/**
@@ -4233,8 +4372,8 @@ define([
 						templates: true,
 						callback: done};
 					testProposals(options, [
-						['ends ', '@lends'],
-						['icense ', '@license'],
+						['@lends ', '@lends'],
+						['@license ', '@license'],
 						['@listens', '@listens'],
 					]);
 				});
@@ -4377,7 +4516,7 @@ define([
 						callback: done};
 						
 					testProposals(options, [
-					    ['m {type} ', '@param', 'Document the parameter', {length: 4, offset: 14}]  // Check that the selection offset is right
+					    ['@param {type} ', '@param', 'Document the parameter', {length: 4, offset: 14}]  // Check that the selection offset is right
 					]);
 				});
 				/**
@@ -4393,7 +4532,7 @@ define([
 						callback: done};
 						
 					testProposals(options, [
-					    ['am {type} ', '@param', 'Document the parameter', {length: 4, offset: 14}]  // Check that the selection offset is right
+					    ['@param {type} ', '@param', 'Document the parameter', {length: 4, offset: 14}]  // Check that the selection offset is right
 					]);
 				});
 				/**
@@ -4543,7 +4682,7 @@ define([
 						buffer: "var o = {/**\n* @param {type} a \n*/f: function a(aa, bb, cc){}}",
 						line: '* @param {type} a ',
 						prefix: "a",
-						ofset: 31,
+						offset: 31,
 						callback: done};
 					testProposals(options, []);
 				});
@@ -4741,8 +4880,8 @@ define([
 						templates: true,
 						callback: done};
 					testProposals(options, [
-					    ['ends ', '@lends'],
-					    ['icense ', '@license'],
+					    ['@lends ', '@lends'],
+					    ['@license ', '@license'],
 						['@listens', '@listens']
 					]);
 				});
@@ -4772,16 +4911,16 @@ define([
 				 */
 				it("test object doc completion 2", function(done) {
 					var options = {
-						buffer: "/**\n* @returns {I} \n*/",
+						buffer: "/**\n* @returns {T} \n*/",
 						line: '* @returns {I} ',
 						prefix: "I",
 						offset: 17,
 						callback: done};
 					testProposals(options, [
+						['', 'ecma5'],
+						['TypeError', 'TypeError', 'Represents an error'],
 						['', 'ecma6'],
-						['Int16Array', 'Int16Array', 'The Int16Array typed array represents'],
-						['Int32Array', 'Int32Array', 'The Int32Array typed array represents'],
-						['Int8Array', 'Int8Array', 'The Int8Array typed array represents']
+						['TypedArray', 'TypedArray', 'A TypedArray object describes an array-like view of'],
 					]);
 				});
 	
@@ -4798,15 +4937,15 @@ define([
 						offset: 39,
 						callback: done};
 					testProposals(options, [
-						['', 'ecma5'],
-						['Date', 'Date', 'Creates JavaScript Date'],
-						['', 'ecma6'],
-						['DataView', 'DataView', 'The DataView view provides'],
 						['', 'browser'],
 						['DOMParser', 'DOMParser', 'DOMParser can parse XML or HTML'],
 						['DOMTokenList', 'DOMTokenList', 'This type represents a set of space-separated tokens.'],
 						['Document', 'Document', 'Each web page loaded in the browser has its own document object.'],
 						['DocumentFragment', 'DocumentFragment', 'Creates a new empty DocumentFragment.'],
+						['', 'ecma5'],
+						['Date', 'Date', 'Creates JavaScript Date'],
+						['', 'ecma6'],
+						['DataView', 'DataView', 'The DataView view provides'],
 					]);
 				});
 				
@@ -4843,8 +4982,57 @@ define([
 						['Number', 'Number', 'The Number JavaScript object is a wrapper']
 					]);
 				});
+				
+				it("Test JSDoc type completions 1", function(done) {
+					var options = {
+						buffer: "/**\n* @returns {} \n*/",
+						line: '* @returns {} ',
+						prefix: "",
+						offset: 16,
+						callback: done};
+					testProposals(options, [
+						['', 'ecma5'],
+						['?', '? - No type information'],
+						['Array', 'Array'],
+						['Boolean', 'Boolean'],
+						['Date', 'Date'],
+						['Error', 'Error'],
+						['EvalError', 'EvalError'],
+						['Function', 'Function'],
+						['JSON', 'JSON'],
+						['Math', 'Math'],
+						['Number', 'Number'],
+						['Object', 'Object'],
+						['RangeError', 'RangeError'],
+						['ReferenceError', 'ReferenceError'],
+						['RegExp', 'RegExp'],
+						['String', 'String'],
+						['SyntaxError', 'SyntaxError'],
+						['TypeError', 'TypeError'],
+						['URIError', 'URIError'],
+						['eval', 'eval'],
+						['{prop: propType}', '{prop: propType} - Object with a specific property'],
+						['{}', '{} - Empty object'],
+						['', 'ecma6'],
+						['ArrayBuffer', 'ArrayBuffer'],
+						['DataView', 'DataView'],
+						['Map', 'Map'],
+						['Promise', 'Promise'],
+						['Proxy', 'Proxy'],
+						['Reflect', 'Reflect'],
+						['Set', 'Set'],
+						['Symbol', 'Symbol'],
+						['TypedArray', 'TypedArray'],
+						['WeakMap', 'WeakMap'],
+						['WeakSet', 'WeakSet'],
+					]);
+				});
+				
 			});
 			describe('Node.js Tests', function() {
+				before("Start server for node.js awareness tests", function(done) {
+					worker.start(done, {options:{plugins:{node:{}}, libs:['ecma6']}});
+				});
 				/**
 				 * Tests support for the eslint-env directive to find global objects
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
@@ -4884,11 +5072,14 @@ define([
 				 */
 				it('node awareness 3', function(done) {
 					var options = {
-						buffer: "/*eslint-env amd*/ require('fs').mk",
+						buffer: "/*eslint-env amd*/ require('fs').mkd",
 						prefix: "mk",
-						offset: 35,
+						offset: 36,
 						callback: done};
 					testProposals(options, [
+						['', 'node'],
+						['mkdir(path, mode?, callback?)', 'mkdir(path, mode?, callback?)'],
+						['mkdirSync(path, mode?)', 'mkdirSync(path, mode?)']
 					]);
 				});
 				/**
@@ -4920,6 +5111,9 @@ define([
 						offset: 40,
 						callback: done};
 					testProposals(options, [
+						['', 'node'],
+						['mkdir(path, mode?, callback?)', 'mkdir(path, mode?, callback?)'],
+						['mkdirSync(path, mode?)', 'mkdirSync(path, mode?)']
 					]);
 				});
 				it('node awareness 6', function(done) {
@@ -4986,7 +5180,9 @@ define([
 						callback: done};
 					testProposals(options, [
 						['', 'node'],
-						["copy(targetBuffer, targetStart?, sourceStart?, sourceEnd?)", "copy(targetBuffer, targetStart?, sourceStart?, sourceEnd?)"]
+						["copy(targetBuffer, targetStart?, sourceStart?, sourceEnd?)", "copy(targetBuffer, targetStart?, sourceStart?, sourceEnd?) : number"],
+						['', 'ecma6'],
+						["copyWithin(target, start, end?)", "copyWithin(target, start, end?)"]
 					]);
 				});
 				it('node awareness 12', function(done) {
@@ -5011,12 +5207,15 @@ define([
 						offset: 20,
 						callback: done};
 					testProposals(options, [
-					//TODO this will pass ['', 'node'],
-					//	["mkdirSync(path, mode?)", "mkdirSync(path, mode?)"]
+						['', 'node'],
+						["mkdirSync(path, mode?)", "mkdirSync(path, mode?)"]
 					]);
 				});
 			});
 			describe('Browser Tests', function() {
+				before("Start server for browser tests", function(done) {
+					worker.start(done, {options: {libs:['browser']}});
+				});
 				/**
 				 * Tests support for the eslint-env directive to find global objects
 				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=439056
@@ -5088,6 +5287,8 @@ define([
 						offset: 3,
 						callback: done};
 					testProposals(options, [
+						['', 'browser'],
+						["window", "window : <top>"]
 					]);
 				});
 				it('browser awareness 6', function(done) {

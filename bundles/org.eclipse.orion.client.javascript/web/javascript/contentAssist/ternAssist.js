@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -16,151 +16,11 @@ define([
 	'orion/objects',
 	'javascript/finder',
 	'orion/editor/templates',
-	'javascript/contentAssist/templates',
 	'javascript/hover',
 	'javascript/util',
 	'javascript/contentAssist/sigparser',
 	'orion/i18nUtil'
-], function(Messages, Deferred, Objects, Finder, mTemplates, Templates, Hover, Util, SigParser, i18nUtil) {
-
-	/**
-	 * @description Creates a new delegate to create keyword and template proposals
-	 */
-	function TemplateProvider() {
-	    //constructor
- 	}
-
- 	TemplateProvider.prototype = new mTemplates.TemplateContentAssist([], []);
-
- 	Objects.mixin(TemplateProvider.prototype, {
- 		uninterestingChars: ":!#$^&.?<>", //$NON-NLS-1$
-
- 		isValid: function(prefix, buffer, offset) {
-			var char = buffer.charAt(offset-prefix.length-1);
-			return !char || this.uninterestingChars.indexOf(char) === -1;
-		},
-
-		getTemplateProposals: function(prefix, offset, context, ast) {
-			var proposals = [];
-			var k = this.getKind(ast, offset);
-			var templates = Templates.getTemplatesForKind(k.kind);
-			for (var t = 0; t < templates.length; t++) {
-				var template = templates[t];
-				if (this.templateMatches(template, prefix, k, context)) {
-					var proposal = template.getProposal(prefix, offset, context);
-					var _h;
-					if(template.doc) {
-						_h = Hover.formatMarkdownHover(template.doc);
-					} else {
-						_h = Object.create(null);
-				        _h.type = 'markdown'; //$NON-NLS-1$
-				        _h.content = Messages['templateHoverHeader'];
-				        _h.content += proposal.proposal;
-			        }
-			        if(template.url) {
-				        _h.content += i18nUtil.formatMessage.call(null, Messages['onlineDocumentationProposalEntry'], template.url);
-				    }
-			        proposal.hover = _h;
-			        proposal.style = 'emphasis'; //$NON-NLS-1$
-					this.removePrefix(prefix, proposal);
-					proposal.kind = 'js'; //$NON-NLS-1$
-					proposals.push(proposal);
-				}
-			}
-
-			if (0 < proposals.length) {
-				//sort the proposals by name
-				proposals.sort(function(p1, p2) {
-					if (p1.name < p2.name) {
-						return -1;
-					}
-					if (p1.name > p2.name) {
-						return 1;
-					}
-					return 0;
-				});
-			}
-			return proposals;
-		},
-
-		templateMatches: function(template, prefix, kind, context) {
-		    if(template.match(prefix)) {
-		        //must match the prefix always
-		        if(typeof context.line !== 'undefined') {
-			        var len = context.line.length - (typeof prefix !== 'undefined' ? prefix.length : 0);
-			        var line = context.line.slice(0, (len > -1 ? len : 0)).trim();
-			        if(kind && kind.kind === 'jsdoc') {
-			            // don't propose tag templates when one exists already on the same line
-			            return !/^[\/]?[\*]+\s*[@]/ig.test(line);
-			        }
-		        }
-		        if(kind && kind.kind === 'doc') {
-		            var comment = kind.node.value.trim();
-		            if(comment) {
-		                var idx = context.offset - prefix.length - kind.node.range[0];
-		                if(idx > -1) {
-		                    var val = /^(eslint-\w+|eslint?)(\s|$)/ig.exec(comment.slice(0, idx));
-			                if(val) {
-		                        //nothing else is allowed in the directives - eslint won't parse it
-		                        return false;
-			                }
-		                }
-		            }
-		        }
-		        return true;
-		    }
-		    return false;
-		},
-		
-		/**
-		 * @description Computes the kind of context to complete in
-		 * @param {Object} ast The backing AST to visit
-		 * @param {Number} offset The offset into the source
-		 * @param {String} contents The text of the file
-		 * @return {Object} Returns the deferred node and the completion kind
-		 */
-		getKind: function(ast, offset) {
-	    	var node = Finder.findNode(offset, ast, {parents:true});
-	    	if(node) {
-	    		if(node.parents && node.parents.length > 0) {
-		    		var prent = node.parents.pop();
-		    		switch(prent.type) {
-							case 'MemberExpression':
-								return { kind : 'member'}; //$NON-NLS-1$
-							case 'Program':
-							case 'BlockStatement':
-								break;
-							case 'VariableDeclarator':
-								if(!prent.init || offset < prent.init.range[0]) {
-									return null;
-								}
-								break;
-							case 'FunctionDelcaration':
-							case 'FunctionExpression':
-								if(offset < prent.body.range[0]) {
-									return null;
-								}
-								break;
-							case 'Property':
-								if(offset-1 >= prent.value.range[0] && offset-1 <= prent.value.range[1]) {
-									return { kind : 'prop'}; //$NON-NLS-1$
-								}
-								return null;
-							case 'SwitchStatement':
-								return {kind: 'swtch'}; //$NON-NLS-1$
-						}
-				}
-	    	}
-	    	node = Finder.findComment(offset, ast);
-	    	if(node) {
-	    		return {kind: 'doc', node: node}; //$NON-NLS-1$
-	    	}
-			return {kind:'top'}; //$NON-NLS-1$
-		}
- 	});
-
- 	var provider = new TemplateProvider();
-
+], function(Messages, Deferred, Objects, Finder, mTemplates, Hover, Util, SigParser, i18nUtil) {
 	/**
 	 * @description Creates a new TernContentAssist object
 	 * @constructor
@@ -169,13 +29,15 @@ define([
 	 * @param {TernWorker} ternWorker The worker running Tern
 	 * @param {Function} pluginEnvironments The function to use to query the Tern server for contributed plugins
 	 * @param {Object} cuprovider The CU Provider that caches compilation units
+	 * @param {JavaScriptProject} jsproject The backing Javascript project
 	 */
-	function TernContentAssist(astManager, ternWorker, pluginEnvironments, cuprovider) {
+	function TernContentAssist(astManager, ternWorker, pluginEnvironments, cuprovider, jsproject) {
 		this.astManager = astManager;
 		this.ternworker = ternWorker;
 		this.pluginenvs = pluginEnvironments;
 		this.cuprovider = cuprovider;
 		this.timeout = null;
+		this.jsProject = jsproject;
 	}
 
 	/**
@@ -183,6 +45,30 @@ define([
 	 */
 	Objects.mixin(TernContentAssist.prototype, {
 
+		/**
+		 * @private
+		 */
+		_getPrefixStart: function(text, offset) {
+			var index = offset;
+			while (index > 0) {
+				var char = text.substring(index - 1, index);
+				if (/[A-Za-z0-9_]/.test(char)) {
+					index--;
+				} else {
+					break;
+				}
+			}
+			return index;
+		},
+		/**
+		 * @callback 
+		 */
+		computePrefix: function(editorContext, offset) {
+			var that = this;
+			return editorContext.getText().then(function (text) {
+				return text.substring(that._getPrefixStart(text, offset), offset);
+			});
+		},
 		/**
 		 * Called by the framework to initialize this provider before any <tt>computeContentAssist</tt> calls.
 		 */
@@ -203,54 +89,61 @@ define([
 		            	}, meta);
     			        if(cu.validOffset(params.offset)) {
     			            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
-    			            	return that.pluginenvs().then(function(envs) {
-    			            		return that.doAssist(ast, params, meta, {ecma5:true, ecma6:true, browser:true}, envs, text);
-    			            	});
-                			});
+			            		return that.doAssist(ast, params, meta, {ecma5:true, ecma6:true, ecma7: true, browser:true}, text);
+			            	});
     			        }
     			        return [];
 			        });
 			    } 
 		        return that.astManager.getAST(editorContext).then(function(ast) {
-		        	return that.pluginenvs().then(function(envs) {
-		        		return that.doAssist(ast, params, meta, {ecma5: true, ecma6: true}, envs);
-		        	});
-    			});
+	        		return that.doAssist(ast, params, meta, {ecma5: true, ecma6: true, ecma7: true});
+	        	});
 			});
 		},
 
-		doAssist: function(ast, params, meta, envs, pluginenvs, htmlsource) {
-       		var templates = createTemplateProposals(params, ast);
-   			var env = this.getActiveEnvironments(ast, envs);
-		    var files = [
-		    	{type:'full', name: meta.location, text: htmlsource ? htmlsource : ast.source} //$NON-NLS-1$
-		    ];
-		    if(typeof(params.keywords) === 'undefined') {
-		    	params.keywords = true;
-		    }
-		    var args = {params: params, meta: meta, envs:env, files: files};
-			var deferred = new Deferred();
-			var that = this;
-			this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
-				function(response) {
-					clearTimeout(that.timeout);
-		        	deferred.resolve(sortProposals(response.proposals, templates, args));
-				}
-        	);
-			
-			if(this.timeout) {
-				clearTimeout(this.timeout);
-			}
-			this.timeout = setTimeout(function() {
-				if(deferred) {
-					// In the editor we can't return an error message here or it will be treated as a proposal and inserted into text
-					deferred.resolve(params.timeoutReturn ? params.timeoutReturn : []);
-				}
-				that.timeout = null;
-			}, params.timeout ? params.timeout : 5000);
-			return deferred;
-		},
+		doAssist: function(ast, params, meta, envs, htmlsource) {
+			return this.jsProject.getEcmaLevel().then(function(ecma) {
+				return this.jsProject.getESlintOptions().then(function(eslint) {
+				    var files = [
+				    	{type:'full', name: meta.location, text: htmlsource ? htmlsource : ast.sourceFile.text} //$NON-NLS-1$
+				    ];
+				    if(typeof params.keywords === 'undefined') {
+				    	params.keywords = true;
+				    }
+				    params.ecma = ecma;
+				    if(eslint && eslint.env) {
+				    	Objects.mixin(envs, eslint.env);
+				    }
+				    var env = this.getActiveEnvironments(ast, envs);
+				    var args = {params: params, meta: meta, envs: env, files: files};
+					var deferred = new Deferred();
+					var that = this;
+					this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
+						/* @callback */ function(response, err) {
+							clearTimeout(that.timeout);
+							var p = [];
+							if(Array.isArray(response.proposals)) {
+								p = response.proposals;
+							}
+				        	deferred.resolve(sortProposals(p, args));
+						}
+		        	);
+					
+					if(this.timeout) {
+						clearTimeout(this.timeout);
+					}
+					this.timeout = setTimeout(function() {
+						if(deferred) {
+							// In the editor we can't return an error message here or it will be treated as a proposal and inserted into text
+							deferred.resolve(params.timeoutReturn ? params.timeoutReturn : []);
+						}
+						that.timeout = null;
+					}, params.timeout ? params.timeout : 5000);
+					return deferred;
+				}.bind(this));
+			}.bind(this));
 
+		},
 		getActiveEnvironments: function getActiveEnvironements(ast, defenvs) {
 			var env = Object.create(null);
 			Objects.mixin(env, defenvs);
@@ -277,25 +170,19 @@ define([
 			        }
 				}
 			}
+			//correct the missing mappings
+			if(env.amd) {
+				env.requirejs = true;
+			}
+			if(env.mongo) {
+				env.mongdb = true;
+			}
+			if(env.pg) {
+				env.postgres = true;
+			}
 		    return env;
 		}
 	});
-
-	/**
-	 * @description Create the template proposals
-	 * @private
-	 * @param {Object} params The completion context
-	 * @param {Object} ast The the backing AST
-	 * @param {String} buffer The compilation unit buffer
-	 * @returns {Array} The array of template proposals
-	 */
-	function createTemplateProposals (params, ast) {
-		if((typeof params.template === 'undefined' || params.template) &&
-				provider.isValid(params.prefix, ast.source, params.offset, params)) {
-			return provider.getTemplateProposals(params.prefix, params.offset, params, ast);
-		}
-		return [];
-	}
 
 	var operators = {
     	'delete': true,
@@ -365,15 +252,15 @@ define([
             overwrite: true,
             kind: 'js' //$NON-NLS-1$
         };
-        if(typeof(completion.overwrite) === 'boolean') {
+        if(typeof completion.overwrite === 'boolean') {
         	proposal.overwrite = completion.overwrite;
         }
-        if(typeof(completion.prefix) === 'string') {
+        if(typeof completion.prefix === 'string') {
         	//args.params.prefix = completion.prefix;
         	proposal.prefix = completion.prefix;
         }
         proposal.name = proposal.proposal = completion.name;
-        if(typeof(completion.type) !== 'undefined') {
+        if(typeof completion.type !== 'undefined') {
             if(/^fn/.test(completion.type)) {
             	//TODO proposal.tags = [{content: 'F', cssClass: 'iconTagPurple'}];
             	calculateFunctionProposal(completion, args, proposal);
@@ -382,8 +269,15 @@ define([
             	if (!prefix){
             		prefix = args.params.prefix;
             	}
-            	var _t = new mTemplates.Template(prefix, completion.description, completion.template, completion.name);
+            	var template = completion.template;
+            	if (args.params.indentation){
+            		template = template.replace(/\n([\t ]*)/g, "\n" + args.params.indentation + "$1"); //$NON-NLS-1$ //$NON-NLS-2$
+            	}
+            	var _t = new mTemplates.Template(prefix, completion.description, template, completion.name);
             	var _prop = _t.getProposal(prefix, args.params.offset, {});
+            	if(completion.overwrite) {
+            		_prop.overwrite = completion.overwrite;
+            	}
             	var obj = Object.create(null);
 		        obj.type = 'markdown'; //$NON-NLS-1$
 		        
@@ -403,15 +297,14 @@ define([
 			        obj.content += i18nUtil.formatMessage.call(null, Messages['onlineDocumentationProposalEntry'], completion.url);
 			    }
 		        _prop.hover = obj;
-		        provider.removePrefix(prefix, _prop);
 		        _prop.style = 'emphasis'; //$NON-NLS-1$
 		        _prop.kind = 'js'; //$NON-NLS-1$
-		        if(typeof(completion.prefix) === 'string') {
+		        if(typeof completion.prefix === 'string') {
 		        	_prop.prefix = completion.prefix;
 		        }
 		        return _prop;
             } else {
-            	if(typeof(completion.description) === 'string') {
+            	if(typeof completion.description === 'string') {
             		proposal.description = completion.description;
             	} else {
 	    		    proposal.description = convertTypes(' : ' + completion.type); //$NON-NLS-1$
@@ -473,7 +366,7 @@ define([
 		if(params) {
 			for(var i = 0; i < params.length; i++) {
 				var param = params[i];
-				positions.push({offset: (args.params.offset+_p.length)-args.params.prefix.length, length: param.value.length});
+				positions.push({offset: args.params.offset+_p.length-args.params.prefix.length, length: param.value.length});
 				_p += param.value;
 				if(i < params.length-1) {
 					_p += ', '; //$NON-NLS-1$
@@ -482,7 +375,7 @@ define([
 		}
 		_p += ')';
 		proposal.name = proposal.proposal = _p;
-		proposal.escapePosition = (args.params.offset - args.params.prefix.length) + _p.length;
+		proposal.escapePosition = args.params.offset - args.params.prefix.length + _p.length;
 		if(positions.length > 0) {
 			proposal.positions = positions;
 		}
@@ -522,33 +415,39 @@ define([
 	 * @returns returns a formatted origin string, may be the same as the origin
 	 */
 	function formatOrigin(origin) {
-		var match = /([^/.]+\/[^\/]+)$/g.exec(origin);  // Shortens long / separated file paths to the last two segments
+		var o = origin;
+		if(o.indexOf("!known_modules.") === 0) {
+			o = o.slice(0, "!known_modules.".length);
+		}
+		var match = /([^/.]+\/[^\/]+)$/g.exec(o);  // Shortens long / separated file paths to the last two segments
 		if(match) {
 			return match[1];
 		}
-		match = /\/([^\/]+)$/g.exec(origin);  // Removes leading slash from a file path
+		match = /\/([^\/]+)$/g.exec(o);  // Removes leading slash from a file path
 		if(match) {
 			return match[1];
 		}
-		return origin;
+		return o;
 	}
 
-	function sortProposals(completions, templates, args) {
+	function sortProposals(completions, args) {
 		var envs = args.envs ? args.envs : {};
 	    //bucket them by origin
 	    var _p = Object.create(null); // Grouped proposals from env and indexes
 	    var _d = Object.create(null); // Grouped proposals from dependencies 
 	    var locals = []; // Proposals from local scope
 	    var keywords = [];
+	    var templates = [];
 	    for(var i = 0; i < completions.length; i++) {
 	        var _c = completions[i];
-	        var _prefix = typeof(_c.prefix) === 'string' ? _c.prefix : args.params.prefix;
+	        var _prefix = typeof _c.prefix === 'string' ? _c.prefix : args.params.prefix;
 	        if(Util.looselyMatches(_prefix, _c.name)) {
     	        var _o = _c.origin;
     	        if(_c.isKeyword) {
     	        	keywords.push(_formatTernProposal(_c, args));
-    	        } else if(typeof(_o) === 'undefined') {
-    	        	if(_c.isTemplate && _c.type !== 'jsdoc_template') {
+    	        	continue;
+    	        } else if(typeof _o === 'undefined') {
+    	        	if(_c.type === 'template') {
     	        		templates.push(_formatTernProposal(_c, args));
     	        	} else {
 	    	        	locals.push(_formatTernProposal(_c, args));
@@ -559,9 +458,6 @@ define([
     	        if(_o === args.meta.location) {
     	            locals.push(_formatTernProposal(_c, args));
     	        } else {
-    	        	if(_o.indexOf('/') < 0 && !envs[_o]) {
-	    	        	continue;
-	    	        }
 					var orig = formatOrigin(_o);
 					var propMap = _p;
 					if (!envs[_o]){
@@ -633,4 +529,4 @@ define([
 	return {
 		TernContentAssist : TernContentAssist
 	};
-});
+});

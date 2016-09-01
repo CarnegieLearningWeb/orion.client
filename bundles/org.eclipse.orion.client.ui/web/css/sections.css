@@ -37,7 +37,11 @@ html[dir="rtl"] .sectionItemCount { /* ACGC */
 }
 
 .sectionTable {
-	overflow-x: hidden;
+	overflow-x: auto;
+}
+
+.sectionDropdown {
+	resize: both;
 }
 
 .sectionTableItem {

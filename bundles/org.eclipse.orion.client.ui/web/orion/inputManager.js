@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2013 IBM Corporation and others.
+ * Copyright (c) 2010, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -19,8 +19,9 @@ define([
 	'orion/EventTarget',
 	'orion/objects',
 	'orion/PageUtil',
+	'orion/editor/textModelFactory',
 	'orion/metrics'
-], function(messages, mNavigatorRenderer, i18nUtil, Deferred, EventTarget, objects, PageUtil, mMetrics) {
+], function(messages, mNavigatorRenderer, i18nUtil, Deferred, EventTarget, objects, PageUtil, mTextModelFactory, mMetrics) {
 
 	function Idle(options){
 		this._document = options.document || document;
@@ -62,10 +63,16 @@ define([
 
 	function _makeError(error) {
 		var newError = {
-			Severity: "Error", //$NON-NLS-0$
-			Message: messages.noResponse
+			Severity: "Error" //$NON-NLS-0$
 		};
-		if(error.name === "Cancel") {
+		if (error.args && error.args.timeout) {
+			/* write timeout in s, not ms */
+			newError.Message = i18nUtil.formatMessage(messages.noResponseTimeout, error.args.timeout / 1000);
+		} else {
+			newError.Message = messages.noResponse;
+		}
+
+		if (error.name === "Cancel") {
 			return {Severity: "Warning", Message: error.name, Cancel: true};
 		} else if (error.status === 0) {
 			newError.Cancel = true;
@@ -134,6 +141,25 @@ define([
 		this.contentTypeRegistry = options.contentTypeRegistry;
 		this.selection = options.selection;
 		this._input = this._title = "";
+		if (this.fileClient) {
+			this.fileClient.addEventListener("Changed", function(evt) { //$NON-NLS-0$
+				if (this._fileMetadata && this._fileMetadata._saving) {
+					return;
+				}
+				if(evt && evt.modified) {
+					var metadata = this.getFileMetadata();
+					if(metadata && metadata.Location) {
+						if(evt.modified.some(function(loc){
+							return metadata.Location === loc;
+						})) {
+							//We do not want to set focus on this editor. 
+							//E.g., If a user works on editor A but quick fix could have modified editor B. We should update B's contents but user still want to work on A.
+							this.load(null, true);
+						}
+					}
+				}
+			}.bind(this));
+		}
 	}
 	objects.mixin(InputManager.prototype, /** @lends orion.editor.InputManager.prototype */ {
 		/**
@@ -176,7 +202,7 @@ define([
 			}
 			return false;
 		},
-		load: function(charset) {
+		load: function(charset, nofocus) {
 			var fileURI = this.getInput();
 			if (!fileURI) { return; }
 			var fileClient = this.fileClient;
@@ -195,7 +221,7 @@ define([
 							this._fileMetadata = objects.mixin(this._fileMetadata, data);
 							if (!editor.isDirty() || window.confirm(messages.loadOutOfSync)) {
 								progress(fileClient.read(resource), messages.Reading, fileURI).then(function(contents) {
-									editor.setInput(fileURI, null, contents);
+									editor.setInput(fileURI, null, contents, null, nofocus);
 									this._clearUnsavedChanges();
 								}.bind(this));
 							}
@@ -222,7 +248,7 @@ define([
 						statusService = this.statusService;
 					}
 					handleError(statusService, error);
-					this._setNoInput();
+					this._setNoInput(true);
 				}.bind(this);
 				this._acceptPatch = null;
 				// Read metadata
@@ -248,7 +274,13 @@ define([
 						var isText = this._isText(metadata);
 						if (isUTF8(charset) && isText) {
 							// Read text contents
-							progress(fileClient.read(resource, false, true), messages.Reading, fileURI).then(function(contents) {
+							var defaultReadOptions, textModelFactory = new mTextModelFactory.TextModelFactory();
+							//If textModelFactory support additional options for reading text contents, we need to use it.
+							//An example is to support large file, whose contents is read by segments
+							if(typeof textModelFactory.getDefaultReadOptions === "function") {
+								defaultReadOptions = textModelFactory.getDefaultReadOptions();
+							}
+							progress(fileClient.read(resource, false, true, defaultReadOptions), messages.Reading, fileURI).then(function(contents) {
 								clearProgressTimeout();
 								if (typeof contents !== "string") { //$NON-NLS-0$
 									this._acceptPatch = contents.acceptPatch;
@@ -285,6 +317,9 @@ define([
 		getAutoSaveEnabled: function() {
 			return this._autoSaveEnabled;
 		},
+		getFormatOnSaveEnabled: function() {
+			return this._formatOnSaveEnabled;
+		},
 		getEditor: function() {
 			return this.editor;
 		},
@@ -308,7 +343,7 @@ define([
 		},
 		getReadOnly: function() {
 			var data = this._fileMetadata;
-			return this._readonly || !data || (data.Attributes && data.Attributes.ReadOnly);
+			return this._readonly || !data || (data.Attributes && data.Attributes.ReadOnly) ? true: false;
 		},
 		getContentType: function() {
 			return this._contentType;
@@ -358,80 +393,87 @@ define([
 
 			this.dispatchEvent({ type: "Saving", inputManager: this}); //$NON-NLS-0$
 
-			editor.markClean();
-			var contents = editor.getText();
-			var data = contents;
-			if (this._getSaveDiffsEnabled() && !this._errorSaving) {
-				var changes = this._getUnsavedChanges();
-				if (changes) {
-					var len = 0;
-					for (var i = 0; i < changes.length; i++) {
-						len += changes[i].text.length;
-					}
-					if (contents.length > len) {
-						data = {
-							diff: changes
-						};
-					}
-				}
-			}
-			this._clearUnsavedChanges();
-			this._errorSaving = false;
-
-			var etag = metadata.ETag;
-			var args = { "ETag" : etag }; //$NON-NLS-0$
-			var resource = this._parsedLocation.resource;
-			var def = this.fileClient.write(resource, data, args);
-			var progress = this.progressService;
-			var statusService = null;
-			if(this.serviceRegistry){
-				statusService = this.serviceRegistry.getService("orion.page.message"); //$NON-NLS-0$
-			}
-			if (progress) {
-				def = progress.progress(def, i18nUtil.formatMessage(messages.savingFile, input));
-			}
-			function successHandler(result) {
-				if (input === that.getInput()) {
-					metadata.ETag = result.ETag;
-					editor.setInput(input, null, contents, true);
-				}
-				that.reportStatus("");
-				if (failedSaving && statusService) {
-					statusService.setProgressResult({Message:messages.Saved, Severity:"Normal"}); //$NON-NLS-0$
-				}
-				if (that.postSave) {
-					that.postSave(closing);
-				}
-				return done(result);
-			}
-			function errorHandler(error) {
-				that.reportStatus("");
-				var errorMsg = handleError(statusService, error);
-				mMetrics.logEvent("status", "exception", (that._autoSaveActive ? "Auto-save: " : "Save: ") + errorMsg.Message); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-				that._errorSaving = true;
-				return done();
-			}
-			def.then(successHandler, function(error) {
-				// expected error - HTTP 412 Precondition Failed
-				// occurs when file is out of sync with the server
-				if (error.status === 412) {
-					var forceSave = window.confirm(messages.saveOutOfSync);
-					if (forceSave) {
-						// repeat save operation, but without ETag
-						var redef = that.fileClient.write(resource, contents);
-						if (progress) {
-							redef = progress.progress(redef, i18nUtil.formatMessage(messages.savingFile, input));
+			function _save(that) {
+				editor.markClean();
+				var contents = editor.getText();
+				var data = contents;
+				if (that._getSaveDiffsEnabled() && !that._errorSaving) {
+					var changes = that._getUnsavedChanges();
+					if (changes) {
+						var len = 0;
+						for (var i = 0; i < changes.length; i++) {
+							len += changes[i].text.length;
 						}
-						redef.then(successHandler, errorHandler);
-					} else {
-						return done();
+						if (contents.length > len) {
+							data = {
+								diff: changes
+							};
+						}
 					}
-				} else {
-					// unknown error
-					errorHandler(error);
 				}
-			});
-			return metadata._savingDeferred;
+				that._clearUnsavedChanges();
+				that._errorSaving = false;
+
+				var etag = metadata.ETag;
+				var args = { "ETag" : etag }; //$NON-NLS-0$
+				var resource = that._parsedLocation.resource;
+				var def = that.fileClient.write(resource, data, args);
+				var progress = that.progressService;
+				var statusService = null;
+				if (that.serviceRegistry) {
+					statusService = that.serviceRegistry.getService("orion.page.message"); //$NON-NLS-0$
+				}
+				if (progress) {
+					def = progress.progress(def, i18nUtil.formatMessage(messages.savingFile, input));
+				}
+				function successHandler(result) {
+					if (input === that.getInput()) {
+						metadata.ETag = result.ETag;
+						editor.setInput(input, null, contents, true);
+					}
+					that.reportStatus("");
+					if (failedSaving && statusService) {
+						statusService.setProgressResult({Message:messages.Saved, Severity:"Normal"}); //$NON-NLS-0$
+					}
+					if (that.postSave) {
+						that.postSave(closing);
+					}
+					return done(result);
+				}
+				function errorHandler(error) {
+					that.reportStatus("");
+					var errorMsg = handleError(statusService, error);
+					mMetrics.logEvent("status", "exception", (that._autoSaveActive ? "Auto-save: " : "Save: ") + errorMsg.Message); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+					that._errorSaving = true;
+					return done();
+				}
+				def.then(successHandler, function(error) {
+					// expected error - HTTP 412 Precondition Failed
+					// occurs when file is out of sync with the server
+					if (error.status === 412) {
+						var forceSave = window.confirm(messages.saveOutOfSync);
+						if (forceSave) {
+							// repeat save operation, but without ETag
+							var redef = that.fileClient.write(resource, contents);
+							if (progress) {
+								redef = progress.progress(redef, i18nUtil.formatMessage(messages.savingFile, input));
+							}
+							redef.then(successHandler, errorHandler);
+						} else {
+							return done();
+						}
+					} else {
+						// unknown error
+						errorHandler(error);
+					}
+				});
+				return metadata._savingDeferred;
+			}
+
+			if (this.getFormatOnSaveEnabled()) {
+				return new mFormatter.Formatter(this.serviceRegistry, this, editor).doFormat().then(function() {return _save(this);}.bind(this));
+			}
+			return _save(this);
 		},
 		setAutoLoadEnabled: function(enabled) {
 			this._autoLoadEnabled = enabled;
@@ -462,13 +504,16 @@ define([
 				this._idle.setTimeout(timeout);
 			}
 		},
+		setFormatOnSave: function(enabled) {
+			this._formatOnSaveEnabled = enabled;
+		},
 		setContentType: function(contentType) {
 			this._contentType = contentType;
 		},
 		setEncodingCharset: function(charset) {
 			this._charset = charset;
 		},
-		setInput: function(loc) {
+		setInput: function(loc, noFocus) {
 			if (this._ignoreInput) { return; }
 			if (!loc) {
 				loc = PageUtil.hash();
@@ -477,6 +522,9 @@ define([
 				return;
 			}
 			var editor = this.getEditor();
+			if(editor && editor.setNoFocus) {
+				editor.setNoFocus(noFocus);
+			}
 			if (loc && loc[0] !== "#") { //$NON-NLS-0$
 				loc = "#" + loc; //$NON-NLS-0$
 			}
@@ -656,6 +704,9 @@ define([
 				if (editor && editor.getTextView && editor.getTextView()) {
 					var textView = editor.getTextView();
 					textView.addEventListener("Focus", this._focusListener = this.onFocus.bind(this)); //$NON-NLS-0$
+					if(editor.getModel() && typeof  editor.getModel().setModelData === "function") {
+						editor.getModel().setModelData({	 metadata: metadata});
+					}
 				}
 				this._clearUnsavedChanges();
 				if (!this.processParameters(input)) {

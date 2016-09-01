@@ -12,8 +12,9 @@
 define([
 	'i18n!orion/nls/messages',
 	'orion/webui/littlelib',
-	'orion/i18nUtil'
-], function(messages, lib, i18nUtil) {
+	'orion/i18nUtil',
+	'orion/bidiUtils'
+], function(messages, lib, i18nUtil, bidiUtils) {
 	/**
 	 * This class contains static utility methods. It is not intended to be instantiated.
 	 * @class This class contains static utility methods.
@@ -181,7 +182,7 @@ define([
 				}
 				if (isKeyEvent && event.keyCode === lib.KEY.ESCAPE) {
 					if (hideRefNode) {
-						refNode.style.display = "inline"; //$NON-NLS-0$
+						refNode.style.display = "";
 					}
 					done = true;
 					editBox.parentNode.removeChild(editBox);
@@ -194,13 +195,13 @@ define([
 					return;
 				} else if (newValue.length === 0 || (!isInitialValid && newValue === initialText)) {
 					if (hideRefNode) {
-						refNode.style.display = "inline"; //$NON-NLS-0$
+						refNode.style.display = "";
 					}
 					done = true;
 				} else {
 					onComplete(newValue);
 					if (hideRefNode && refNode.parentNode) {
-						refNode.style.display = "inline"; //$NON-NLS-0$
+						refNode.style.display = "";
 					}
 					done = true;
 				}
@@ -226,7 +227,8 @@ define([
 		editBox.classList.add("userEditBoxPrompt"); //$NON-NLS-0$
 		if (hideRefNode) {
 			refNode.style.display = "none"; //$NON-NLS-0$
-		}				
+		}	
+		bidiUtils.initInputField(editBox);
 		editBox.addEventListener("keydown", handler(true), false); //$NON-NLS-0$
 		editBox.addEventListener("blur", handler(false), false); //$NON-NLS-0$
 		window.setTimeout(function() { 
@@ -339,9 +341,8 @@ define([
 	}
 	
 	function _timeDifference(timeStamp) {
-		var currentDate = new Date();
 		var commitDate = new Date(timeStamp);
-	    var difference = currentDate.getTime() - commitDate.getTime();
+	    var difference = Date.now() - commitDate.getTime();
 	    var yearDiff = Math.floor(difference/1000/60/60/24/365);
 	    difference -= yearDiff*1000*60*60*24*365;
 	    var monthDiff = Math.floor(difference/1000/60/60/24/30);

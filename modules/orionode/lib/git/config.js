@@ -15,6 +15,7 @@ var args = require('../args');
 var clone = require('./clone');
 var express = require('express');
 var bodyParser = require('body-parser');
+var util = require('./util');
 
 module.exports = {};
 
@@ -34,20 +35,20 @@ function configJSON(key, value, fileDir) {
 	return {
 		"Key": key,
 		"CloneLocation": "/gitapi/clone" + fileDir,
-		"Location": "/gitapi/config/" + encodeURIComponent(key) + "/clone" + fileDir,
+		"Location": "/gitapi/config/" + util.encodeURIComponent(key) + "/clone" + fileDir,
 		"Value": Array.isArray(value) ? value : [value]
 	};
 }
 
 function getAConfig(req, res) {
-	var key = decodeURIComponent(req.params.key);
+	var key = util.decodeURIComponent(req.params.key);
 	clone.getRepo(req)
 	.then(function(repo) {
-		var fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+		var fileDir = clone.getfileDir(repo,req);
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
 			if (err) {
-				return writeError(403, res, err.message);
+				return writeError(400, res, err.message);
 			}
 			var segments = key.split(".");
 			var section = segments[0];
@@ -59,7 +60,7 @@ function getAConfig(req, res) {
 			} else {
 				value = config[section] && config[section][name];
 			}
-			if (value) {
+			if (value !== undefined) {
 				res.status(200).json(configJSON(key, value, fileDir));
 			} else {
 				writeError(404, res, "There is no config entry with key provided");
@@ -75,11 +76,11 @@ function getConfig(req, res) {
 	var filter = req.query.filter;
 	clone.getRepo(req)
 	.then(function(repo) {
-		var fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+		var fileDir = clone.getfileDir(repo,req);
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
 			if (err) {
-				return writeError(403, res, err.message);
+				return writeError(400, res, err.message);
 			}
 			configs = [];
 
@@ -116,11 +117,11 @@ function updateConfig(req, res, key, value, callback) {
 	var fileDir;
 	clone.getRepo(req)
 	.then(function(repo) {
-		fileDir = api.join(fileRoot, repo.workdir().substring(req.user.workspaceDir.length + 1));
+		fileDir = clone.getfileDir(repo,req);
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
 			if (err) {
-				return writeError(403, res, err.message);
+				return writeError(400, res, err.message);
 			}
 			var segments = key.split(".");
 			var section = segments[0];
@@ -133,7 +134,7 @@ function updateConfig(req, res, key, value, callback) {
 			if (result.status === 200 || result.status === 201) {
 				args.writeConfigFile(configFile, config, function(err) {
 					if (err) {
-						return writeError(403, res, err.message);
+						return writeError(400, res, err.message);
 					}
 					if (result.value) {
 						var resp = configJSON(key, result.value, fileDir);
