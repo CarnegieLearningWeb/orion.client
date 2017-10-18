@@ -12,20 +12,20 @@
 define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'orion/status', 'orion/progress', 'orion/commandRegistry',  'orion/keyBinding', 'orion/dialogs', 'orion/selection',
 	'orion/contentTypes','orion/fileClient', 'orion/operationsClient', 'orion/searchClient', 'orion/globalCommands', 'orion/editorCommands', 'orion/links', 'orion/cfui/cFClient',
 	'orion/PageUtil', 'orion/cfui/logView', 'orion/section', 'orion/metrics', 'orion/cfui/widgets/CfLoginDialog', 'orion/i18nUtil', 'orion/projectClient', 'orion/webui/RichDropdown',
-	'orion/PageLinks', 'orion/URITemplate', 'orion/commands'],
+	'orion/PageLinks', 'orion/URITemplate', 'orion/commands', 'orion/urlModifier'],
 	function(messages, lib, mBootstrap, mStatus, mProgress, CommandRegistry, KeyBinding, mDialogs, mSelection,
 	mContentTypes, mFileClient, mOperationsClient, mSearchClient, mGlobalCommands, mEditorCommands, mLinks,
 	mCFClient, PageUtil, mLogView, mSection, mMetrics, CfLoginDialog, i18Util, mProjectClient, mRichDropdown,
-	PageLinks, URITemplate, mCommands) {
+	PageLinks, URITemplate, mCommands, urlModifier) {
 	mBootstrap.startup().then(
 		function(core) {
 			var serviceRegistry = core.serviceRegistry;
 			var preferences = core.preferences;
 			var pluginRegistry = core.pluginRegistry;
 		
-			new mDialogs.DialogService(serviceRegistry);
 			var selection = new mSelection.Selection(serviceRegistry);
 			var commandRegistry = new CommandRegistry.CommandRegistry({selection: selection});
+			new mDialogs.DialogService(serviceRegistry, commandRegistry);
 			var operationsClient = new mOperationsClient.OperationsClient(serviceRegistry);
 			var statusService = new mStatus.StatusReportingService(serviceRegistry, operationsClient, "statusPane", "notifications", "notificationArea"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			var progressService = new mProgress.ProgressService(serviceRegistry, operationsClient, commandRegistry);
@@ -274,7 +274,7 @@ define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'o
 							launchConfLocation: launchConf.File.Location
 						}
 					});
-					window.location.href = newUrl;
+					window.location.href = urlModifier(newUrl);
 					launchConfDropdown.setDropdownTriggerButtonName(getLaunchConfName(launchConf));
 				}
 
@@ -330,7 +330,9 @@ define(['i18n!cfui/nls/messages', 'orion/webui/littlelib', 'orion/bootstrap', 'o
 
 				var switchScrollLockCommand = new mCommands.Command({
 					id: "orion.projects.switchScrollLock",
-					imageClass : "sprite-switch-liveUpdate",
+					name: messages["scrollLockLabel"],
+					tooltip: messages["scrollLockTooltip"],
+					imageClass : "sprite-switch-check-x",
 					type: "switch",
 					visibleWhen: function() {
 						return true;

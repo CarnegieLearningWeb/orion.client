@@ -24,8 +24,8 @@ define([
 	 * Provides a shared AST.
 	 * @name javascript.ASTManager
 	 * @class Provides a shared AST.
-	 * @param {Object} esprima The esprima parser that this ASTManager will use.
-	 * @param {Object} serviceRegistry The platform service registry
+	 * @param {?} serviceRegistry The platform service registry
+	 * @param {?} servjsProject The backing project context
 	 */
 	function ASTManager(serviceRegistry, jsProject) {
 		this.cache = new LRU(10);
@@ -33,7 +33,7 @@ define([
 		this.jsProject = jsProject;
 		registry = serviceRegistry;
 	}
-	
+
 	/**
 	 * @description Delegate to log timings to the metrics service
 	 * @param {Number} end The end time
@@ -47,7 +47,7 @@ define([
 			}
 		}
 	}
-	
+
 	Objects.mixin(ASTManager.prototype, /** @lends javascript.ASTManager.prototype */ {
 		/**
 		 * @param {orion.editor.EditorContext} editorContext
@@ -63,16 +63,9 @@ define([
 				return editorContext.getText().then(function(text) {
 					var options = Object.create(null);
 					if(this.jsProject) {
-						return this.jsProject.getFile(this.jsProject.TERN_PROJECT).then(function(file) {
-							if(file && file.contents) {
-								var json = JSON.parse(file.contents);
-								if (json) {
-									options.ecmaVersion = json.ecmaVersion;
-									if (json.sourceType) {
-										options.sourceType = json.sourceType;
-									}
-								}
-							}
+						return this.jsProject.getComputedEnvironment().then(function(env) {
+							options.ecmaVersion = typeof env.ecmaVersion === 'number' ? env.ecmaVersion : 6;
+							options.sourceType = typeof env.sourceType === 'string' ? env.sourceType : "script";
 							ast = this.parse(text, metadata ? metadata.location : 'unknown', options); //$NON-NLS-1$
 							this.cache.put(loc, ast);
 							return ast;
@@ -117,7 +110,7 @@ define([
 			logTiming(Date.now() - start);
 			return ast;
 		},
-		
+
 		/**
 		 * Callback from the orion.edit.model service
 		 * @param {Object} event An <tt>orion.edit.model</tt> event.

@@ -1,29 +1,74 @@
 /*eslint-env node*/
 var _path = require("path"),
+	fingerPrintRegistry = require("./build/fingerPrint"),
     utilFactory = require("./build/utils");
 module.exports = function(grunt) {
 	var util = utilFactory(grunt),
 	    BADDIR = "This Gruntfile must be run from the modules/orionode folder in the Orion client repository.",
 	    SOURCE_GLOB = ["**", "!**/node_modules/**", "!**/built/**", "!**/builder/**", "!**/target/**"],
 	    // All paths here are relative to Gruntfile.js
-	    configPath = "../../releng/org.eclipse.orion.client.releng/builder/scripts/orion.build.js",
+	    configPath = grunt.option("configPath") || "../../releng/org.eclipse.orion.client.releng/builder/scripts/orion.build.js",
+	    extraModules = grunt.option("extraModules") ? grunt.option("extraModules").split(",") : [],
 	    clientPath = "../../",
 	    staging = "target/staging/",
-	    optimized = "target/optimized/";
+	    optimized = "target/optimized/",
+	    fingerPrint = grunt.option("fp") || false,
+	   // skipTest = grunt.option("skipTest") || false,
+	    skipMinify = grunt.option("skipMinify") || false;
+
+	var socketioPath =  grunt.file.exists('./node_modules/socket.io/node_modules/socket.io-client') ?
+			'../../node_modules/socket.io/node_modules/socket.io-client/dist/socket.io' :
+			'../../node_modules/socket.io-client/dist/socket.io';
 
 	var orionBuildConfig = util.loadBuildConfig(configPath),
 	    bundles = util.parseBundles(orionBuildConfig, {
 			buildDirectory: staging,
-			orionClient: clientPath
-		});
+			orionClient: clientPath,
+			psClient: grunt.option("psClient")
+		}),
+		modules =util.parseModules(orionBuildConfig, staging);
 
+	// Register fingerprint multi task
+	fingerPrintRegistry(grunt);
 	grunt.initConfig({
 		pkg: grunt.file.readJSON("package.json"),
 		clientPath: clientPath,
 		configPath: configPath,
 		staging: staging,
 		optimized: optimized,
-		nodeBuildConfig: util.filterBuildConfig(orionBuildConfig, "<% requirejsExcludeModules %>"),
+		fingerPrints:{
+			fingerprintModules:['javascript/plugins/ternWorker.js'],
+			allMaps:[],
+			jsMaps:[]
+		},
+		karma: {
+			options: {
+				configFile: 'test/client/karma.conf.js'
+			},
+			client_unit_tests: {
+				singleRun: true
+			},
+		},
+		nodeBuildConfig: util.filterBuildConfig(orionBuildConfig, "<% requirejsExcludeModules %>", [
+			{
+				name: "plugins/consolePlugin"
+			},
+			{
+				name: "tty/ttyShell"
+			},
+			{
+				name: "orion/collab/collabClient"
+			},
+			{
+				name: "orion/debug/debugPackage"
+			},
+			{
+				name: "orion/debug/debugDeploymentWizard"
+			}
+		], {
+			"socket.io/socket.io": socketioPath,
+        	"xterm/xterm": '../../node_modules/xterm/dist/xterm',
+		}),
 		checkDirs: {
 			orion: {
 				src: ["<%= clientPath %>/bundles", "<%= configPath %>"],
@@ -34,18 +79,19 @@ module.exports = function(grunt) {
 		},
 		clean: {
 			outdirs: {
-				src: [staging + "/**" , optimized + "/**", "lib/orion.client/**"]
+				src: [staging + "/**" , optimized + "/**", "lib/orion.client/**"].concat(extraModules.map(function(modulePath) {
+					return _path.join('lib', _path.basename(modulePath));
+				}))
 			}
 		},
 		copy: {
-			// Copy each client {bundle} to lib/orion.client/bundles/{bundle}
-			orionclient: {
-				files: bundles.map(function(bundle) {
+			orionserver: {
+				files: extraModules.map(function(modulePath) {
 					return {
 						expand: true,
-						cwd: bundle.path,
+						cwd: modulePath,
 						src: SOURCE_GLOB,
-						dest: "lib/orion.client/bundles/" + bundle.name + "/"
+						dest: _path.join('lib', _path.basename(modulePath))
 					};
 				})
 			},
@@ -62,7 +108,7 @@ module.exports = function(grunt) {
 					// Copy orionode.client last since it must overwrite some files
 					{
 						expand: true,
-						cwd: "lib/orionode.client/**",
+						cwd: "lib/orionode.client",
 						src: SOURCE_GLOB,
 						dest: staging
 					}
@@ -73,43 +119,19 @@ module.exports = function(grunt) {
 				files: [{
 					expand: true,
 					cwd: optimized,
-					dest: "lib/",
-					src: ["**/*.js", "**/*.css", "**/*.html", "**/*.map"], // includes .src.js
-					rename: function(dest, src) {
-						// Determine the actual destination. This is either a bundle in lib/orion.client/bundles/
-						// or the Orionode client code lib/orionode.client/.
-						var bundlefile, match;
-						if ((match = /(.*)(\.src\.js|\.map)$/.exec(src)) != null) {
-							// Source map file; use the associated .js file to decide where we go
-							bundlefile = match[1];
-						} else {
-							bundlefile = src;
-						}
-						var newDest;
-						// Reverse order here so later bundle in list wins over earlier one, if both contain a bundlefile
-						grunt.verbose.write("Finding origin bundle for " + src + "... ");
-						bundles.slice().reverse().some(function(bundle) {
-							if (grunt.file.exists(_path.join(bundle.web, bundlefile))) {
-								// This file originated from bundle
-								newDest = _path.join(dest, "orion.client/bundles/", bundle.name, "web/", src);
-								return true;
-							}
-						});
-						// Check orionode.client last, since it overrides orion.client bundles
-						if (grunt.file.exists(_path.join("lib/orionode.client/", bundlefile)))
-							newDest = _path.join(dest, "orionode.client/", src);
-
-						if (newDest)
-							grunt.verbose.ok();
-						else
-							grunt.fail.warn("Could not determine origin bundle for " + src + ".");
-						return newDest;
-					}
+					src: SOURCE_GLOB,
+					dest: "lib/orion.client",
 				}]
 			}
 		},
 		requirejs: {
 			compile: {} // .options is set later
+		},
+		fingerprint: {
+			orion: {
+				src: modules,
+				path: optimized
+			}
 		},
 		"string-replace": {
 			// Ensure optimized files use the minified copy of requirejs
@@ -126,13 +148,31 @@ module.exports = function(grunt) {
 						replacement: "requirejs/require.min.js"
 					}]
 				}
-			}
-		},
-		simplemocha: {
-			options: {
-				reporter: "dot"
 			},
-			all: { src: "test/*.js" }
+			// Replace file dependancies with fingerprint name throughout all the HTML files, this task will be excuted within finger print task, no need to call explicitely.
+			"replacefp-inHTMLs": {
+				files: [{
+					expand: true,
+					cwd: optimized,
+					dest: optimized,
+					src: ["**/*.html","!**/embeddedEditor/**"]
+				}],
+				options: {
+					replacements: '<%= fingerPrints.allMaps %>'
+				}
+			},
+			// Replace file dependancies with fingerprint name throughout all the JS files, this task will be excuted within finger print task, no need to call explicitely.
+			"replacefp-inJSs": {
+				files: [{
+					expand: true,
+					cwd: optimized,
+					dest: optimized,
+					src: '<%= fingerPrints.fingerprintModules %>'
+				}],
+				options: {
+					replacements: '<%= fingerPrints.jsMaps %>'
+				}
+			}
 		}
 	});
 
@@ -142,15 +182,16 @@ module.exports = function(grunt) {
 		generateSourceMaps: false, // Turn off source maps to reduce download size
 		appDir: staging,
 		baseUrl: "./",
-		dir: optimized // TODO <% optimized %> ?
+		dir: optimized
 	}));
 
 	// Task definitions
 	grunt.loadNpmTasks("grunt-contrib-clean");
 	grunt.loadNpmTasks("grunt-contrib-copy");
 	grunt.loadNpmTasks("grunt-contrib-requirejs");
-	grunt.loadNpmTasks("grunt-simple-mocha");
+	//grunt.loadNpmTasks("grunt-simple-mocha");
 	grunt.loadNpmTasks("grunt-string-replace");
+  grunt.loadNpmTasks('grunt-karma');
 
 	grunt.registerTask("printBuild", function() {
 		grunt.log.writeln("Using build file", JSON.stringify(grunt.config("requirejs.compile.options"), null, 2));
@@ -165,9 +206,20 @@ module.exports = function(grunt) {
 		});
 	});
 
-	grunt.registerTask("test", ["simplemocha"]);
-	grunt.registerTask("optimize", ["printBuild", "copy:stage", "requirejs", "string-replace", "copy:unstage"]);
-	grunt.registerTask("default", ["checkDirs", "clean", "copy:orionclient", "optimize", "test"]);
-	grunt.registerTask("notest", ["checkDirs", "clean", "copy:orionclient", "optimize"]);
-	grunt.registerTask("nomin",   ["checkDirs", "clean", "copy:orionclient", "string-replace:orionclient", "test"]);
+	//grunt.registerTask("test", ["simplemocha"]);
+	grunt.registerTask("replaceFp", ["string-replace:replacefp-inHTMLs", "string-replace:replacefp-inJSs"]);
+	grunt.registerTask("optimize", fingerPrint ?
+		["printBuild", "copy:stage", "requirejs", "fingerprint", "string-replace:requiremin", "copy:unstage"]:
+		["printBuild", "copy:stage", "requirejs", "string-replace:requiremin", "copy:unstage"]);
+	var tasksArray = ["checkDirs", "clean", "copy:orionserver"];
+	if(!skipMinify){
+		tasksArray.push("optimize");
+	}
+//	if(!skipTest){
+//		tasksArray.push("test");
+//	}
+	grunt.registerTask("default", tasksArray);
+  grunt.registerTask('client_unit_tests', ['karma:client_unit_tests:start']);
+//	grunt.registerTask("notest", ["checkDirs", "clean", "copy:orionserver", "optimize"]);
+//	grunt.registerTask("nomin",   ["checkDirs", "clean", "copy:orionserver", "string-replace:orionclient", "test"]);
 };

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,28 +9,30 @@
  *		 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'), writeError = api.writeError;
-var git = require('nodegit');
-var clone = require('./clone');
-var path = require('path');
-var express = require('express');
-var util = require('./util');
-var request = require('request');
-var https = require('https');
-var bodyParser = require('body-parser');
-var url = require("url");
-var fs = require('fs');
-var tasks = require('../tasks');
+var clone = require('./clone'),
+	express = require('express'),
+	request = require('request'),
+	bodyParser = require('body-parser'),
+	url = require("url"),
+	tasks = require('../tasks'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
 
 	return express.Router()
 	.use(bodyParser.json())
-	.post('/file*', getPullRequest);
+	.use(responseTime({digits: 2, header: "X-GitapiPullrequest-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
+	.post(fileRoot + '*', getPullRequest);
 	
 function pullRequestJSON(cloneDir,remoteDir,bodyJson) {
 	var children = [];
@@ -69,13 +71,18 @@ function getPullRequest(req, res) {
     
 	var task = new tasks.Task(res, false, true, 0, false);
 	if(gitUrl){
+		var isSsh = false;
+		if (gitUrl.indexOf("@") < gitUrl.indexOf(":")){
+			gitUrl = "ssh://" + gitUrl;
+			isSsh = true;
+		}
 		var parsedURL = url.parse(gitUrl);
 		var pathnames = parsedURL["pathname"].split("/");   
-		var username = pathnames[1];
+		var username = isSsh ? pathnames[1].substr(1) : pathnames[1];
 		var projectname = pathnames[2].replace(/\.git$/g, "");
 		var pullrequestUrl = "https://api.github.com/repos/" + username +"/" + projectname + "/pulls";
 		if(clientID && clientSecret){
-			pullrequestUrl += "?client_id="+clientID+"&client_secret="+clientSecret+"";
+			pullrequestUrl += "?client_id="+clientID+"&client_secret="+clientSecret;
 		}
 	}
 	var userAgentHeader = {
@@ -87,8 +94,8 @@ function getPullRequest(req, res) {
 	clone.getRepo(req)
 	.then(function(repo) {
 		fileDir = clone.getfileDir(repo,req); 
-		cloneDir = "/gitapi/clone" + fileDir;
-		remoteDir = "/gitapi/remote" + fileDir;
+		cloneDir = gitRoot + "/clone" + fileDir;
+		remoteDir = gitRoot + "/remote" + fileDir;
 		return request(userAgentHeader, function (error, response, body) {
 				if (!error && response.statusCode === 200) {
 					bodyJson = JSON.parse(body);
@@ -100,7 +107,7 @@ function getPullRequest(req, res) {
 						Message: "OK",
 						Severity: "Ok"
 					});
-				} else if (!error && response.statusCode === 404 || response.statusCode === 401){
+				} else if (!error && (response.statusCode === 404 || response.statusCode === 401)) {
 					var message = "Repository not found, might be a private repository that requires authentication.";
 					if(response.statusCode === 401){
 						message = "Not authorized to get the repository information.";
@@ -113,7 +120,17 @@ function getPullRequest(req, res) {
 						Message: message,
 						Severity: "Error"
 					});
-				} else {
+				} else if (!error && response.statusCode === 403 && body.indexOf(" rate limit exceeded") !== -1) {
+					task.done({
+						HttpCode: 403,
+						Code: 0,
+						JsonData: {},
+						DetailedMessage: "Pull requests for this repository will not be displayed because you have reached the GitHUB API limit while requesting your pull request list." 
+							+ isSsh ? "Please consider cloning the repo with HTTPS protocol instead of SSH. This will increase our API limit." : "",
+						Message: "Unable to fetch pull request info.",
+						Severity: "Warning"
+					});
+				}else {
 					task.done({
 						HttpCode: 403,
 						Code: 0,
@@ -124,6 +141,8 @@ function getPullRequest(req, res) {
 					});
 				}
 			});
+	}).catch(function(err){
+		clone.handleRemoteError(task, err, gitRoot + "/clone" + fileDir);
 	});
 	function toBase64 (str) {
 		return (new Buffer(str || '', 'utf8')).toString('base64');

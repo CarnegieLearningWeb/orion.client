@@ -36,11 +36,18 @@ define(['require', 'orion/Deferred', 'orion/EventTarget', 'orion/xhr'], function
 				if (item === null) {
 					return null;
 				}
-				var cached = JSON.parse(item);
-				if (ignoreExpires || expiresSeconds === -1 || (cached._expires && cached._expires > Date.now())) {
-					delete cached._expires;
-					return cached;
+				
+				try {
+					var cached = JSON.parse(item);
+					if (ignoreExpires || expiresSeconds === -1 || (cached._expires && cached._expires > Date.now())) {
+						delete cached._expires;
+						return cached;
+					}
+				} catch (e) {
+					//invalid value; remove from cache.
+					localStorage.removeItem(prefix + namespace);
 				}
+				
 				return null;
 			},
 			set: function(namespace, data) {
@@ -99,6 +106,7 @@ define(['require', 'orion/Deferred', 'orion/EventTarget', 'orion/xhr'], function
 				this._currentPromises[namespace] = d;
 				var that = this;
 				this._service.get(namespace).then(function(data) {
+					data = data || {};
 					that._cache.set(namespace, data);
 					delete that._currentPromises[namespace];
 					d.resolve(data);
@@ -183,7 +191,7 @@ define(['require', 'orion/Deferred', 'orion/EventTarget', 'orion/xhr'], function
 					that._currentPromise = null;
 					d.resolve(cached);
 				}, function(error) {
-					if (error.xhr.status === 401 || error.xhr.status === 404 ) {
+					if (error.xhr.status === 401 || error.xhr.status === 491 || error.xhr.status === 404 ) {
 						that._cache.set(namespace, {});
 						that._currentPromise = null;
 						d.resolve({});
@@ -483,6 +491,7 @@ define(['require', 'orion/Deferred', 'orion/EventTarget', 'orion/xhr'], function
 		}
 	};
 	return {
-		PreferencesService: PreferencesService
+		PreferencesService: PreferencesService,
+		Cache: Cache
 	};
 });

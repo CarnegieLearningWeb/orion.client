@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016 IBM Corporation and others.
+ * Copyright (c) 2016, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -11,101 +11,96 @@
 /*eslint-env node */
 var api = require('../api');
 var clone = require('./clone');
-var util = require('./util');
 
 module.exports = {};
-	
-module.exports.gitFileDecorator = function(rootName, req, filepath, originalJson){
-	var result = originalJson;
-	if (!"/file" === rootName && !"/workspace" ===rootName) {//$NON-NLS-1$ //$NON-NLS-2$
-		return; 
+module.exports.GitFileDecorator = GitFileDecorator;
+
+function GitFileDecorator(options) {
+	this.options = options;
+}
+Object.assign(GitFileDecorator.prototype, {
+	decorate: function(req, file, json) {
+		var gitRoot = this.options.gitRoot;
+		var contextPath = req.contextPath || "";
+		var endpoint = req.originalUrl.substring(contextPath.length).split("/")[1];
+		if (!"file" === endpoint && !"workspace" === endpoint) {//$NON-NLS-1$ //$NON-NLS-2$
+			return; 
+		}
+		var isWorkspace = "workspace" === endpoint;	
+		if (isWorkspace && req.method === "GET") {
+			var children = json.Children;
+			return Promise.all(children.map(function(child) {
+				return addWorkSpaceGitLinks(gitRoot, child, {workspaceDir: file.workspaceDir, workspaceId: file.workspaceId, path: api.join(file.workspaceDir,child.Name), contextPath: contextPath});		
+			}));
+		}
+		if (!isWorkspace && req.method === "GET") {
+			return clone.getRepoByPath(file.path, file.workspaceDir).then(function(repo) {
+				if(repo){
+					var fileDir = api.join(clone.getfileDir(repo, file), "/");
+					return getBranch(repo).then(function(branchname){
+						addGitLinks(gitRoot, json, branchname, fileDir, contextPath);
+						var fileChildren = json.Children;
+						if(fileChildren){
+							calcGitLinks(gitRoot, fileChildren, branchname, fileDir, contextPath);
+						}
+					}.bind(this));
+				}
+			}.bind(this))
+			.catch(function(){});
+		}			
 	}
-	var isWorkspace = "/workspace"=== rootName;	
-	if (isWorkspace && req.method === "GET") {
-		var children = result.Children;
-		return Promise.all(children.map(function(child){
-				var name = child["Name"];
-				return addWorkSpaceGitLinks(child, req, name);		
-			})
-		);
-	}
-	if (!isWorkspace && req.method === "GET") {
-		return clone.getRepoByPath(filepath, req.user.workspaceDir)
-		.then(function(repo) {
-			if(repo){
-				var fileDir = api.join(clone.getfileDir(repo,req), "/");
-				return Promise.resolve(getBranch(repo))
-				.then(function(branchname){
-					addGitLinks(result,branchname,fileDir);
-					var fileChildren = result.Children;
-					if(fileChildren){
-						calcGitLinks(fileChildren,branchname,fileDir);
-					}
-				});
-			}
-		})
-		.catch(function(){
-			return;
-		});
-	}			
-	
-function getBranch(repo){
+});
+
+function getBranch(repo) {
 	return repo.getCurrentBranch().then(function(reference) {
 		return reference.shorthand();
 	});
 }
 	
-function calcGitLinks(fileChildren,branchname,fileDir){
+function calcGitLinks(gitRoot, fileChildren, branchname, fileDir, contextPath) {
 	if (fileChildren) {
 		for (var j = 0; j < fileChildren.length; j++) {
-			var filechild = fileChildren[j];
-			addGitLinks(filechild,branchname,fileDir);
-			var childItems = filechild.Children;
+			var fileChild = fileChildren[j];
+			addGitLinks(gitRoot, fileChild, branchname, fileDir, contextPath);
+			var childItems = fileChild.Children;
 			if (childItems) {
-				calcGitLinks(childItems,branchname,fileDir);
+				calcGitLinks(gitRoot, childItems, branchname, fileDir, contextPath);
 			}
 		}
 	}
 }	
 	
-function addWorkSpaceGitLinks(workspacechild,req, name){
-	var fullpath = api.join(req.user.workspaceDir,name);
-	return clone.getRepoByPath(fullpath, req.user.workspaceDir)
-	.then(
-		function(repo) {
-			if(repo){
-				return Promise.resolve(getBranch(repo))
-					.then(function(branchname){
-						var workDir = api.join(clone.getfileDir(repo,req) , "/");
-						addGitLinks(workspacechild,branchname,workDir);
-					});
-			}
+function addWorkSpaceGitLinks(gitRoot, workspaceChild, file){
+	return clone.getRepoByPath(file.path, file.workspaceDir).then(function(repo) {
+		if (repo) {
+			return Promise.resolve(getBranch(repo)).then(function(branchname){
+				var workDir = api.join(clone.getfileDir(repo, file) , "/");
+				addGitLinks(gitRoot, workspaceChild, branchname, workDir, file.contextPath);
+			});
 		}
-	).catch(function(){
-			return;
-	});
+	}).catch(function(){});
 }
 	
-function addGitLinks(comingJson,branchname,fileDir){
-	var fileTarget = comingJson.Location.substr(fileDir.length);
+function addGitLinks(gitRoot, json, branchname, fileDir, contextPath){
+	var fileTarget = json.Location.substr(contextPath.length + fileDir.length);
 	if(fileTarget === "/") fileTarget = "";
-	comingJson.Git ={
-		"BlameLocation": "/gitapi/blame/HEAD" + fileDir + fileTarget,
-		"CloneLocation": "/gitapi/clone" + fileDir,
-		"CommitLocation": "/gitapi/commit/" + util.encodeURIComponent(branchname) + fileDir + fileTarget,
-		"ConfigLocation": "/gitapi/config/clone" + fileDir + fileTarget,
-		"DefaultRemoteBranchLocation": "/gitapi/remote/origin/"+ util.encodeURIComponent(branchname) + fileDir,
-		"DiffLocation": "/gitapi/diff/Default" + fileDir + fileTarget,
-		"HeadLocation": "/gitapi/commit/HEAD" + fileDir + fileTarget,
-		"IndexLocation": "/gitapi/index" + fileDir + fileTarget,
-		"RemoteLocation": "/gitapi/remote" + fileDir + fileTarget,
-		"StatusLocation": "/gitapi/status" + fileDir + fileTarget,
-		"TagLocation": "/gitapi/tag" + fileDir + fileTarget,
-		"TreeLocation": "/gitapi/tree" + fileDir + "HEAD/" + fileTarget
+	json.Git = {
+		"BlameLocation": gitRoot + "/blame/HEAD" + fileDir + fileTarget,
+		"CloneLocation": gitRoot + "/clone" + fileDir,
+		"CommitLocation": gitRoot + "/commit/" + api.encodeURIComponent(branchname) + fileDir + fileTarget,
+		"ConfigLocation": gitRoot + "/config/clone" + fileDir + fileTarget,
+		"DefaultRemoteBranchLocation": gitRoot + "/remote/origin/"+ api.encodeURIComponent(branchname) + fileDir,
+		"DiffLocation": gitRoot + "/diff/Default" + fileDir + fileTarget,
+		"HeadLocation": gitRoot + "/commit/HEAD" + fileDir + fileTarget,
+		"IndexLocation": gitRoot + "/index" + fileDir + fileTarget,
+		"RemoteLocation": gitRoot + "/remote" + fileDir + fileTarget,
+		"StatusLocation": gitRoot + "/status" + fileDir + fileTarget,
+		"TagLocation": gitRoot + "/tag" + fileDir + fileTarget,
+		"TreeLocation": gitRoot + "/tree" + fileDir + "HEAD/" + fileTarget
 	};
-	if(!branchname){
-		delete comingJson.Git.CommitLocation;
-		delete comingJson.Git.DefaultRemoteBranchLocation;
+	if (!branchname) {
+		delete json.Git.CommitLocation;
+		delete json.Git.DefaultRemoteBranchLocation;
 	}
 }
-};
+	

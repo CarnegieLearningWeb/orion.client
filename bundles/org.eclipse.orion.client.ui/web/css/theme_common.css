@@ -33,7 +33,7 @@
 
 a {
 	text-decoration: none;
-	color: #00AED1;
+	color: #00749c;
 }
 
 a:hover {
@@ -187,9 +187,9 @@ a:hover {
 	color: #E6E6E6;
 	-webkit-flex-grow: 0;		/* Safari */
 	flex-grow: 0;
-	font: 9pt;
-	font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", 
-		Helvetica, Tahoma, Geneva, Arial, "Lucida Grande", sans-serif;
+	font-size: 9pt;
+	font-family: HelveticaNeue, "Helvetica Neue", HelveticaNeueRoman, HelveticaNeue-Roman, "Helvetica Neue Roman", 
+		TeXGyreHerosRegular, Helvetica, Tahoma, Geneva, Arial, sans-serif;
 	overflow: hidden;
 	text-decoration: none;
 	text-overflow: ellipsis;
@@ -215,11 +215,9 @@ a.breadcrumb:hover {
 }
 
 .currentLocation {
-	padding-top:1px;
-	font-weight: bold;
 	font-size: 9pt;
-	font-family: "HelveticaNeue-Light", "Helvetica Neue Light", "Helvetica Neue", 
-		Helvetica, Tahoma, Geneva, Arial, "Lucida Grande", sans-serif;
+	font-family: HelveticaNeue, "Helvetica Neue", HelveticaNeueRoman, HelveticaNeue-Roman, "Helvetica Neue Roman", 
+		TeXGyreHerosRegular, Helvetica, Tahoma, Geneva, Arial, sans-serif;
 	color: #E6E6E6;
 	text-decoration: none;
 	line-height: 10pt;
@@ -235,14 +233,12 @@ div.currentLocation {
 }
 
 a.currentLocation:hover {
-	font-weight: bold;
 	color: #00AED1;
  	text-decoration: none;
 	border-bottom: 1px dotted;
 }
 
 a.breadcrumb.currentLocation {
-	font-weight: bold;
 	margin: 0;
 }
 
@@ -357,11 +353,6 @@ a.breadcrumb.currentLocation {
 	font-size: 7pt;
 }
 
-.searchbox:focus{
-	color: white;
-	outline: none;
-}
-
 /* Orion button provides standard padding, margin, alignment for any button, regardless of whether it is a command or not.  Using
    this helps non-gray buttons remain uniform looking with respect to size. */
    
@@ -413,7 +404,7 @@ a.breadcrumb.currentLocation {
 	/* text-transform: uppercase; */
 }
 
-.commandButton:not(.primaryButton):hover, .commandButton:not(.primaryButton):focus {
+.commandButton:not(.primaryButton):hover {
 	color: white;
 	background-color: #a5b5bc;
 	box-shadow: 0 1px 2px 0 rgba(0,0,0,0.2);
@@ -429,7 +420,7 @@ a.breadcrumb.currentLocation {
 	color: white;
 }
 
-.primaryButton:hover, .primaryButton:focus {
+.primaryButton:hover {
 	background: #01CDB0;
 	border-color: #01CDB0;
 }
@@ -452,7 +443,7 @@ a.breadcrumb.currentLocation {
 	user-select: none;
 }
 
-.commandImage:hover, .commandImage:focus {
+.commandImage:hover {
 	background-color: #a5b5bc;
 	border: 1px solid #ccc;
 }
@@ -521,13 +512,6 @@ a.breadcrumb.currentLocation {
 .orionSwitch {
 	position: relative;
 	width: auto;
-}
-
-.orionSwitchCheck {
- 	display: none;
-}
-
-.orionSwitchLabel {
 	display: block;
 	overflow: hidden;
 	cursor: pointer;
@@ -563,13 +547,13 @@ a.breadcrumb.currentLocation {
 	padding-left: 3px;
 	padding-right: 2px;
 	background-color: #FFF;
-	color: #808080;
+	color: #707070;
 }
 
 .orionSwitchInner:after {
 	padding-right: 3px;
 	background-color: #eee;
-	color: #808080;
+	color: #707070;
 	text-align: right;
 }
 
@@ -579,7 +563,6 @@ a.breadcrumb.currentLocation {
 	margin: 0;
 	background: #DFE6EB;
 	border: 1px solid #DFE6EB;
-	border-radius: 3px;
 	position: absolute; 
 	top: 0; 
 	bottom: 0; 
@@ -590,12 +573,12 @@ a.breadcrumb.currentLocation {
 	transition: all 0.2s ease-in 0s; 
 }
 
-.orionSwitchCheck:checked + .orionSwitchLabel .orionSwitchInner {
+.orionSwitch[aria-pressed="true"] .orionSwitchInner {
 	margin-left: 0;
 }
 
-.orionSwitchCheck:checked + .orionSwitchLabel .orionSwitchSwitch {
-	right: 0px; 
+.orionSwitch[aria-pressed="true"] .orionSwitchSwitch {
+	right: 0;
 }
 
 /* should be used in conjunction with .commandButton when a tool has no icon. */
@@ -621,7 +604,7 @@ a.breadcrumb.currentLocation {
 
 .commandActive {
 	background-color: #e6e6e6 !important;
-	border: 1px solid #808080 !important;
+	border: 1px solid #707070 !important;
     border-radius: 2px !important;
 }
 
@@ -637,6 +620,11 @@ a.breadcrumb.currentLocation {
 /* splitter - typically the color of the title area */
 .split {
 	background: #3B4B54;
+}
+
+.split:focus {
+	background: #00FF00;
+	outline: none;
 }
 
 .splitTracking {
@@ -676,6 +664,15 @@ a.breadcrumb.currentLocation {
 
 .dialogContent .dropdownTrigger:not(.dropdownDefaultButton):not(:hover) {
 	color: #00AED1 !important;
+}
+
+.orionPage .findOptionsDiv .dropdownTrigger:not(.dropdownDefaultButton) {
+	color: white !important;
+}
+
+.desktopmode .dropdownTrigger a {
+	text-decoration: none;
+	pointer-events: none;
 }
 
 .dropdownTrigger a {
@@ -731,10 +728,6 @@ a.breadcrumb.currentLocation {
 	margin: 0;
 }
 
-.dropdownMenu > li > *:focus {
-	outline: none;
-}
-
 
 .dropdownSeparator {
 	height: 1px;
@@ -776,7 +769,7 @@ a.breadcrumb.currentLocation {
 }
 
 .dropdownMenuItem .dropdownKeyBinding {
-	color: grey !important; /* !important to override .dropdownMenuItem */
+	color: #707070 !important; /* !important to override .dropdownMenuItem */
 	flex-grow: 0;
 	-webkit-flex-grow: 0;		/* Safari */
 	font-size: 11px;
@@ -833,7 +826,7 @@ a.breadcrumb.currentLocation {
 	color: white;
 	background-color: #158d7a;
 	border-radius: 3px;
-	padding: 8px;
+	padding: 4px;
 	clear: both;
 	float: left;
 	border: 1px solid #158d7a;
@@ -1056,7 +1049,6 @@ a.breadcrumb.currentLocation {
 	color: #222;
 	background-color: #fbfbfb;
 	border-radius: 2px;
-	border: 1px solid #BBB;
 	box-shadow: 0 5px 10px rgba(0, 0, 0, 0.2);
 	padding-bottom:5px;
 }
@@ -1161,6 +1153,37 @@ a.breadcrumb.currentLocation {
 
 .core-sprite-git-logo {
 	font-size: 20px !important;
+}
+
+.sprite-switch-check-x {
+	font-size: 14px;
+	line-height: 22px;
+	color: white;
+	padding-right: 5px;
+	background: none;
+	border: none;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	vertical-align:middle;
+}
+
+.orionSwitchInner.sprite-switch-check-x:before{
+	color: white;
+	background-color: #1bb199;
+	content: '\e050'; /* check mark icon */
+	font-family: 'Orion Icon Font';
+	margin-top: -3px;
+	padding-left: 3px;
+	padding-right: 0;
+}
+
+.orionSwitchInner.sprite-switch-check-x:after{
+	color: white;
+	background-color: #707070;
+	content: '\e02a'; /* X icon */
+	font-family: 'Orion Icon Font';
+	margin-top: -3px;
+	padding-right: 4px;
 }
 
 .outlineExplorer .navlinkonpage {

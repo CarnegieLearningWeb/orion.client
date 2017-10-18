@@ -49,7 +49,7 @@ define(['i18n!orion/settings/nls/messages', 'orion/bootstrap', 'orion/status', '
 		commandRegistry.addCommand(clearPrefsCommand);
 		// add as a binding only command
 		commandRegistry.registerCommandContribution("globalActions", "orion.clearThemes", 1,  null, true, new KeyBinding.KeyBinding('t', true, true, true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-		var preferenceDialogService = new mDialogs.DialogService(serviceRegistry);
+		var preferenceDialogService = new mDialogs.DialogService(serviceRegistry, commandRegistry);
 		mGlobalCommands.generateBanner("orion-settings", serviceRegistry, commandRegistry, preferences, searcher); //$NON-NLS-0$
 
 		var settingsRegistry = new SettingsRegistry(serviceRegistry, new mMetaType.MetaTypeRegistry(serviceRegistry));
@@ -72,7 +72,7 @@ define(['i18n!orion/settings/nls/messages', 'orion/bootstrap', 'orion/status', '
 									};
 									
 		lib.node("categoriesTitle").textContent = messages["Categories"]; //$NON-NLS-1$ //$NON-NLS-0$
-		var settingsContainer = new SettingsContainer( containerParameters, lib.node("categoriesContainer"), lib.node("settings")); //$NON-NLS-0$
+		var settingsContainer = new SettingsContainer( containerParameters, lib.node("categoriesContainer"), lib.$("#settings", lib.node("pageContent"))); //$NON-NLS-0$
 		settingsContainer.show();
 
 		preferencesStatusService.setMessage("");

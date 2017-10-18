@@ -44,17 +44,33 @@ module.exports = function(grunt) {
 			};
 		});
 	};
+	
+	/**
+	 * @returns {Bundle[]} where Bundle is {{ name: string, path: string, web: string }}
+	 */
+	self.parseModules = function(buildConfig) {
+		return buildConfig.modules.map(function(module) {
+			return module.name;
+		});
+	};
 
 	/**
 	 * @returns {Object} A copy of `config` with the `excludeModules` removed from its `modules` section.
 	 */
-	self.filterBuildConfig = function(config, excludeModules) {
+	self.filterBuildConfig = function(config, excludeModules, extraModules, extraPaths) {
 		excludeModules = excludeModules || [];
 		var clone = JSON.parse(JSON.stringify(config));
 		clone.modules = clone.modules && clone.modules.filter(function(module) {
 			var baseName = module.name.split("/").pop();
 			return excludeModules.indexOf(baseName) === -1;
 		});
+		extraModules.forEach(function(m) {
+			m.excludeShallow = clone.modules[0].excludeShallow;
+		});
+		clone.modules = clone.modules.concat(extraModules || []);
+		for (var p in extraPaths || {}) {
+			clone.paths[p] = extraPaths[p];
+		}
 		return clone;
 	};
 

@@ -1,22 +1,24 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012, 2016 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
  * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
  * 
+ * Contributors:
+ *     IBM Corporation - initial API and implementation
+ *     Casey Flynn - Google Inc.
  ******************************************************************************/
 /*eslint-env browser, amd*/
 define({
 	"Editor": "Editor",
 	"switchEditor": "Switch Editor",
 	"Fetching": "Fetching: ${0}",
-	"confirmUnsavedChanges": "There are unsaved changes. Do you still want to navigate away?",
-	"searchFilesCommand": "Quick Search...",
+	"confirmUnsavedChanges": "This file contains unsaved changes.  If you navigate away, will lose them.  \n\nDo you want to save your changes?",
 	"searchFiles": "Quick Search in ${0}",
 	"searchTerm": "Enter search term:",
-	"unsavedChanges": "There are unsaved changes.",
+	"unsavedChanges": "There are unsaved changes in current file, you can't navigate away without saving it.",
 	"unsavedAutoSaveChanges": "Please stay on the page until Auto Save is complete.",
 	"Save": "Save",
 	"Saved": "Saved",
@@ -58,6 +60,8 @@ define({
 	"SplitHorizontal": "Split Horizontal",
 	"SplitPipInPip": "Picture in Picture",
 	"SplitModeTooltip": "Change split editor mode",
+	"AllTabsDropDown": "Open Tabs (Ctrl + Shift + E)",
+	"AllTabsDropDownMac": "Open Tabs (Cmd + Shift + E)",
 	"SidePanel": "Side Panel",
 	"SidePanelTooltip": "Choose what to show in the side panel.",
 	"Slideout": "Slideout",
@@ -73,12 +77,14 @@ define({
 	"noActions": "There are no actions for the current selection.",
 	"NoFile": "Use the ${0} to create new files and folders. Click a file to start coding.",
 	"LocalEditorSettings": "Local Editor Settings",
+	"EditorSettings": "Editor Settings",
 	"NoProject": "${0} is not a project. To convert it to a project use ${1}.",
 	"NoProjects": "There are no projects in your workspace. Use the ${0} menu to create projects.",
 	"Disconnected": "${0} (disconnected)",
 	"ChooseFS": "Choose Filesystem",
 	"ChooseFSTooltip": "Choose the filesystem you want to view.",
 	"FSTitle": "${0} (${1})",
+	"EnterCondition": "Please enter a condition:",
 	"Deploy": "Deploy",
 	"Deploy As": "Deploy As",
 	"Import": "Import",
@@ -86,12 +92,14 @@ define({
 	"OpenWith": "Open With",
 	"OpenRelated": "Open Related",
 	"OpenFolder": "Open Folder",
+	"SwitchWorkspace": "Switch To",
+	"SwitchWorkspaceTip": "Switch workspaces",
 	"OpenRecent": "Open Recent",
 	"OpenFolderTip": "Change the root folder",
 	"Dependency": "Dependency",
 	"UnnamedCommand": "Unnamed",
-	"searchInFolder": "Folder Search...",
-	"Global Search": "Global Search...",
+	"Search": "Search...",
+	"Show Debug": "Debug...",
 	"ClickEditLabel": "Click to edit",
 	"ProjectInfo": "Project Information",
 	"Name": "Name",
@@ -107,5 +115,17 @@ define({
 	"Orion": "Orion",
 	"OK": "Ok",
 	"Format" : "Format Code",
-	"FormatTooltip":"Format editor contents"
+	"FormatTooltip":"Format editor contents",
+	"Cancel":"Cancel",
+	"Yes":"Yes",
+	"No":"No",
+	"selectNextTab": "Select Next Editor Tab",
+	"selectPreviousTab": "Select Previous Editor Tab",
+	"showTabDropdown": "Display Open Editor Tabs",
+	"Collaborate": "Collaborate",
+	"CollaborateToolTip": "Start a Collaboration session on the current file",
+	"closeOthers":"Close Others Tabs",
+	"closeTotheRight":"Close Tabs To The Right",
+	"keepOpen":"Keep Open",
+	"closeSelf":"Close"
 });

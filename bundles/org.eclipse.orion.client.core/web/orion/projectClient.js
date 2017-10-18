@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013 IBM Corporation and others.
+ * Copyright (c) 2013, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -93,7 +93,7 @@ define([
         },
         
 		getProject: function (metadata) {
-			if (!metadata || metadata.Projects) {
+			if (!metadata || metadata.Projects || !metadata.Parents) {
 				return new Deferred().resolve(null);
 			}
 			while (metadata.parent && metadata.parent.parent && metadata.parent.parent.type !== "ProjectRoot") {
@@ -109,6 +109,11 @@ define([
 					project.ContentLocation = project.Location;
 					return project;
 				});
+			}
+			if (!metadata.Directory) {
+				// climbed the metadata and still a file,
+				// must be a file in the workspace root and therefore has no validly associated project
+				return new Deferred().resolve(null);
 			}
 			metadata.ContentLocation = metadata.Location;
 			return new Deferred().resolve(metadata);
@@ -178,7 +183,7 @@ define([
 			if(workspaceMetadata){
 				readProjectFromWorkspace.call(that, fileMetadata, workspaceMetadata, deferred);
 			} else {
-				this.fileClient.loadWorkspace().then(function(workspace){
+				this.fileClient.getWorkspace(fileMetadata.Location).then(function(workspace){
 					readProjectFromWorkspace.call(that, fileMetadata, workspace, deferred);
 				});
 			}
@@ -565,7 +570,7 @@ define([
 	getProjectLaunchConfigurations: function(projectMetadata){
 		var deferred = new Deferred();
 
-		this.getLaunchConfigurationsDir(projectMetadata).then(function(launchConfMeta){
+		this.getLaunchConfigurationsDir(projectMetadata).then(function func(launchConfMeta){
 			if(!launchConfMeta){
 				deferred.resolve([]);
 				return deferred;
@@ -603,12 +608,13 @@ define([
 								launchConf.Params.LogLocationTemplate = deployService.logLocationTemplate;
 							}
 							
-							if(deployService && deployService.getDevMode){
-								deployService.getDevMode(projectMetadata.ContentLocation + launchConf.Path).then(function(devModeParam){
+							if(deployService && deployService.getDevMode) {
+								//copy Java - no path, assume manifest.yml
+								var confLoc = projectMetadata.ContentLocation + (typeof launchConf.Path === 'string' ? launchConf.Path : "manifest.yml");
+								deployService.getDevMode(confLoc).then(function(devModeParam){
 									if (devModeParam) {
 										launchConf.Params.DevMode = devModeParam;
 									}
-									
 									def.resolve(launchConf);
 								}, function(){
 									def.resolve(launchConf);
@@ -640,10 +646,9 @@ define([
 					deferred.resolve(result);
 				}, deferred.reject);
 			} else {
-				var func = arguments.callee.bind(this);
 				this.fileClient.fetchChildren(launchConfMeta.ChildrenLocation).then(function(children){
 					launchConfMeta.Children = children;
-					func(launchConfMeta);
+					func.bind(this)(launchConfMeta);
 				}.bind(this), deferred.reject);
 			}
 		}.bind(this), deferred.reject);
@@ -718,14 +723,13 @@ define([
 			return deferred;
 		}
 
-		this.getLaunchConfigurationsDir(projectMetadata, true).then(function(_launchConfDir){
+		this.getLaunchConfigurationsDir(projectMetadata, true).then(function func(_launchConfDir){
 			if(_launchConfDir.Children){
 				deferred.resolve(_launchConfDir);
 			} else {
-				var func = arguments.callee.bind(this);
 				this.fileClient.fetchChildren(_launchConfDir.ChildrenLocation).then(function(children){
 					_launchConfDir.Children = children;
-					func(_launchConfDir);
+					func.bind(this)(_launchConfDir);
 				}.bind(this), deferred.reject);
 			}
 		}.bind(this));
@@ -761,12 +765,13 @@ define([
 							launchConfigurationEntry.Params.LogLocationTemplate = deployService.logLocationTemplate;
 						}
 						
-						if(deployService && deployService.getDevMode){
-							deployService.getDevMode(projectMetadata.ContentLocation + launchConfigurationEntry.Path).then(function(devModeParam){
+						if(deployService && deployService.getDevMode) {
+							//copy Java - if not path in launch config, assume manifest.yml
+							var confLoc = projectMetadata.ContentLocation + (typeof launchConfigurationEntry.Path === 'string' ? launchConfigurationEntry.Path : "manifest.yml");
+							deployService.getDevMode(confLoc).then(function(devModeParam){
 								if (devModeParam) {
 									launchConfigurationEntry.Params.DevMode = devModeParam;
 								}
-								
 								deferred.resolve(launchConfigurationEntry);
 							}, function(){
 								deferred.resolve(launchConfigurationEntry);
@@ -774,9 +779,6 @@ define([
 						} else {
 							deferred.resolve(launchConfigurationEntry);
 						}
-						
-						
-
 					}.bind(this), deferred.reject
 				);
 			}.bind(this), deferred.reject

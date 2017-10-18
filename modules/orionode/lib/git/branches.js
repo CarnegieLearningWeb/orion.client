@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,29 +9,38 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'), writeError = api.writeError;
-var git = require('nodegit');
-var async = require('async');
-var mRemotes = require('./remotes');
-var clone = require('./clone');
-var express = require('express');
-var bodyParser = require('body-parser');
-var util = require('./util');
-var args = require('../args');
+var api = require('../api'), 
+	writeError = api.writeError, 
+	writeResponse = api.writeResponse,
+	git = require('nodegit'),
+	async = require('async'),
+	mRemotes = require('./remotes'),
+	clone = require('./clone'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	args = require('../args'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+	
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
 	
 	module.exports.branchJSON = branchJSON;
 	module.exports.getBranchCommit = getBranchCommit;
 	module.exports.getBranchRemotes = getBranchRemotes;
-
+	
 	return express.Router()
 	.use(bodyParser.json())
-	.get('/file*', getBranches)
+	.use(responseTime({digits: 2, header: "X-GitapiBranches-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
+	.get(fileRoot + '*', getBranches)
 	.get('/:branchName*', getBranches)
 	.delete('/:branchName*', deleteBranch)
 	.post('*', createBranch);
@@ -39,20 +48,20 @@ module.exports.router = function(options) {
 	function branchJSON(repo, ref, fileDir) {
 		var fullName = ref.name();
 		var shortName = ref.shorthand();
-		var branchURL = util.encodeURIComponent(fullName);
+		var branchURL = api.encodeURIComponent(fullName);
 		var current = !!ref.isHead() || repo.headDetached() && ref.name() === "HEAD";
 		return {
-			"CloneLocation": "/gitapi/clone"+ fileDir,
-			"CommitLocation": "/gitapi/commit/" + branchURL + fileDir,
+			"CloneLocation": gitRoot + "/clone"+ fileDir,
+			"CommitLocation": gitRoot + "/commit/" + branchURL + fileDir,
 			"Current": current,
 			"Detached": current && !!repo.headDetached(),
-			"DiffLocation": "/gitapi/diff/" + util.encodeURIComponent(shortName) + fileDir,
+			"DiffLocation": gitRoot + "/diff/" + api.encodeURIComponent(shortName) + fileDir,
 			"FullName": fullName,
-			"HeadLocation": "/gitapi/commit/HEAD" + fileDir,
-			"Location": "/gitapi/branch/" + util.encodeURIComponent(shortName) + fileDir,
+			"HeadLocation": gitRoot + "/commit/HEAD" + fileDir,
+			"Location": gitRoot + "/branch/" + api.encodeURIComponent(shortName) + fileDir,
 			"Name": shortName,
 			"RemoteLocation": [],
-			"TreeLocation": "/gitapi/tree" + fileDir + "/" + branchURL,
+			"TreeLocation": gitRoot + "/tree" + fileDir + "/" + branchURL,
 			"Type": "Branch"
 		};
 	}
@@ -124,7 +133,7 @@ module.exports.router = function(options) {
 	}
 	
 	function getBranches(req, res) {
-		var branchName = util.decodeURIComponent(req.params.branchName || "");
+		var branchName = api.decodeURIComponent(req.params.branchName || "");
 		var fileDir;
 		
 		var theRepo;
@@ -144,7 +153,7 @@ module.exports.router = function(options) {
 					return getBranchRemotes(theRepo, [branch], fileDir);
 				})
 				.then(function(){
-					res.status(200).json(branch);
+					writeResponse(200, res, null, branch, true);
 				});
 			})
 			.catch(function(err) {
@@ -191,10 +200,10 @@ module.exports.router = function(options) {
 					return getBranchRemotes(theRepo, branches, fileDir);
 				})
 				.then(function(){
-					res.status(200).json({
+					writeResponse(200, res, null, {
 							"Children": branches,
 							"Type": "Branch"
-					});
+					}, true);
 				});
 			});
 		})
@@ -233,7 +242,7 @@ module.exports.router = function(options) {
 			var branch = branchJSON(theRepo, ref, fileDir);
 			return getBranchRemotes(theRepo, [branch], fileDir)
 			.then(function(){
-				res.status(201).json(branch);
+				writeResponse(201, res, null, branch, true);
 			});
 		})
 		.catch(function(err) {
@@ -242,20 +251,20 @@ module.exports.router = function(options) {
 	}
 	
 	function deleteBranch(req, res) {
-		var branchName = util.decodeURIComponent(req.params.branchName);
+		var branchName = api.decodeURIComponent(req.params.branchName);
 		clone.getRepo(req)
 		.then(function(repo) {
 			return git.Branch.lookup(repo, branchName, git.Branch.BRANCH.LOCAL);
 		})
 		.then(function(ref) {
 			if (git.Branch.delete(ref) === 0) {
-				res.status(200).end();
+				writeResponse(200, res);
 			} else {
 				writeError(403, res);
 			}
 		})
-		.catch(function() {
-			writeError(403, res);
+		.catch(function(err) {
+			writeError(403, res, err.message);
 		});
 	}
 };

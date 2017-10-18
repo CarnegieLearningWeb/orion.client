@@ -9,8 +9,12 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var fileUtil = require('./fileUtil');
-var express = require('express');
+var fileUtil = require('./fileUtil'),
+	express = require('express'),
+	api = require("./api"),
+	log4js = require('log4js'),
+	logger = log4js.getLogger("git"),
+	responseTime = require('response-time');
 
 // Handle optional nodegit dependency
 var hasNodegit = true;
@@ -29,13 +33,13 @@ try {
 	var submodule = require('./git/submodule');
 	var tree = require('./git/tree');
 	var pullrequest = require('./git/pullrequest');
-	var gitFileDecorator = require('./git/gitfiledecorator').gitFileDecorator;
+	var GitFileDecorator = require('./git/gitfiledecorator').GitFileDecorator;
 } catch (e) {
 	hasNodegit = false;
 	if (e.code === "MODULE_NOT_FOUND" && e.message.indexOf("nodegit") >= 0) {
-		console.error("nodegit is not installed. Some features will be unavailable.");
+		logger.error("nodegit is not installed. Some features will be unavailable.");
 	} else {
-		console.error("nodegit failed to load. " + e.message);
+		logger.error("nodegit failed to load. " + e.message);
 	}
 }
 
@@ -48,22 +52,39 @@ if (hasNodegit) {
 function Nothing() {
 	var router = express.Router();
 	router.use(/* @callback */ function(req, res) {
-		res.status(404).json({
-			Severity: "Error",
-			Message: "Nodegit not installed."
-		});
+		api.writeResponse(404, res, null, {
+				Severity: "Error",
+				Message: "Nodegit not installed."
+			});
 	});
 	return router;
 }
 
 function Git(options) {
-	var workspaceRoot = options.root;
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root path required'); }
-	if (!workspaceRoot) { throw new Error('options.root path required'); }
+	var gitRoot = options.gitRoot;
+	var workspaceRoot = options.workspaceRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+	if (!workspaceRoot) { throw new Error('options.workspaceRoot is required'); }
 	
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
+
 	var router = express.Router();
 	
+	// General access check logic, which applies to mose of git endpoints, execpt clone, remote and config and also expect tree, which doesn't check at all
+	options.checkUserAccess = function(req, res, next){
+		var uri = req.url.split("?")[0];
+		var uriSegs = uri.split("/");
+		if(("/" + uriSegs[2]) === fileRoot){
+			uriSegs.splice(1, 1);
+			uri = uriSegs.join("/");
+		}
+		req.user.checkRights(req.user.username, uri, req, res, next);
+	};
+	//TODO should we propagate timing collection into sub-sub-git handlers?
+	router.use(responseTime({digits: 2, header: "X-Gitapi-Response-Time", suffix: true}));
 	router.use("/clone", clone.router(options));
 	router.use("/status", status.router(options));
 	router.use("/commit", commit.router(options));
@@ -78,6 +99,6 @@ function Git(options) {
 	router.use("/submodule", submodule.router(options));
 	router.use("/tree", tree.router(options));
 	router.use("/pullRequest", pullrequest.router(options));
-	fileUtil.addDecorator(gitFileDecorator);
+	fileUtil.addDecorator(new GitFileDecorator(options));
 	return router;
 }

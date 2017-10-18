@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2009, 2015 IBM Corporation and others.
+ * Copyright (c) 2009, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -16,8 +16,9 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 	'orion/editor/tooltip', //$NON-NLS-0$
 	'orion/editor/annotations', //$NON-NLS-0$
 	'orion/objects', //$NON-NLS-0$
+	'orion/editor/util', //$NON-NLS-1$
 	'orion/util' //$NON-NLS-0$
-], function(messages, mEventTarget, mTooltip, mAnnotations, objects, util) {
+], function(messages, mEventTarget, mTooltip, mAnnotations, objects, textUtil, util) {
 	
 	var AT = mAnnotations.AnnotationType;
 
@@ -180,9 +181,30 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		 * @param {Boolean} dirty
 		 */
 		setDirty: function(dirty) {
+			this._setSyntaxCheckRequired(dirty);
 			if (this._dirty === dirty) { return; }
 			this._dirty = dirty;
 			this.onDirtyChanged({type: "DirtyChanged"}); //$NON-NLS-0$
+		},
+		/**
+		 * Sets a flag indicating whether the editor contents have been modified since
+		 * the last syntax check (validation) operation.
+		 * 
+		 * @function
+		 * @param required {Boolean} what to set the flag to, true indicates the editor is dirty and needs syntax checking
+		 */
+		_setSyntaxCheckRequired: function _setSyntaxCheckRequired(required){
+			this._syntaxCheckRequired = required;
+		},
+		/**
+		 * Returns the state of the syntax check required flag, indicating whether the editor contents have
+		 * been modified since the last syntax check (validation) operation.
+		 * 
+		 * @function
+		 * @returns returns {Boolean} whether the flag has been set indicating a syntax check (validation) operation is required
+		 */
+		_isSyntaxCheckRequired: function _isSyntaxCheckRequired() {
+			return this._syntaxCheckRequired;
 		},
 		/**
 		 * @private
@@ -366,6 +388,22 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		 */
 		getFoldingRulerVisible: function() {
 			return this._foldingRulerVisible;
+		},
+		/**
+		 * Creates and add a FoldingAnnotation to the editor.
+		 *
+		 * @param {Number} start The start offset of the annotation in the text model.
+		 * @param {Number} end The end offset of the annotation in the text model.
+		 * @returns {orion.editor.FoldingAnnotation} The FoldingAnnotation added to the editor.
+		 */
+		addFoldingAnnotation: function(start, end) {
+			var annotationModel = this.getAnnotationModel();
+			if(annotationModel) {
+				var foldingAnnotation = new mAnnotations.FoldingAnnotation(start, end, this.getTextView().getModel());
+				annotationModel.addAnnotation(foldingAnnotation);
+				return foldingAnnotation;
+			}
+			return null;
 		},
 		/**
 		 * Returns the line number ruler of the editor.
@@ -573,6 +611,48 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			} else {
 				textView.removeRuler(this._zoomRuler);
 			}
+		},
+		
+		/**
+		 * Sets which annotations types are shown in the annotation ruler.  Annotations are visible by default.
+		 * 
+		 * @param {Object} types a hash table mapping annotation type to visibility (i.e. AnnotationType.ANNOTATION_INFO -> true).
+		 * @since 14.0
+		 */
+		setAnnotationTypesVisible: function(types) {
+			if (textUtil.compare(this._annotationTypesVisible, types)) return;
+			this._annotationTypesVisible = types;
+			if (!this._annotationRuler || !this._textView || !this._annotationRulerVisible) { return; }
+			this._annotationRuler.setAnnotationTypeVisible(types);
+			this._textView.redrawLines(0, undefined, this._annotationRuler);
+		},
+		
+		/**
+		 * Sets which annotations types are shown in the overview ruler.  Annotations are visible by default.
+		 * 
+		 * @param {Object} types a hash table mapping annotation type to visibility (i.e. AnnotationType.ANNOTATION_INFO -> true).
+		 * @since 14.0
+		 */
+		setOverviewAnnotationTypesVisible: function(types) {
+			if (textUtil.compare(this._overviewAnnotationTypesVisible, types)) return;
+			this._overviewAnnotationTypesVisible = types;
+			if (!this._overviewRuler || !this._textView || !this._overviewRulerVisible) { return; }
+			this._overviewRuler.setAnnotationTypeVisible(types);
+			this._textView.redrawLines(0, undefined, this._overviewRuler);
+		},
+		
+		/**
+		 * Sets which annotations types are shown in the text.  Annotations are visible by default.
+		 * 
+		 * @param {Object} types a hash table mapping annotation type to visibility (i.e. AnnotationType.ANNOTATION_INFO -> true).
+		 * @since 14.0
+		 */
+		setTextAnnotationTypesVisible: function(types) {
+			if (textUtil.compare(this._textAnnotationTypesVisible, types)) return;
+			this._textAnnotationTypesVisible = types;
+			if (!this._annotationStyler || !this._textView) { return; }
+			this._annotationStyler.setAnnotationTypeVisible(types);
+			this._textView.redrawLines(0, undefined);
 		},
 
 		mapOffset: function(offset, _parent) {
@@ -839,6 +919,62 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			this.install();
 		},
 
+		/**
+		 * Highlight a line.
+		 * @param {number} line
+		 */
+		highlightLine: function(line) {
+			// Find any existing annotation
+			var annotationModel = this.getAnnotationModel();
+			var textModel = this.getModel();
+			if (textModel.getBaseModel) {
+				textModel = textModel.getBaseModel();
+			}
+			var type = AT.ANNOTATION_HIGHLIGHTED_LINE;
+			var annotations = annotationModel.getAnnotations(0, textModel.getCharCount());
+			var remove = null;
+			while (annotations.hasNext()) {
+				var annotation = annotations.next();
+				if (annotation.type === type) {
+					remove = annotation;
+					break;
+				}
+			}
+			var lineStart = textModel.getLineStart(line);
+			var lineEnd = textModel.getLineEnd(line);
+			var add = AT.createAnnotation(type, lineStart, lineEnd);
+			// Replace to or add the new annotation
+			if (remove) {
+				annotationModel.replaceAnnotations([remove], [add]);
+			} else {
+				annotationModel.addAnnotation(add);
+			}
+		},
+
+		/**
+		 * Unhightlight the highlighted line
+		 */
+		unhighlightLine: function() {
+			var annotationModel = this.getAnnotationModel();
+			var textModel = this.getModel();
+			if (textModel.getBaseModel) {
+				textModel = textModel.getBaseModel();
+			}
+			var type = AT.ANNOTATION_HIGHLIGHTED_LINE;
+			var annotations = annotationModel.getAnnotations(0, textModel.getCharCount());
+			var remove = null;
+			while (annotations.hasNext()) {
+				var annotation = annotations.next();
+				if (annotation.type === type) {
+					remove = annotation;
+					break;
+				}
+			}
+			if (remove) {
+				annotationModel.removeAnnotation(remove);
+			}
+		},
+
 		install : function() {
 			if (this._textView) { return; }
 
@@ -948,7 +1084,30 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 				}
 			}
 
+			var rulerOnDblClick = /* @callback */ function(lineIndex, e) {
+				if (e.shiftKey) {
+					addRemoveBookmark.call(this, lineIndex, e);
+				} else if (e.altKey) {
+					addRemoveConditionalBreakpoint.call(this, lineIndex, e);
+				} else {
+					addRemoveBreakpoint.call(this, lineIndex, e);
+				}
+			};
+
 			var addRemoveBookmark = /* @callback */ function(lineIndex, e) {
+				addRemoveAnnotation.call(this, lineIndex, e, AT.ANNOTATION_BOOKMARK);
+			};
+
+			var addRemoveBreakpoint = /* @callback */ function(lineIndex, e) {
+				addRemoveAnnotation.call(this, lineIndex, e, AT.ANNOTATION_BREAKPOINT);
+			};
+
+			var addRemoveConditionalBreakpoint = /* @callback */ function(lineIndex, e) {
+				addRemoveAnnotation.call(this, lineIndex, e, AT.ANNOTATION_CONDITIONAL_BREAKPOINT);
+			};
+
+			/** @callback */
+			function addRemoveAnnotation(lineIndex, e, annotationType) {
 				if (lineIndex === undefined) { return; }
 				if (lineIndex === -1) { return; }
 				var view = this.getView();
@@ -960,16 +1119,25 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 				var bookmark = null;
 				while (annotations.hasNext()) {
 					var annotation = annotations.next();
-					if (annotation.type === AT.ANNOTATION_BOOKMARK) {
+					if (annotation.type === annotationType) {
 						bookmark = annotation;
 						break;
 					}
 				}
 				if (bookmark) {
-					annotationModel.removeAnnotation(bookmark);
+					editor.dispatchEvent({
+						// This event will only be triggered by the user double clicking the side bar. (i.e. add/remove bookmark or breakpoint)
+						type: 'UserAnnotationModified',
+						added: [],
+						removed: [bookmark]
+					});
 				} else {
-					bookmark = AT.createAnnotation(AT.ANNOTATION_BOOKMARK, lineStart, lineEnd, editor.getText(lineStart, lineEnd));
-					annotationModel.addAnnotation(bookmark);
+					bookmark = AT.createAnnotation(annotationType, lineStart, lineEnd, editor.getText(lineStart, lineEnd));
+					editor.dispatchEvent({
+						type: 'UserAnnotationModified',
+						added: [bookmark],
+						removed: []
+					});
 				}
 			};
 
@@ -983,32 +1151,42 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 					if (styler) {
 						styler.addAnnotationType(AT.ANNOTATION_CURRENT_SEARCH);
 						styler.addAnnotationType(AT.ANNOTATION_MATCHING_SEARCH);
+						styler.addAnnotationType(AT.ANNOTATION_SEARCH_RANGE);
 						styler.addAnnotationType(AT.ANNOTATION_ERROR);
 						styler.addAnnotationType(AT.ANNOTATION_WARNING);
+						styler.addAnnotationType(AT.ANNOTATION_INFO);
 						styler.addAnnotationType(AT.ANNOTATION_MATCHING_BRACKET);
 						styler.addAnnotationType(AT.ANNOTATION_CURRENT_BRACKET);
 						styler.addAnnotationType(AT.ANNOTATION_CURRENT_LINE);
+						styler.addAnnotationType(AT.ANNOTATION_HIGHLIGHTED_LINE);
 						styler.addAnnotationType(AT.ANNOTATION_READ_OCCURRENCE);
 						styler.addAnnotationType(AT.ANNOTATION_WRITE_OCCURRENCE);
 						styler.addAnnotationType(AT.ANNOTATION_SELECTED_LINKED_GROUP);
 						styler.addAnnotationType(AT.ANNOTATION_CURRENT_LINKED_GROUP);
 						styler.addAnnotationType(AT.ANNOTATION_LINKED_GROUP);
 						styler.addAnnotationType(HIGHLIGHT_ERROR_ANNOTATION);
+
+						styler.setAnnotationTypeVisible(this._textAnnotationTypesVisible);
 					}
 				}
 
 				var rulers = this._annotationFactory.createAnnotationRulers(this._annotationModel);
 				var ruler = this._annotationRuler = rulers.annotationRuler;
 				if (ruler) {
-					ruler.onDblClick = addRemoveBookmark;
+					ruler.onDblClick = rulerOnDblClick;
 					ruler.setMultiAnnotationOverlay({html: "<div class='annotationHTML overlay'></div>"}); //$NON-NLS-0$
 					ruler.addAnnotationType(AT.ANNOTATION_ERROR);
 					ruler.addAnnotationType(AT.ANNOTATION_WARNING);
+					ruler.addAnnotationType(AT.ANNOTATION_INFO);
 					ruler.addAnnotationType(AT.ANNOTATION_TASK);
 					ruler.addAnnotationType(AT.ANNOTATION_BOOKMARK);
+					ruler.addAnnotationType(AT.ANNOTATION_BREAKPOINT);
+					ruler.addAnnotationType(AT.ANNOTATION_CONDITIONAL_BREAKPOINT);
 					ruler.addAnnotationType(AT.ANNOTATION_DIFF_ADDED);
 					ruler.addAnnotationType(AT.ANNOTATION_DIFF_DELETED);
 					ruler.addAnnotationType(AT.ANNOTATION_DIFF_MODIFIED);
+					
+					ruler.setAnnotationTypeVisible(this._annotationTypesVisible);
 				}
 				this.setAnnotationRulerVisible(this._annotationRulerVisible || this._annotationRulerVisible === undefined, true);
 
@@ -1022,15 +1200,19 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 					ruler.addAnnotationType(AT.ANNOTATION_CURRENT_BLAME);
 					ruler.addAnnotationType(AT.ANNOTATION_ERROR);
 					ruler.addAnnotationType(AT.ANNOTATION_WARNING);
+					ruler.addAnnotationType(AT.ANNOTATION_INFO);
 					ruler.addAnnotationType(AT.ANNOTATION_TASK);
 					ruler.addAnnotationType(AT.ANNOTATION_BOOKMARK);
+					ruler.addAnnotationType(AT.ANNOTATION_BREAKPOINT);
+					ruler.addAnnotationType(AT.ANNOTATION_CONDITIONAL_BREAKPOINT);
 					ruler.addAnnotationType(AT.ANNOTATION_MATCHING_BRACKET);
 					ruler.addAnnotationType(AT.ANNOTATION_CURRENT_BRACKET);
 					ruler.addAnnotationType(AT.ANNOTATION_CURRENT_LINE);
 					ruler.addAnnotationType(AT.ANNOTATION_DIFF_ADDED);
 					ruler.addAnnotationType(AT.ANNOTATION_DIFF_DELETED);
 					ruler.addAnnotationType(AT.ANNOTATION_DIFF_MODIFIED);
-
+					
+					ruler.setAnnotationTypeVisible(this._overviewAnnotationTypesVisible);
 				}
 				this.setOverviewRulerVisible(this._overviewRulerVisible || this._overviewRulerVisible === undefined, true);
 			}
@@ -1047,7 +1229,7 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 		        this._lineNumberRuler.addAnnotationType(AT.ANNOTATION_DIFF_ADDED);
 		        this._lineNumberRuler.addAnnotationType(AT.ANNOTATION_DIFF_MODIFIED);
 		        this._lineNumberRuler.addAnnotationType(AT.ANNOTATION_DIFF_DELETED);
-				this._lineNumberRuler.onDblClick = addRemoveBookmark;
+				this._lineNumberRuler.onDblClick = rulerOnDblClick;
 				this.setLineNumberRulerVisible(this._lineNumberRulerVisible || this._lineNumberRulerVisible === undefined, true);
 			}
 
@@ -1188,12 +1370,14 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 			this.showAnnotations(problems, [
 				AT.ANNOTATION_ERROR,
 				AT.ANNOTATION_WARNING,
-				AT.ANNOTATION_TASK
+				AT.ANNOTATION_TASK,
+				AT.ANNOTATION_INFO
 			], null, function(annotation) {
 				switch (annotation.severity) {
 					case "error": return AT.ANNOTATION_ERROR; //$NON-NLS-0$
 					case "warning": return AT.ANNOTATION_WARNING; //$NON-NLS-0$
 					case "task": return AT.ANNOTATION_TASK; //$NON-NLS-0$
+					case "info": return AT.ANNOTATION_INFO;
 				}
 				return null;
 			});
@@ -1242,6 +1426,9 @@ define("orion/editor/editor", [ //$NON-NLS-0$
 				if (index === -1) { index = this.blame.Message.length; }
 				var commitLink = util.createElement(doc, "a"); //$NON-NLS-0$
 				commitLink.href = this.blame.CommitLink;
+				if(util.isElectron){
+					commitLink.target = "_blank";
+				}
 				commitLink.appendChild(doc.createTextNode(this.blame.Message.substring(0, index)));
 				titleDiv.appendChild(commitLink);
 				titleDiv.appendChild(util.createElement(doc, "br")); //$NON-NLS-0$

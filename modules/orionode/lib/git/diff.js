@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,41 +9,48 @@
  *	 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var git = require('nodegit');
-var url = require('url');
-var api = require('../api'), writeError = api.writeError;
-var clone = require('./clone');
-var fs = require('fs');
-var path = require('path');
-var mkdirp = require('mkdirp');
-var mDiff = require('diff');
-var request = require('request');
-var multiparty = require('multiparty');
-var express = require('express');
-var bodyParser = require('body-parser');
-var util = require('./util');
-var async = require('async');
+var git = require('nodegit'),
+	url = require('url'),
+	api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
+	clone = require('./clone'),
+	fs = require('fs'),
+	path = require('path'),
+	mkdirp = require('mkdirp'),
+	mDiff = require('diff'),
+	request = require('request'),
+	multiparty = require('multiparty'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	async = require('async'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
-
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+	
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
+	
 	module.exports.changeType = changeType;
 
 	return express.Router()
 	.use(bodyParser.json())
-	.get('/file*', getDiff)
-	.get('/:scope/file*', getDiff)
-	.post('/:scope/file*', postDiff);
+	.use(responseTime({digits: 2, header: "X-GitapiDiff-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
+	.get(fileRoot + '*', getDiff)
+	.get('/:scope'+ fileRoot + '*', getDiff)
+	.post('/:scope'+ fileRoot + '*', postDiff);
 
 function getDiff(req, res) {
 	var query = req.query;
 	var parts = (query.parts || "").split(",");
 	var ignoreWS = query.ignoreWS === "true";
 	var paths = query.Path;
-	var scope = util.decodeURIComponent(req.params.scope || "");
+	var scope = api.decodeURIComponent(req.params.scope || "");
 	var filePath; 
 	
 	var diff, repo;
@@ -59,11 +66,11 @@ function getDiff(req, res) {
 		if (includeURIs) {
 			var p = api.toURLPath(path.join(fileDir, filePath));
 			URIs = {
-				"Base": getBaseLocation(scope, p),
-				"CloneLocation": "/gitapi/clone" + fileDir,
-				"Location": "/gitapi/diff/" + util.encodeURIComponent(scope) + fileDir + filePath,
-				"New": getNewLocation(scope, p),
-				"Old": getOldLocation(scope, p),
+				"BaseLocation": getBaseLocation(scope, p),
+				"CloneLocation": gitRoot + "/clone" + fileDir,
+				"Location": path.join(gitRoot, "/diff", api.encodeURIComponent(scope), fileDir, filePath),
+				"NewLocation": getNewLocation(scope, p, req.contextPath),
+				"OldLocation": getOldLocation(scope, p),
 				"Type": "Diff"
 			};
 		}
@@ -78,7 +85,7 @@ function getDiff(req, res) {
 			if (includeDiff && includeURIs) {
 				body += "--BOUNDARY\n";
 				body += "Content-Type: application/json\n\n";
-				body += JSON.stringify(URIs);
+				body += JSON.stringify(api.encodeLocation(URIs));
 				body += "--BOUNDARY\n";
 				body += "Content-Type: plain/text\n\n";
 				body += diffContents.join("");
@@ -89,14 +96,13 @@ function getDiff(req, res) {
 				res.setHeader("Content-Disposition", "attachment; filename=\"changes.patch\"");
 				res.setHeader('Content-Type', 'plain/text');
 			} else if (includeDiffs) {
-				body += JSON.stringify(diffs);
+				body += JSON.stringify(api.encodeLocation(diffs));
 				res.setHeader('Content-Type', 'application/json');
 			} else if (includeURIs) {
-				body += JSON.stringify(URIs);
+				body += JSON.stringify(api.encodeLocation(URIs));
 				res.setHeader('Content-Type', 'application/json');
 			}
-			res.setHeader('Content-Length', body.length);
-			return res.status(200).end(body);
+			return writeResponse(200, res, null, body);
 		}
 		if (includeDiff || includeDiffs) {
 			var diffOptions = getOptions(ignoreWS, filePath, paths);
@@ -135,21 +141,24 @@ function changeType(patch) {
 function getOldLocation(scope, path) {
 	if (scope.indexOf("..") !== -1) {
 		var commits = scope.split("..");
-		return "/gitapi/commit/" + util.encodeURIComponent(commits[0]) + path + "?parts=body";
+		return {pathname: gitRoot + "/commit/" + api.encodeURIComponent(commits[0]) + path, query: {parts: "body"}};
 	} else if (scope === "Cached") {
-		return "/gitapi/commit/HEAD" + path + "?parts=body";
+		return {pathname: gitRoot + "/commit/HEAD" + path, query: {parts: "body"}};
 	} else if (scope === "Default") {
-		return "/gitapi/index" + path;
+		return gitRoot + "/index" + path;
 	}
-	return "/gitapi/commit/" + util.encodeURIComponent(scope) + path + "?parts=body";
+	return {pathname: gitRoot + "/commit/" + api.encodeURIComponent(scope) + path, query: {parts: "body"}};
 }
 
-function getNewLocation(scope, path) {
+function getNewLocation(scope, path ,contextPath) {
 	if (scope.indexOf("..") !== -1) {
 		var commits = scope.split("..");
-		return "/gitapi/commit/" + util.encodeURIComponent(commits[1]) + path + "?parts=body";
+		return {pathname: gitRoot + "/commit/" + api.encodeURIComponent(commits[1]) + path, query: {parts: "body"}};
 	} else if (scope === "Cached") {
-		return "/gitapi/index" + path;
+		return gitRoot + "/index" + path;
+	}
+	if (path.startsWith(fileRoot)) {
+		path = contextPath + path; // Since git endpoint's fileRoot doesn't have contextPath part
 	}
 	return path;
 }
@@ -158,11 +167,11 @@ function getBaseLocation(scope, path) {
 	if (scope.indexOf("..") !== -1) {
 		var commits = scope.split("..");
 		//TODO find merge base
-		return "/gitapi/commit/" + util.encodeURIComponent(commits[1]) + path + "?parts=body";
+		return {pathname: gitRoot + "/commit/" + api.encodeURIComponent(commits[1]) + path, query: {parts: "body"}};
 	} else if (scope === "Cached") {
-		return "/gitapi/commit/HEAD" + path + "?parts=body";
+		return {pathname: gitRoot + "/commit/HEAD" + path, query: {parts: "body"}};
 	}
-	return "/gitapi/index" + path;
+	return gitRoot + "/index" + path;
 }
 
 function processDiff(diff, filePath, paths, fileDir, includeDiff, includeDiffs, query, scope, diffContents, diffs) {
@@ -189,7 +198,7 @@ function processDiff(diff, filePath, paths, fileDir, includeDiff, includeDiffs, 
 					diffs.Children.push({
 						"ChangeType": type,
 						"ContentLocation": p1,
-						"DiffLocation": "/gitapi/diff/" + util.encodeURIComponent(scope) + p1,
+						"DiffLocation": gitRoot + "/diff/" + api.encodeURIComponent(scope) + p1,
 						"NewPath": newFilePath,
 						"OldPath": oldFilePath,
 						"Type": "Diff"
@@ -254,8 +263,8 @@ function processDiff(diff, filePath, paths, fileDir, includeDiff, includeDiffs, 
 		});
 		if (includeDiffs) {
 			diffs.Length = patches.length;
-			if (i < patches.length) {
-				diffs.NextLocation = "";
+			if (i < patches.length - 1) {
+				diffs.NextLocation  = {pathname: gitRoot + "/diff/" + scope + fileDir, query: {page: page + 1, pageSize:pageSize}}
 			}
 		}
 		return Promise.all(result);
@@ -384,29 +393,35 @@ function applyPatch(req, res) {
 						}
 						fs.readFile(this.getFile(index.oldFileName), "utf8", cb);
 					},
-					patched: function(index, content) {
+					patched: function(index, content, cb) {
 						if (content === false || !index.newFileName) {
 							failed.push(index);
+							cb();
 							return;
 						}
 						successed.push(index);
 						if (index.newFileName === "/dev/null") {
 							fs.unlink(this.getFile(index.oldFileName));
+							cb();
 							return;
 						}
 						var fileName = this.getFile(index.newFileName);
 						mkdirp(path.dirname(fileName), function (err) {
 							if (err) {
 								failed.push(index);
+								cb(err);
 								return;
 							}
 							fs.writeFile(fileName, content, "utf8", function(err) {
 								if (err) {
 									failed.push(index);
+									cb(err);
 									return;
 								}
 							});
 						});
+						cb();
+						return;
 					},
 					complete: function(err) {
 						if (err) return writeError(404, res, err.message);
@@ -416,7 +431,7 @@ function applyPatch(req, res) {
 							}.bind(this))
 						};
 						if (failed.length) {
-							return res.status(400).json({
+							return writeResponse(400, res, null, {
 								Message: "Some files did not apply: " + failed.map(function(index) {
 									return this.getUnprefixFile(index.oldFileName);
 								}.bind(this)).join(","),
@@ -425,7 +440,7 @@ function applyPatch(req, res) {
 								JsonData: jsonData
 							});
 						}
-						res.status(200).json({
+						writeResponse(200, res, null, {
 							Message: "Ok",
 							HttpCode: 200,
 							JsonData: jsonData
@@ -460,9 +475,9 @@ function postDiff(req, res) {
 	var newCommit = req.body.New;
 	var originalUrl = url.parse(req.originalUrl, true);
 	var segments = originalUrl.pathname.split("/");
-	segments[3] = segments[3] + ".." + util.encodeURIComponent(newCommit);
+	var contextPathSegCount = req.contextPath.split("/").length - 1;
+	segments[3 + contextPathSegCount] = segments[3 + contextPathSegCount] + ".." + api.encodeURIComponent(newCommit);
 	var location = url.format({pathname: segments.join("/"), query: originalUrl.query});
-	res.setHeader('Location', location);
-	res.status(200).json({Location: location});
+	writeResponse(200, res, {'Location':location}, {Location: location}, false); // Avoid double encoding
 }
 };

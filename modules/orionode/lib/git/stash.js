@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,25 +9,33 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'), writeError = api.writeError;
-var git = require('nodegit');
-var mCommit = require('./commit');
-var clone = require('./clone');
-var express = require('express');
-var bodyParser = require('body-parser');
+var api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
+	git = require('nodegit'),
+	mCommit = require('./commit'),
+	clone = require('./clone'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
-	
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
+
 	return express.Router()
 	.use(bodyParser.json())
+	.use(responseTime({digits: 2, header: "X-GitapiStash-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
 	.get('*', getStash)
-	.delete('/file*', deleteStash)
+	.delete(fileRoot + '*', deleteStash)
 	.delete('/:stashRev*', deleteStash)
-	.put('/file*', putStash)
+	.put(fileRoot + '*', putStash)
 	.put('/:stashRev*', putStash)
 	.post('*', postStash);
 
@@ -52,8 +60,8 @@ function getStash(req, res) {
 				var diffs = commitAndDiffs[1];
 				var parents = commitAndDiffs[2];
 				var stashCommit = mCommit.commitJSON(commit, fileDir, diffs, parents);
-				stashCommit["ApplyLocation"] = "/gitapi/stash/" + oid + fileDir;
-				stashCommit["DropLocation"] = "/gitapi/stash/" + oid + fileDir;
+				stashCommit["ApplyLocation"] = gitRoot + "/stash/" + oid + fileDir;
+				stashCommit["DropLocation"] = gitRoot + "/stash/" + oid + fileDir;
 				stashCommit["Type"] = "StashCommit";
 				return stashCommit;
 			}));
@@ -63,12 +71,12 @@ function getStash(req, res) {
 		return Promise.all(stashesPromises);
 	})
 	.then(function(stashes) {
-		res.status(200).json({
+		writeResponse(200, res, null, {
 			"Children" : stashes,
-			"Location" : "/gitapi/stash" + fileDir,
-			"CloneLocation" : "/gitapi/clone" + fileDir,
+			"Location" : gitRoot + "/stash" + fileDir,
+			"CloneLocation" : gitRoot + "/clone" + fileDir,
 			"Type" : "StashCommit"
-		});
+		}, true);
 	})
 	.catch(function(err) {
 		writeError(500, res, err.message);
@@ -82,24 +90,41 @@ function putStash(req, res) {
 	.then(function(_repo) {
 		repo = _repo;
 		if (stashRev) {
-			var index;
+			var empty = true;
+			var index = -1;
 			return git.Stash.foreach(repo, /* @callback */ function(i, message, oid) {
+				empty = false;
 				if (oid.toString() === stashRev) {
 					index = i;
 				}
 			})
 			.then(function() {
-				return git.Stash.apply(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX);
+				if (empty) {
+					return "Failed to apply stashed changes due to an empty stash.";
+				} else if (index === -1) {
+					return "Invalid stash reference " + stashRev + ".";
+				}
+				return git.Stash.apply(repo, index, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX)
+				.then(function() {
+					return null;
+				});
 			});
 		}
-		return git.Stash.pop(repo, 0, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX);
+		return git.Stash.pop(repo, 0, git.Stash.APPLY_FLAGS.APPLY_REINSTATE_INDEX)
+		.then(function() {
+			return null;
+		});
 	})
-	.then(function() {
-		res.status(200).end();
+	.then(function(message) {
+		if (message === null) {
+			writeResponse(200, res);
+		} else {
+			writeError(400, res, message);
+		}
 	})
 	.catch(function(err) {
-		if (err.message === "Reference 'refs/stash' not found"){
-			writeError(400, res, "Failed to apply stashed changes due to an empty stash.");
+		if (err.message === "reference 'refs/stash' not found"){
+			return writeError(400, res, "Failed to apply stashed changes due to an empty stash.");
 		}
 		writeError(404, res, err.message);
 	});
@@ -111,23 +136,42 @@ function deleteStash(req, res) {
 	return clone.getRepo(req)
 	.then(function(_repo) {
 		repo = _repo;
-		var index, all = [];
+		var index = -1, all = [];
+		var empty = true;
 		return git.Stash.foreach(repo, /* @callback */ function(i, message, oid) {
+			empty = false;
 			if (stashRev) {
 				if (oid.toString() === stashRev) {
 					index = i;
 				}
 			} else {
-				all.push(git.Stash.drop(repo, index));				
+				all.push(git.Stash.drop(repo, i));
 			} 
 		})
 		.then(function() {
-			if (all.length) return Promise.all(all);
-			return git.Stash.drop(repo, index);
+			if (empty) {
+				return "Failed to drop stashed changes due to an empty stash.";
+			} else if (stashRev) {
+				if (index === -1) {
+					return "Invalid stash reference " + stashRev + ".";
+				} else {
+					return git.Stash.drop(repo, index).then(function() {
+						return null;
+					});
+				}
+			} else {
+				return Promise.all(all).then(function() {
+					return null;
+				});
+			}
 		});
 	})
-	.then(function() {
-		res.status(200).end();
+	.then(function(message) {
+		if (message === null) {
+			writeResponse(200, res);
+		} else {
+			writeError(400, res, message);
+		}
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
@@ -146,7 +190,7 @@ function postStash(req, res) {
 		return git.Stash.save(repo, clone.getSignature(repo), message, flags);
 	})
 	.then(function() {
-		res.status(200).end();
+		writeResponse(200, res);
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);

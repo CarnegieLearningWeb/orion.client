@@ -25,9 +25,10 @@ define([
 	'orion/webui/littlelib', 
 	'orion/util', 
 	'orion/webui/dialog', 
-	'orion/metrics', 
+	'orion/metrics',
+	'orion/generalPreferences',
 	'orion/Deferred'
-], function(messages, searchMSG, extensionCommands, i18nUtil, bidiUtils, mSearchUtils, navigatorRenderer, mContentTypes, require, lib, util, dialog, mMetrics, Deferred) {
+], function(messages, searchMSG, extensionCommands, i18nUtil, bidiUtils, mSearchUtils, navigatorRenderer, mContentTypes, require, lib, util, dialog, mMetrics, mGeneralPreferences, Deferred) {
 	//default search renderer until we factor this out completely
 	function DefaultSearchRenderer(serviceRegistry, commandRegistry) {
 		this.serviceRegistry = serviceRegistry;
@@ -202,7 +203,7 @@ define([
 		'<div role="search">' + //$NON-NLS-0$
 			'<div><label id="fileNameMessage" for="fileName">${Type the name of a file to open (? = any character, * = any string):}</label></div>' + //$NON-NLS-0$
 			'<div><input id="fileName" type="text" class="openResourceDialogInput" style="min-width: 25em; width:90%;"/></div>' + //$NON-NLS-0$
-			'<div><label for="searchScope"><input id="searchScope" type="checkbox" style="width: auto" class="openResourceDialogInput"/>${Search all Projects}</label></input></div>' + //$NON-NLS-0$
+			'<div><label for="searchScope"><input id="searchScope" type="checkbox" style="width: auto" class="openResourceDialogInput"/>${Search In All Folders}</label></input></div>' + //$NON-NLS-0$
 			'<div id="progress" style="padding: 2px 0 0; width: 100%;"><img src="'+ require.toUrl("../../../images/progress_running.gif") + '" class="progressPane_running_dialog" id="crawlingProgress"></img></div>' +  //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			'<div id="results" style="max-height:250px; height:auto; overflow-y:auto;" aria-live="off"></div>' + //$NON-NLS-0$
 			'<div id="statusbar"></div>' + //$NON-NLS-0$
@@ -216,6 +217,7 @@ define([
 		this.commandRegistry = options.commandRegistry;
 		this._searcher = options.searcher;
 		this._progress = options.progress;
+		this._prefService = options.prefService;
 		this._onHide = options.onHide;
 		this._contentTypeService = new mContentTypes.ContentTypeRegistry(this.serviceRegistry);
 		if (!this._searcher) {
@@ -261,11 +263,7 @@ define([
 		}
 		bidiUtils.initInputField(this.$fileName);
 		this.$fileName.addEventListener("input", function(evt) { //$NON-NLS-0$
-			self._time = + new Date();
-			if (self._timeoutId) {
-				clearTimeout(self._timeoutId);
-			}
-			self._timeoutId = setTimeout(self.checkSearch.bind(self), 0);
+			self.checkSearch();
 		}, false);
 		this.$fileName.addEventListener("keydown",function(evt) { //$NON-NLS-0$
 			if (evt.keyCode === lib.KEY.ENTER) {
@@ -273,9 +271,9 @@ define([
 				if (link) {
 					lib.stop(evt);
 					if(util.isMac ? evt.metaKey : evt.ctrlKey){
-						window.open(link.href);
+						window.open(urlModifier(link.href));
 					} else {
-						window.location.href = link.href;
+						window.location.href = urlModifier(link.href);
 						self.hide();
 					}
 					self._saveOpenedFileName(link.resource);
@@ -386,14 +384,8 @@ define([
 
 	/** @private */
 	OpenResourceDialog.prototype.checkSearch = function() {
-		clearTimeout(this._timeoutId);
-		var now = Date.now();
-		if ((now - this._time) > this._searchDelay) {
-			this._time = now;
-			this.doSearch();
-		} else {
-			this._timeoutId = setTimeout(this.checkSearch.bind(this), 50); //$NON-NLS-0$
-		}
+		if (this._timeoutId) clearTimeout(this._timeoutId);
+		this._timeoutId = setTimeout(this.doSearch.bind(this), this._searchDelay); //$NON-NLS-0$
 	};
 
 	/** @private */
@@ -443,39 +435,34 @@ define([
 			
 			// Capture the checkbox state
 			this._searchOnRoot = this.$searchScope.checked;
-			
-			var searchParams = this._searcher.createSearchParams(keyword.keyword, this._nameSearch, this._searchOnRoot);
-			var renderFunction = this._searchRenderer.makeRenderFunction(this._contentTypeService, this.$results, false, this.decorateResult.bind(this));
-			this.currentSearch = renderFunction;
-			var div = document.createElement("div"); //$NON-NLS-0$
-			div.appendChild(document.createTextNode(this._nameSearch ? messages['Searching...'] : util.formatMessage(messages["SearchOccurences"], text)));
-			lib.empty(this.$results);
-			this.$results.appendChild(div);
-			var deferredSearch;
-			if(this._searchPending) {
-				deferredSearch = this._searcher.cancel();
-				this.cancelled = true;
-			} else {
-				deferredSearch = new Deferred().resolve();
-			}
-			deferredSearch.then(function(/*result*/) {
-				this._searchPending = true;
-				this._searcher.search(searchParams).then(function(searchResult) {
-					this._searchPending = false;
-					if (renderFunction === this.currentSearch || this.cancelled) {
-						this.cancelled = false;
-						var filteredResult = searchResult.filter(function(item) {
-							return (keyword.folderKeyword ? (item.path.indexOf(keyword.folderKeyword) >= 0) : true);
-						});
-						renderFunction(filteredResult, searchParams.keyword, null, searchParams);
-					}
+			return new mGeneralPreferences.GeneralPreferences(this._prefService).getPrefs().then(function(prefs) {
+				if(typeof prefs.filteredResources === 'string') {
+					var excludeFilesFromSetting = prefs.filteredResources.split(',');
+				}
+				var searchParams = this._searcher.createSearchParams(keyword.keyword, this._nameSearch, this._searchOnRoot,{exclude:excludeFilesFromSetting});
+				var renderFunction = this._searchRenderer.makeRenderFunction(this._contentTypeService, this.$results, false, this.decorateResult.bind(this));
+				var div = document.createElement("div"); //$NON-NLS-0$
+				div.appendChild(document.createTextNode(this._nameSearch ? messages['Searching...'] : util.formatMessage(messages["SearchOccurences"], text)));
+				lib.empty(this.$results);
+				this.$results.appendChild(div);
+				if (this._searchPending) {
+					this._searchPending.cancel();
+				}
+				var currentSearch = this._searchPending = this._searcher.search(searchParams).then(function(searchResult) {
+					this._searchPending =  null;
+					var filteredResult = searchResult.filter(function(item) {
+						return keyword.folderKeyword ? item.path.indexOf(keyword.folderKeyword) >= 0 : true;
+					});
+					renderFunction(filteredResult, searchParams.keyword, null, searchParams);
 				}.bind(this), function(error) {
-					renderFunction(null, null, error, null);
+					if (currentSearch === this._searchPending) {
+						this._searchPending = null;
+						renderFunction(null, null, error, null);
+					}
 				}.bind(this));
 			}.bind(this));
-		}else{
-			this._showRecentSearchedOpenedFiles();
 		}
+		this._showRecentSearchedOpenedFiles();
 	};
 	
 	/** @private */
@@ -486,7 +473,8 @@ define([
 			if (evt.button === 0 && !evt.ctrlKey && !evt.metaKey) {
 				self.hide();
 			}
-			self._saveOpenedFileName(evt.srcElement.resource);
+			var resource = evt.target ? evt.target.resource : evt.srcElement.resource;
+			self._saveOpenedFileName(resource);
 		}
 		for (var i=0; i<links.length; i++) {
 			var link = links[i];
@@ -532,6 +520,7 @@ define([
 	/** @private */
 	OpenResourceDialog.prototype._beforeHiding = function() {
 		clearTimeout(this._timeoutId);
+		this._timeoutId = 0;
 	};
 	
 	OpenResourceDialog.prototype._afterHiding = function() {

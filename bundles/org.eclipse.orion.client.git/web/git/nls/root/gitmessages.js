@@ -10,7 +10,7 @@
 /*eslint-env browser, amd*/
 define({//Default message bundle
 	"Compare": "Compare", //$NON-NLS-0$  //$NON-NLS-1$
-	"GitFileSysName": "Git File System", //$NON-NLS-0$  //$NON-NLS-1$
+	"GitFileSysName": "Git Root", //$NON-NLS-0$  //$NON-NLS-1$
 	"View the side-by-side compare": "View the side-by-side compare", //$NON-NLS-0$  //$NON-NLS-1$
 	"WorkingDirVer": "Open Working Directory", //$NON-NLS-0$  //$NON-NLS-1$
 	"Working Directory": "Working Directory", //$NON-NLS-0$  //$NON-NLS-1$
@@ -81,6 +81,7 @@ define({//Default message bundle
 	"CommitTooltip": "Commit the selected files with the given message.", //$NON-NLS-0$  //$NON-NLS-1$
 	"AuthMsgLink":"Authentication required for: ${0}. <a target=\"_blank\" href=\"${1}\">${2}</a> and re-try the request. </span>", //$NON-NLS-0$  //$NON-NLS-1$
 	"SmartCommit": "Enter the commit message", //$NON-NLS-0$  //$NON-NLS-1$
+	"SmartCommitLabel": "Commit message", //$NON-NLS-0$  //$NON-NLS-1$
 	"SmartCountCommit": "Commit ${0} file(s)", //$NON-NLS-0$  //$NON-NLS-1$
 	"Amend last commit": "Amend last commit", //$NON-NLS-0$  //$NON-NLS-1$
 	" Amend": " Amend", //$NON-NLS-0$  //$NON-NLS-1$
@@ -619,11 +620,13 @@ define({//Default message bundle
 	"MorePullRequests": "More pull requests for \"${0}\"", //$NON-NLS-0$  //$NON-NLS-1$
 	"MorePullRequestsProgress": "Loading more pull requests for \"${0}\"...", //$NON-NLS-0$  //$NON-NLS-1$
 	"Authorize to get pull requests": "Authorize to get pull requests", //$NON-NLS-0$  //$NON-NLS-1$
+	"ForbiddenAccess": "You do not have permission to perform this operation. Details: ${0}", //$NON-NLS-0$  //$NON-NLS-1$
 	"CherryPickProgress": "Cherry Pick in progress", //$NON-NLS-0$  //$NON-NLS-1$
 	"MergeProgress": "Merge in progress", //$NON-NLS-0$  //$NON-NLS-1$
 	"OpenGithubPullRequest": "Open Github Page", //$NON-NLS-0$  //$NON-NLS-1$
 	"OpenGithubPullRequestMsg": "Open the Github page for this Pull Request.", //$NON-NLS-0$  //$NON-NLS-1$
 	"AllowPopUpMsg": "Please allow popups for this site.", //$NON-NLS-0$  //$NON-NLS-1$
+	"ShowGraph":"Show graphical history viewer", //$NON-NLS-0$  //$NON-NLS-1$
 	"ToggleGraph":"Toggles the graphical representation of the commit history", //$NON-NLS-0$  //$NON-NLS-1$
 	"Annotated":"Annotated" //$NON-NLS-0$  //$NON-NLS-1$
 });

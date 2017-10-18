@@ -1,9 +1,9 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2016 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials are made 
- * available under the terms of the Eclipse Public License v1.0 
- * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
+ * Copyright (c) 2016, 2017 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License v1.0
+ * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
  * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html).
  *
  * Contributors:
@@ -193,6 +193,87 @@ define([
 			//NO-UNUSED-VARS-UNREAD ---------------------------------------------
 			describe("no-unused-vars", function() {
 				var RULE_ID = 'no-unused-vars';
+				it("handle exports 1", function(done) {
+					var topic = "export default class XX {}";
+					var config = { rules: {} };
+					config.rules[RULE_ID] = 1;
+					validate({buffer: topic, callback: done, config: config}).then(
+						function (problems) {
+							assertProblems(problems, []);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
+				it("handle exports 2", function(done) {
+					var topic = "class XX {} export default XX;";
+					var config = { rules: {} };
+					config.rules[RULE_ID] = 1;
+					validate({buffer: topic, callback: done, config: config}).then(
+						function (problems) {
+							assertProblems(problems, []);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
+				it("handle exports 3", function(done) {
+					var topic = "class XX {}";
+					var config = { rules: {} };
+					config.rules[RULE_ID] = 1;
+					validate({buffer: topic, callback: done, config: config}).then(
+						function (problems) {
+							assertProblems(problems, [{
+								id: RULE_ID,
+								severity: 'warning',
+								description: "'XX' is unused.",
+								nodeType: "Identifier"
+							}]);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
+				it("handle exports 4", function(done) {
+					var topic = "class XX {} class YY {} export default XX;";
+					var config = { rules: {} };
+					config.rules[RULE_ID] = 1;
+					validate({buffer: topic, callback: done, config: config}).then(
+						function (problems) {
+							assertProblems(problems, [{
+								id: RULE_ID,
+								severity: 'warning',
+								description: "'YY' is unused.",
+								nodeType: "Identifier"
+							}]);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
+				it("handle exports 5", function(done) {
+					var topic = "class XX {} class YY {}";
+					var config = { rules: {} };
+					config.rules[RULE_ID] = 1;
+					validate({buffer: topic, callback: done, config: config}).then(
+						function (problems) {
+							assertProblems(problems, [{
+								id: RULE_ID,
+								severity: 'warning',
+								description: "'XX' is unused.",
+								nodeType: "Identifier"
+							},
+							{
+								id: RULE_ID,
+								severity: 'warning',
+								description: "'YY' is unused.",
+								nodeType: "Identifier"
+							}]);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
 				it("flag unused var in list matching", function(callback) {
 					var topic = "var [a] = [1];";
 					var config = { rules: {} };
@@ -345,7 +426,7 @@ define([
 			describe("no-unused-vars", function() {
 				var RULE_ID = 'no-unused-vars';
 				it("import 1", function(done) {
-					var topic = 'import foo from "./exports";'; 
+					var topic = 'import foo from "./exports";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -365,7 +446,7 @@ define([
 						});
 				});
 				it("import 2", function(done) {
-					var topic = 'import * as foo from "./exports";'; 
+					var topic = 'import * as foo from "./exports";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -385,7 +466,7 @@ define([
 						});
 				});
 				it("import 3", function(done) {
-					var topic = 'import {foo} from "./exports";'; 
+					var topic = 'import {foo} from "./exports";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -405,7 +486,7 @@ define([
 						});
 				});
 				it("import 4", function(done) {
-					var topic = 'import {foo, bar} from "./exports"; bar.toString();'; 
+					var topic = 'import {foo, bar} from "./exports"; bar.toString();';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -425,7 +506,7 @@ define([
 						});
 				});
 				it("Mixed unused import and unused var", function(callback) {
-					var topic = 'import foo from "./exports.js"; function myFunc(){};'; 
+					var topic = 'import foo from "./exports"; function myFunc(){};';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -454,7 +535,7 @@ define([
 			describe("missing-nls", function() {
 				var RULE_ID = "missing-nls";
 				it("Ignore es6 import 1", function(callback) {
-					var topic = 'import { MYCONSTANT , arr } from "./exports";'; 
+					var topic = 'import { MYCONSTANT , arr } from "./exports";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -467,7 +548,7 @@ define([
 						});
 				});
 				it("Ignore es6 import 2", function(callback) {
-					var topic = 'import * as myImport from "./exports";'; 
+					var topic = 'import * as myImport from "./exports";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -480,7 +561,7 @@ define([
 						});
 				});
 				it("Ignore es6 import 3", function(callback) {
-					var topic = 'import "./exports";'; 
+					var topic = 'import "./exports";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -493,7 +574,7 @@ define([
 						});
 				});
 				it("Ignore es6 export", function(callback) {
-					var topic = 'export\n * from "./exports.js";'; 
+					var topic = 'export\n * from "./exports.js";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -506,7 +587,7 @@ define([
 						});
 				});
 				it("Ignore es6 export", function(callback) {
-					var topic = 'export * from "./exports.js";'; 
+					var topic = 'export * from "./exports.js";';
 					var config = { rules: {} };
 					var createFiles = [{name: './exports', text: ''}];
 					config.rules[RULE_ID] = 1;
@@ -1342,7 +1423,7 @@ define([
 							{
 								id: "quotes",
 								severity: 'error',
-								description: 'Strings must use doublequote.',
+								description: 'Strings must use double quotes (").',
 								start: 13,
 								end: 21
 							}]);
@@ -1362,7 +1443,7 @@ define([
 							{
 								id: "quotes",
 								severity: 'error',
-								description: 'Strings must use singlequote.',
+								description: 'Strings must use single quotes (\').',
 								start: 13,
 								end: 21
 							}]);
@@ -1382,7 +1463,7 @@ define([
 							{
 								id: "quotes",
 								severity: 'error',
-								description: 'Strings must use backtick.',
+								description: 'Strings must use backtick quotes (`).',
 								start: 13,
 								end: 21
 							}]);
@@ -1402,7 +1483,7 @@ define([
 							{
 								id: "quotes",
 								severity: 'error',
-								description: 'Strings must use backtick.',
+								description: 'Strings must use backtick quotes (`).',
 								start: 16,
 								end: 49
 							}]);
@@ -1422,7 +1503,7 @@ define([
 							{
 								id: "quotes",
 								severity: 'error',
-								description: 'Strings must use backtick.',
+								description: 'Strings must use backtick quotes (`).',
 								start: 13,
 								end: 21
 							}]);
@@ -1606,10 +1687,10 @@ define([
 						});
 				});
 				it("flag invalid this 3", function(callback) {
-					var topic = 
-						"(function() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"(function() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"})();";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1637,10 +1718,10 @@ define([
 						});
 				});
 				it("flag invalid this 4", function(callback) {
-					var topic = 
-						"function foo() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"function foo() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"}";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1668,10 +1749,10 @@ define([
 						});
 				});
 				it("flag invalid this 5", function(callback) {
-					var topic = 
-						"var foo = function() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"var foo = function() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1699,10 +1780,10 @@ define([
 						});
 				});
 				it("flag invalid this 6", function(callback) {
-					var topic = 
-						"foo(function() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"foo(function() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"});";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1730,9 +1811,9 @@ define([
 						});
 				});
 				it("flag invalid this 7", function(callback) {
-					var topic = 
-						"obj.foo = () => {\n" + 
-						"    this.a = 0;\n" + 
+					var topic =
+						"obj.foo = () => {\n" +
+						"    this.a = 0;\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1753,14 +1834,14 @@ define([
 						});
 				});
 				it("flag invalid this 8", function(callback) {
-					var topic = 
-						"var obj = {\n" + 
-						"    aaa: function() {\n" + 
-						"        return function foo() {\n" + 
-						"            this.a = 0;\n" + 
-						"            baz(() => this);\n" + 
-						"        };\n" + 
-						"    }\n" + 
+					var topic =
+						"var obj = {\n" +
+						"    aaa: function() {\n" +
+						"        return function foo() {\n" +
+						"            this.a = 0;\n" +
+						"            baz(() => this);\n" +
+						"        };\n" +
+						"    }\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1788,10 +1869,10 @@ define([
 						});
 				});
 				it("flag invalid this 9", function(callback) {
-					var topic = 
-						"foo.forEach(function() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"foo.forEach(function() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"});";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1819,10 +1900,10 @@ define([
 						});
 				});
 				it("should not flag this", function(callback) {
-					var topic = 
-						"function Foo() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"function Foo() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"}";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1836,13 +1917,13 @@ define([
 						});
 				});
 				it("should not flag this 2", function(callback) {
-					var topic = 
-						"class Foo {\n" + 
-						"    constructor() {\n" + 
-						"        // OK, this is in a constructor.\n" + 
-						"        this.a = 0;\n" + 
-						"        baz(() => this);\n" + 
-						"    }\n" + 
+					var topic =
+						"class Foo {\n" +
+						"    constructor() {\n" +
+						"        // OK, this is in a constructor.\n" +
+						"        this.a = 0;\n" +
+						"        baz(() => this);\n" +
+						"    }\n" +
 						"}";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1856,12 +1937,12 @@ define([
 						});
 				});
 				it("should not flag this 3", function(callback) {
-					var topic = 
-						"var obj = {\n" + 
-						"    foo: function foo() {\n" + 
-						"        // OK, this is in a method (this function is on object literal).\n" + 
-						"        this.a = 0;\n" + 
-						"    }\n" + 
+					var topic =
+						"var obj = {\n" +
+						"    foo: function foo() {\n" +
+						"        // OK, this is in a method (this function is on object literal).\n" +
+						"        this.a = 0;\n" +
+						"    }\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1875,11 +1956,11 @@ define([
 						});
 				});
 				it("should not flag this 4", function(callback) {
-					var topic = 
-						"var obj = {\n" + 
-						"    foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"    }\n" + 
+					var topic =
+						"var obj = {\n" +
+						"    foo() {\n" +
+						"        this.a = 0;\n" +
+						"    }\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1893,11 +1974,11 @@ define([
 						});
 				});
 				it("should not flag this 5", function(callback) {
-					var topic = 
-						"var obj = {\n" + 
-						"    get foo() {\n" + 
-						"        return this.a;\n" + 
-						"    }\n" + 
+					var topic =
+						"var obj = {\n" +
+						"    get foo() {\n" +
+						"        return this.a;\n" +
+						"    }\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1911,11 +1992,11 @@ define([
 						});
 				});
 				it("should not flag this 6", function(callback) {
-					var topic = 
-						"var obj = Object.create(null, {\n" + 
-						"    foo: {value: function foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"    }}\n" + 
+					var topic =
+						"var obj = Object.create(null, {\n" +
+						"    foo: {value: function foo() {\n" +
+						"        this.a = 0;\n" +
+						"    }}\n" +
 						"});";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1929,11 +2010,11 @@ define([
 						});
 				});
 				it("should not flag this 7", function(callback) {
-					var topic = 
-						"Object.defineProperty(obj, \"foo\", {\n" + 
-						"    value: function foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"    }\n" + 
+					var topic =
+						"Object.defineProperty(obj, \"foo\", {\n" +
+						"    value: function foo() {\n" +
+						"        this.a = 0;\n" +
+						"    }\n" +
 						"});";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1947,11 +2028,11 @@ define([
 						});
 				});
 				it("should not flag this 8", function(callback) {
-					var topic = 
-						"Object.defineProperties(obj, {\n" + 
-						"    foo: {value: function foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"    }}\n" + 
+					var topic =
+						"Object.defineProperties(obj, {\n" +
+						"    foo: {value: function foo() {\n" +
+						"        this.a = 0;\n" +
+						"    }}\n" +
 						"});";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1965,12 +2046,12 @@ define([
 						});
 				});
 				it("should not flag this 9", function(callback) {
-					var topic = 
-						"function Foo() {\n" + 
-						"    this.foo = function foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"        baz(() => this);\n" + 
-						"    };\n" + 
+					var topic =
+						"function Foo() {\n" +
+						"    this.foo = function foo() {\n" +
+						"        this.a = 0;\n" +
+						"        baz(() => this);\n" +
+						"    };\n" +
 						"}";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -1984,9 +2065,9 @@ define([
 						});
 				});
 				it("should not flag this 10", function(callback) {
-					var topic = 
-						"obj.foo = function foo() {\n" + 
-						"    this.a = 0;\n" + 
+					var topic =
+						"obj.foo = function foo() {\n" +
+						"    this.a = 0;\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -2000,9 +2081,9 @@ define([
 						});
 				});
 				it("should not flag this 11", function(callback) {
-					var topic = 
-						"Foo.prototype.foo = function foo() {\n" + 
-						"    this.a = 0;\n" + 
+					var topic =
+						"Foo.prototype.foo = function foo() {\n" +
+						"    this.a = 0;\n" +
 						"};";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -2016,17 +2097,17 @@ define([
 						});
 				});
 				it("should not flag this 12", function(callback) {
-					var topic = 
-						"class Foo {\n" + 
-						"    foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"        baz(() => this);\n" + 
-						"    }\n" + 
-						"\n" + 
-						"    static foo() {\n" + 
-						"        this.a = 0;\n" + 
-						"        baz(() => this);\n" + 
-						"    }\n" + 
+					var topic =
+						"class Foo {\n" +
+						"    foo() {\n" +
+						"        this.a = 0;\n" +
+						"        baz(() => this);\n" +
+						"    }\n" +
+						"\n" +
+						"    static foo() {\n" +
+						"        this.a = 0;\n" +
+						"        baz(() => this);\n" +
+						"    }\n" +
 						"}";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -2040,9 +2121,9 @@ define([
 						});
 				});
 				it("should not flag this 13", function(callback) {
-					var topic = 
-						"var foo = (function foo() {\n" + 
-						"    this.a = 0;\n" + 
+					var topic =
+						"var foo = (function foo() {\n" +
+						"    this.a = 0;\n" +
 						"}).bind(obj);";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -2056,10 +2137,10 @@ define([
 						});
 				});
 				it("should not flag this 14", function(callback) {
-					var topic = 
-						"foo.forEach(function() {\n" + 
-						"    this.a = 0;\n" + 
-						"    baz(() => this);\n" + 
+					var topic =
+						"foo.forEach(function() {\n" +
+						"    this.a = 0;\n" +
+						"    baz(() => this);\n" +
 						"}, thisArg);";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -2073,10 +2154,10 @@ define([
 						});
 				});
 				it("should not flag this 15", function(callback) {
-					var topic = 
-						"/** @this Foo */\n" + 
-						"function foo() {\n" + 
-						"    this.a = 0;\n" + 
+					var topic =
+						"/** @this Foo */\n" +
+						"function foo() {\n" +
+						"    this.a = 0;\n" +
 						"}";
 					var config = { rules: {} };
 					config.rules[RULE_ID] = 2;
@@ -2112,6 +2193,27 @@ define([
 					validate({buffer: topic, callback: callback, config: config}).then(
 						function (problems) {
 							assertProblems(problems, []);
+						},
+						function (error) {
+							worker.getTestState().callback(error);
+						});
+				});
+			});
+			//NO-IRREGULAR-WHITESPACE  -----------------------------------------------------
+			describe('no-irregular-whitespace', function() {
+				var RULE_ID = "no-irregular-whitespace";
+				it("flag irregular whitespace in template with skipTemplate false", function(callback) {
+					var topic = "function thing() {return `template \u00A0string`;}";
+					var config = { rules: {} };
+					config.rules[RULE_ID] = 1;
+					validate({buffer: topic, callback: callback, config: config}).then(
+						function (problems) {
+							assertProblems(problems, [
+								{
+									id: RULE_ID,
+									severity: 'warning',
+									description: "Irregular whitespace not allowed"
+								}]);
 						},
 						function (error) {
 							worker.getTestState().callback(error);

@@ -10,17 +10,17 @@
  *******************************************************************************/
 /*eslint-env browser, node*/
 var electron = require('electron');
+var nodeUrl = require('url');
 var dragSrcEl = null;
 var contextSrcEl = null;
+var activeIndex = 0;
+var isInitiatingWorkspace = false;
+var needToCleanFrames = [];
 
 function redrawButtons() {
 	var bar = document.querySelector("#bar");
 	var buttons = document.createElement("span");
 	buttons.classList.add("tabButtons");
-	var back = document.createElement("button");
-	back.textContent = "<";
-	back.classList.add("tabButton");
-
 	function historyBack() {
 		var active = getActiveTab();
 		if (!active) return;
@@ -32,29 +32,51 @@ function redrawButtons() {
 		if (!active) return;
 		active.contentWindow.history.forward();
 	}
+	function refreshPage() {
+		var active = getActiveTab();
+		if (!active) return;
+		active.contentWindow.location.reload();
+	}
+	var back = document.createElement("button"),
+		backTitle = process.platform === "darwin"? "Back (Cmd+Left)" :"Back (Alt+Left)";
+	back.title = backTitle;
+	back.setAttribute("aria-label", backTitle);
+	back.textContent = "<";
+	back.classList.add("tabButton");
 	back.addEventListener("click", historyBack);
 	buttons.appendChild(back);
-	var forward = document.createElement("button");
+	
+	var forward = document.createElement("button"),
+		forwardTitle = process.platform === "darwin"? "Forward (Cmd+Right)" :"Forward (Alt+Right)";
+	forward.title = forwardTitle;
+	forward.setAttribute("aria-label", forwardTitle);
 	forward.textContent = ">";
 	forward.classList.add("tabButton");
 	forward.addEventListener("click", historyForward);
 	buttons.appendChild(forward);
-	var refresh = document.createElement("button");
+	
+	var refresh = document.createElement("button"),
+		refreshTitle = process.platform === "darwin"? "Refresh (Cmd+R)" :"Refresh (Ctrl+R)";
+	refresh.title = refreshTitle;
+	refresh.setAttribute("aria-label", refreshTitle);
 	refresh.textContent = "\u27F2";
 	refresh.classList.add("tabButton");
-	refresh.addEventListener("click", function() {
-		var active = getActiveTab();
-		if (!active) return;
-		active.contentWindow.location.reload();
-	});
+	refresh.addEventListener("click", refreshPage);
 	buttons.appendChild(refresh);
+	
 	bar.appendChild(buttons);
+	return {
+		refreshPage:refreshPage,
+		historyForward:historyForward,
+		historyBack:historyBack
+	};
+}
 
-	var _globalShortcut = electron.remote.globalShortcut;
-	_globalShortcut.unregister('Alt+Right');
-	_globalShortcut.unregister('Alt+Left');
-	_globalShortcut.register('Alt+Right', historyForward);
-	_globalShortcut.register('Alt+Left', historyBack);
+function closeAllTabs(){
+	var tabbuttons = document.querySelectorAll(".tabItem");
+	for (var j = 0; j < tabbuttons.length; j++) {
+		tabbuttons[j].lastChild.click();
+	}
 }
 
 function addNewTab(id, iframe) {
@@ -72,6 +94,9 @@ function addNewTab(id, iframe) {
 	var text = document.createElement("span");
 	text.classList.add("tabLabel");
 	text.textContent = title;
+	var icon = document.createElement("img");
+	icon.classList.add("tabIcon");
+	tab.appendChild(icon);
 	tab.appendChild(text);
 	tab.title = title;
 
@@ -99,11 +124,21 @@ function addNewTab(id, iframe) {
 	}
 
 	tab.addEventListener("click", function(evt) {
-		setActive();
-		evt.preventDefault();
-		evt.stopPropagation();
-		var menu = document.querySelector("#context-menu");
-		menu.classList.remove('context-menu-items-open');
+		if (evt.button === 1 && tabParent.childNodes.length > 1) {
+			// middle button clicked, close the tab if there are two or more
+			// tabs around
+			iframe.parentNode.removeChild(iframe);
+			tab.parentNode.removeChild(tab);
+			update();
+			evt.preventDefault();
+			evt.stopPropagation();
+		} else {
+			setActive();
+			evt.preventDefault();
+			evt.stopPropagation();
+			var menu = document.querySelector("#context-menu");
+			menu.classList.remove('context-menu-items-open');
+		}
 	});
 
 	tab.addEventListener('dragstart', function(evt) {
@@ -154,12 +189,23 @@ function addNewTab(id, iframe) {
 	});
 	tabParent.appendChild(tab);
 	update();
+	return tab;
 }
 
 function setTabLabel(id, str) {
 	var tab = document.getElementById("tab" + id);
 	var text = tab.querySelector(".tabLabel");
 	tab.title = text.textContent = str;
+}
+function setTabIcon(id,head) {
+	var linkIconElement = Array.prototype.find.call(head.childNodes, function(node){
+		return node.nodeName === 'LINK' && node.rel === 'icon';
+	});
+	if(linkIconElement && linkIconElement.href){
+		var tab = document.getElementById("tab" + id);
+		var icon = tab.querySelector(".tabIcon");
+		icon.src = linkIconElement.href;
+	}
 }
 
 function update() {
@@ -184,10 +230,18 @@ function update() {
 	Array.prototype.forEach.call(items, function(tab) {
 		tab.style.flexBasis = "";
 	});
-	if (bar.getBoundingClientRect().right < ul.lastChild.getBoundingClientRect().right) {
-		Array.prototype.forEach.call(items, function(tab) {
-			tab.style.flexBasis = "0";
+	if(ul.lastChild){
+		if (bar.getBoundingClientRect().right < ul.lastChild.getBoundingClientRect().right) {
+			Array.prototype.forEach.call(items, function(tab) {
+				tab.style.flexBasis = "0";
+			});
+		}
+	}
+	if(needToCleanFrames.length > 0){
+		needToCleanFrames.forEach(function(iframe){
+			iframe.parentNode.removeChild(iframe);
 		});
+		needToCleanFrames = [];
 	}
 }
 
@@ -196,8 +250,9 @@ function getActiveTab() {
 }
 
 function load() {
-	redrawButtons();
+	var pageControlCallbacks = redrawButtons();
 	createTab(window.location.hash.substr(1));
+	registerElectronMenu(pageControlCallbacks);
 	window.addEventListener("resize", function() {
 		if (this.timeout) window.clearTimeout(this.timeout);
 		this.timeout = window.setTimeout(function() {
@@ -205,42 +260,123 @@ function load() {
 		}, 50);
 	});
 	registerContextMenu();
+	collectTabsUrl();
+}
+
+function registerElectronMenu(pageControlCallbacks){
+	function switchForwardTabs(){
+		var activeTab = document.querySelector(".tabItem.active");
+		var nextTabButton = activeTab.nextSibling;
+		nextTabButton ? nextTabButton.click() : activeTab.parentNode.firstChild.click();
+	}
+	function switchBackwardTabs(){
+		var activeTab = document.querySelector(".tabItem.active");
+		var previousTabButton = activeTab.previousSibling;
+		previousTabButton ? previousTabButton.click() : activeTab.parentNode.lastChild.click();
+	}
+	var Menu = electron.remote.Menu;
+	var menu = Menu.getApplicationMenu();
+	menu.append(new electron.remote.MenuItem( // The main purpose of creating menu if for key binding
+		{
+			label: "Navigation",  
+			submenu: [
+				{label: "Back", accelerator:process.platform === "darwin"? "CmdOrCtrl+Left" :"Alt+Left", click: pageControlCallbacks.historyBack},
+				{label: "Forward", accelerator:process.platform === "darwin"? "CmdOrCtrl+Right" :"Alt+Right", click: pageControlCallbacks.historyForward},
+				{label: "Refresh", accelerator:process.platform === "darwin"? "CmdOrCtrl+R" :"Ctrl+R", click: pageControlCallbacks.refreshPage},
+				{label: "RefreshOnF5", accelerator:process.platform === "darwin"? "" :"F5", visible:false, click: pageControlCallbacks.refreshPage},
+				{label: "Move to Next Tab", accelerator:process.platform === "darwin"? "Ctrl+Tab" :"Ctrl+Tab", click: switchForwardTabs},
+				{label: "Move to Previous Tab", accelerator:process.platform === "darwin"? "Ctrl+Shift+Tab" :"Ctrl+Shift+Tab", click: switchBackwardTabs}
+			]
+		}
+	));
+	Menu.setApplicationMenu(menu);
+}
+
+function bindfocus(){
+	getActiveTab().focus();
 }
 
 function createTab(url) {
-	var iframe = document.createElement("iframe");
-	iframe.frameBorder = "0";
-	iframe.classList.add("tabContent");
-	iframe.src = url;
-	var id = Date.now();
-	iframe.id = "iframe" + id;
-	iframe.addEventListener("load", function() {
-		iframe.contentWindow.confirm = window.confirm;
-		iframe.contentWindow.alert = window.alert;
-		iframe.contentWindow.__electron = electron;
-
-		var target = iframe.contentDocument.querySelector('head > title');
-		if (target) {
-			var observer = new window.WebKitMutationObserver(function(mutations) {
-				if (mutations) {
-					setTabLabel(id, iframe.contentDocument.title);
-				}
-			});
-			observer.observe(target, {
-				subtree: true,
-				characterData: true,
-				childList: true
-			});
+	var iframes = document.querySelectorAll(".tabContent");
+	var urlSegs = url.split("#");
+	var potentialExsitingIframe = Array.prototype.find.call(iframes,function(iframe){
+		if(urlSegs[0].indexOf("/edit/edit.html") !== -1){
+			return iframe.contentWindow.location.href.indexOf(urlSegs[0]) === 0;  // Always open the Editor page in this case
+		}else if(urlSegs[0].indexOf("/git/git-repository.html") !== -1){
+			if(urlSegs[1] && urlSegs[1].indexOf("/gitapi/commit") !== -1){
+				return iframe.contentWindow.location.href === url;   // Find exactly the git page of the exact Commit or should open a new git tab
+			}else{ // For all the other cases
+				return iframe.contentWindow.location.href.indexOf(urlSegs[0]+"#/gitapi/clone") === 0  // Find a /clone git page, or should open a new git tab 
+			}
+		}else{
+			return iframe.contentWindow.location.href.indexOf(urlSegs[0]) === 0;  // For all the other cases, open the same html page, like settings
 		}
-		setTabLabel(id, iframe.contentDocument.title);
-		iframe.contentWindow.addEventListener("click", function() {
-			var menu = document.querySelector("#context-menu");
-			var activeClassName = "context-menu-items-open";
-			menu.classList.remove(activeClassName);
-		});
 	});
-	document.body.appendChild(iframe);
-	addNewTab(id, iframe);
+	if(potentialExsitingIframe){
+		if(urlSegs[0].indexOf("/edit/edit.html") !== -1 && urlSegs[1] && urlSegs[1].split("/").length > 4){
+			potentialExsitingIframe.src = url; // Change the src only if it's edit page and the url is targeting some file inside the project folder 
+		}
+		if(urlSegs[1] && urlSegs[1].indexOf("/gitapi/clone") !== -1){
+			potentialExsitingIframe.contentWindow.location.reload();  // Refresh the git page in this case, to get the correct contents, otherwise user have to refresh the page themselves.
+		}
+		clickTab(potentialExsitingIframe.id.substr(6));
+	}else{
+		var iframe = document.createElement("iframe");
+		iframe.frameBorder = "0";
+		iframe.classList.add("tabContent");
+		iframe.src = url;
+		var id = Date.now();
+		iframe.id = "iframe" + id;
+		iframe.addEventListener("load", function() {
+			iframe.contentWindow.confirm = window.confirm;
+			iframe.contentWindow.alert = window.alert;
+			iframe.contentWindow.__electron = electron;
+	
+			var target = iframe.contentDocument.querySelector('head > title');
+			if (target) {
+				var observer = new window.WebKitMutationObserver(function(mutations) {
+					if (mutations) {
+						setTabLabel(id, iframe.contentDocument.title);
+						setTabIcon(id,iframe.contentDocument.head);
+					}
+				});
+				observer.observe(target, {
+					subtree: true,
+					characterData: true,
+					childList: true
+				});
+			}
+			setTabLabel(id, iframe.contentDocument.title);
+			setTabIcon(id, iframe.contentDocument.head);
+			iframe.contentWindow.addEventListener("click", function() {
+				var menu = document.querySelector("#context-menu");
+				var activeClassName = "context-menu-items-open";
+				menu.classList.remove(activeClassName);
+			});
+			if(isInitiatingWorkspace){
+				var tabbuttons = document.querySelectorAll(".tabItem");
+				tabbuttons[activeIndex] && tabbuttons[activeIndex].click();
+				isInitiatingWorkspace = false;
+			}
+		});
+		document.body.appendChild(iframe);
+		var srcUrl = nodeUrl.parse(url);
+		if(srcUrl.pathname === "/" || srcUrl.pathname.endsWith(".html")){
+			addNewTab(id, iframe).click();
+		}else{
+			needToCleanFrames.push(iframe);
+		}
+	}
+}
+
+function clickTab(id){
+	var correspondingTabId = 'tab' + id;
+	var correspondingTab = document.querySelector('#'+correspondingTabId);
+	correspondingTab.click();
+}
+function setActiveIndex(index){
+	isInitiatingWorkspace = true;
+	activeIndex = index;
 }
 
 function registerContextMenu() {
@@ -263,7 +399,6 @@ function registerContextMenu() {
 			if(allTabButtons.length > 1){
 				Array.prototype.forEach.call(allTabButtons, function(eachOne) {
 					if(eachOne.id !== contextSrcEl.id){
-						console.log(eachOne);
 						contextSrcEl.parentNode.removeChild(eachOne);
 					}
 				});
@@ -340,4 +475,18 @@ function getPosition(e) {
 		x: posx,
 		y: posy
 	};
+}
+function collectTabsUrl(){
+	var ipcRenderer = electron.ipcRenderer;
+	ipcRenderer.on('collect-tabs-info',function(event, arg){
+		var iframes = document.querySelectorAll(".tabContent");
+		var activeTabIndex = 0;
+		var tabUrls = Array.prototype.map.call(iframes,function(iframe,index){
+			if(iframe.classList.contains("active")){
+				activeTabIndex = index;
+			}
+			return iframe.contentWindow.location.href.replace(/http:\/\/localhost:\w+\//, "");
+		});
+		ipcRenderer.send("collected-tabs-info-" + arg, tabUrls, activeTabIndex);
+	});
 }

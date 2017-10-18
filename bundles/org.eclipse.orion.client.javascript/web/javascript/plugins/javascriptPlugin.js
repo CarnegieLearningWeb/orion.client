@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2016 IBM Corporation and others.
+ * Copyright (c) 2013, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -24,14 +24,16 @@ define([
 	'javascript/javascriptFormatter',
 	'javascript/javascriptProject',
 	'javascript/contentAssist/ternAssist',
-	'javascript/contentAssist/ternProjectAssist',
+	'javascript/jsonAstManager',
+	'javascript/support/ternproject/ternProjectSupport',
+	'javascript/support/packagejson/packageJsonSupport',
+	'javascript/support/eslint/eslintSupport',
 	'javascript/validator',
-	'javascript/ternProjectValidator',
 	'javascript/occurrences',
 	'javascript/hover',
 	'javascript/outliner',
+	'javascript/astOutliner',
 	'javascript/cuProvider',
-	'javascript/ternProjectManager',
 	'orion/util',
 	'javascript/logger',
 	'javascript/commands/generateDocCommand',
@@ -46,8 +48,8 @@ define([
 	'i18n!javascript/nls/messages',
 	'orion/i18nUtil',
 	'orion/URL-shim'
-], function(PluginProvider, mServiceRegistry, Deferred, ScriptResolver, ASTManager, QuickFixes, JavaScriptFormatter, JavaScriptProject, TernAssist, TernProjectAssist,
-	EslintValidator, TernProjectValidator, Occurrences, Hover, Outliner, CUProvider, TernProjectManager, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
+], function(PluginProvider, mServiceRegistry, Deferred, ScriptResolver, ASTManager, QuickFixes, JavaScriptFormatter, JavaScriptProject, TernAssist,
+	JsonAstManager, TernProjectSupport, PackageJsonSupport, ESLintSupport, EslintValidator, Occurrences, Hover, Outliner, AstOutliner, CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
 	RenameCommand, RefsCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages, i18nUtil) {
 
 	var serviceRegistry = new mServiceRegistry.ServiceRegistry();
@@ -71,10 +73,10 @@ define([
 				imageClass: "file-sprite-javascript modelDecorationSprite" //$NON-NLS-1$
 			},
 			{
-				id: "application/json", //$NON-NLS-1$
-				"extends": "text/plain", //$NON-NLS-1$ //$NON-NLS-1$
-				name: "JSON", //$NON-NLS-1$
-				extension: ["json", "pref", "tern-project", "eslintrc", "jsbeautifyrc"], //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+				id: "javascript/config", //$NON-NLS-1$
+				"extends": "application/json", //$NON-NLS-1$ //$NON-NLS-1$
+				name: "JavaScript Configuration Files", //$NON-NLS-1$
+				extension: ["tern-project", "eslintrc", "jsbeautifyrc"], //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 				imageClass: "file-sprite-javascript modelDecorationSprite" //$NON-NLS-1$
 			},
 			{
@@ -100,7 +102,7 @@ define([
 	/**
 	 * @description Removes the files array if the location is in the 'has not been edited' map
 	 * @param {{args: Object, files: Array, request: string}} msg
-	 * @returns {{args: Object, request: string}} The original request with the files array removed if the file has not changed since 
+	 * @returns {{args: Object, request: string}} The original request with the files array removed if the file has not changed since
 	 * the last request
 	 */
 	function clean(msg) {
@@ -135,13 +137,14 @@ define([
 	 */
 	function WrappedWorker(script, onMessage, onError) {
 		var wUrl = new URL(script, window.location.href);
-		wUrl.query.set("worker-language", navigator.language); //$NON-NLS-1$
+		wUrl.query.set("worker-language",  ((navigator.languages && navigator.languages[0]) ||
+			navigator.language || navigator.userLanguage || 'root').toLowerCase()); //$NON-NLS-1$
 		this.worker = new Worker(wUrl.href);
 		this.worker.onmessage = onMessage.bind(this);
 		this.worker.onerror = onError.bind(this);
 		this.worker.postMessage({
 			request: "start_worker"
-		}); //$NON-NLS-1$
+		});
 		this.messageId = 0;
 		this.callbacks = Object.create(null);
 	}
@@ -154,7 +157,7 @@ define([
 	}
 
 	/**
-	 * @callback 
+	 * @callback
 	 */
 	WrappedWorker.prototype.postMessage = function(msg, f) {
 		var _msg = clean(msg);
@@ -201,13 +204,7 @@ define([
 		}
 	};
 
-	/**
-	 * Object of contributed environments
-	 *
-	 * TODO will need to listen to updated tern plugin settings once enabled to clear this cache
-	 */
-	var contributedEnvs,
-		ternWorker;
+	var ternWorker;
 
 	var handlers = {
 		'read': doRead,
@@ -241,6 +238,9 @@ define([
 			var _d = evnt.data;
 			if (_d.__isError) {
 				Logger.log(_d.message);
+				if(_d.stack) {
+					Logger.log(_d.stack);
+				}
 			} else if (typeof _d === 'object') {
 				var id = _d.messageID;
 				var f = this.callbacks[id];
@@ -258,13 +258,36 @@ define([
 			Logger.log(err);
 		});
 
-	var ternProjectManager = new TernProjectManager.TernProjectManager(ternWorker, scriptresolver, serviceRegistry, setStarting);
-
 	/**
 	 * Create a new JavaScript project context
 	 * @since 12.0
 	 */
 	var jsProject = new JavaScriptProject(serviceRegistry);
+	var jsonAstManager = new JsonAstManager.JsonAstManager();
+	/**
+	 * Register JSON AST manager as Model Change listener
+	 */
+	provider.registerService("orion.edit.model", //$NON-NLS-1$
+		{
+			onModelChanging: jsonAstManager.onModelChanging.bind(jsonAstManager),
+			onInputChanged: jsonAstManager.onInputChanged.bind(jsonAstManager)
+		},
+		{
+			contentType: ["application/json", "javascript/config"] //$NON-NLS-1$ //$NON-NLS-2$
+		});
+		
+// Register .tern-project support
+	var ternProjectSupport = new TernProjectSupport(serviceRegistry, jsProject, jsonAstManager, ternWorker, scriptresolver, setStarting);
+	ternProjectSupport.registerExtensions(provider);
+
+//Register package.json support
+	var packageJsonSupport = new PackageJsonSupport(jsonAstManager, scriptresolver);
+	packageJsonSupport.registerExtensions(provider);
+
+//Register eslintrc* support
+	var eslintSupport = new ESLintSupport(jsonAstManager, scriptresolver, jsProject);
+	eslintSupport.registerExtensions(provider);
+	
 	provider.registerService("orion.edit.model", //$NON-NLS-1$
 		{
 			onInputChanged: jsProject.onInputChanged.bind(jsProject)
@@ -273,7 +296,85 @@ define([
 			contentType: ["application/javascript", "text/html", "application/json"] //$NON-NLS-1$ //$NON-NLS-2$//$NON-NLS-3$
 		});
 
-	jsProject.addHandler(ternProjectManager);
+	/**
+	 * @description Makes sure the filename does not expose Orion file client-specific paths to the UI
+	 * @param {String} fileName The namw of the file
+	 * @returns {String} The cleaned up filename
+	 * @since 15.0
+	 */
+	function cleanFileName(fileName) {
+		if(fileName) {
+			if(fileName.indexOf("/file/") === 0) {
+				return fileName.slice(6);
+			} else if(fileName.indexOf("file/") === 0) {
+				return fileName.slice(5);
+			}
+		}
+		return fileName;
+	}
+
+	provider.registerService("orion.project.handler", {
+		/**
+		 * @callback
+		 */
+		getAdditionalProjectProperties: function getAdditionalProjectProperties(item, projectMetadata) {
+			return jsProject.initFrom(item.Location).then(function initFrom() {
+				return jsProject.getComputedEnvironment().then(function(env) {
+					var infos = [
+						{
+							Name: javascriptMessages.javascript,
+							Children: []
+						}
+					];
+					var val = jsProject.getProjectPath();
+					if(!val) {
+						infos[0].Children.push({Name: javascriptMessages.projectPath, Value: javascriptMessages.unknown});
+					} else {
+						infos[0].Children.push({Name: javascriptMessages.projectPath, Value: cleanFileName(val), Href: "{+OrionHome}/edit/edit.html#"+val});
+					}
+					if(env) {
+						//ECMA version
+						infos[0].Children.push({Name: javascriptMessages.ecmaVersion, Value: env.ecmaVersion});
+						//Guessed envs
+						infos[0].Children.push({Name: javascriptMessages.devEnv, Value: Object.keys(env.envs).toString()});
+						//ESLint
+						if(env.eslint) {
+							infos[0].Children.push({Name: javascriptMessages.eslintConfig,
+													Value: javascriptMessages.eslintFile,
+													Href: "{+OrionHome}/edit/edit.html#"+ env.eslint.file.name});
+						} else {
+							infos[0].Children.push({Name: javascriptMessages.eslintConfig, Value: javascriptMessages.none});	
+						}
+						//Package.json
+						if(env.packagejson) {
+							infos[0].Children.push({Name: javascriptMessages.nodeConfig,
+													Value: javascriptMessages.packagejsonFile,
+													Href: "{+OrionHome}/edit/edit.html#"+ env.packagejson.file.name});
+						} else {
+							infos[0].Children.push({Name: javascriptMessages.nodeConfig, Value: javascriptMessages.none});
+						}
+						//Tern project
+						if(env.ternproject) {
+							infos[0].Children.push({Name: javascriptMessages.ternConfig,
+													Value: javascriptMessages.ternFile,
+													Href: "{+OrionHome}/edit/edit.html#"+ env.ternproject.file.name});
+						} else {
+							infos[0].Children.push({Name: javascriptMessages.ternConfig, Value: javascriptMessages.none});
+						}
+					} else {
+						infos[0].Children.push({Name: javascriptMessages.environment, Value: javascriptMessages.noEnvironment});
+					}
+					return infos;
+				});
+			});
+		}
+	}, {
+		id: "orion.javascript.projecthandler",
+		type: "javascript",
+		validationProperties: [
+			{source: "Location"}
+		]
+	});
 
 	/**
 	 * Create the AST manager
@@ -290,9 +391,18 @@ define([
 			request: 'read',
 			ternID: request.ternID,
 			args: {}
-		}; //$NON-NLS-1$
+		};
 		var fileClient = serviceRegistry.getService("orion.core.file.client"); //$NON-NLS-1$
 		if (typeof request.args.file === 'object') {
+			if(request.args.file.tourl) {
+				var f = request.args.file.file;
+				response.args.file = request.args.file;
+				response.args.file.url = f;
+				if(/^[/]?file/.test(f)) {
+					response.args.file.url = new URL(f, self.location.origin).href;
+				}
+				return ternWorker.postMessage(response);
+			}
 			var _l = request.args.file.logical;
 			response.args.logical = _l;
 			if (request.args.file.env === 'node') {
@@ -317,15 +427,18 @@ define([
 				}
 			}
 		} else {
-			_normalRead(response, request.args.file, fileClient);
+			_normalRead(response, request.args.file, fileClient);	
 		}
 	}
 	/**
 	 * @since 12.0
 	 */
 	function _nodeRead(response, moduleName, filePath, fileclient, error, depth, subModules) {
+		if(!jsProject.hasNodeModules()) {
+			return _failedRead(response, moduleName, "No node_modules folder in project");
+		}
 		if (depth > 2) {
-			if (TRACE) console.log("Don't read '" + moduleName + "': too deep");
+			if (TRACE) { console.log("Don't read '" + moduleName + "': too deep"); }
 			return _failedRead(response, moduleName, "Too deep");
 		}
 		var index = filePath.lastIndexOf('/', filePath.length - 2);
@@ -334,7 +447,7 @@ define([
 		}
 		var parentFolder = filePath.substr(0, index + 1); // include the trailing / in the folder path
 		if (parentFolder === filePath) {
-			if (TRACE) console.log("Infinite loop reading '" + filePath);
+			if (TRACE) { console.log("Infinite loop reading '" + filePath); }
 			return _failedRead(response, moduleName, "Infinite loop");
 		}
 		var modulePath = parentFolder + "node_modules/" + moduleName;
@@ -344,53 +457,50 @@ define([
 			if (!/(\.js)$/.test(modulePath)) {
 				fileToLoad += ".js";
 			}
-			if (!/(\.js)$/.test(modulePath)) {
-				fileToLoad += ".js";
-			}
-			return fileclient.read(filePath).then(function(contents) {
+			return fileclient.read(fileToLoad, false, false, {readIfExists: true}).then(function(contents) {
 					if (contents) {
 						response.args.contents = contents;
-						ternWorker.postMessage(response);
-					} else {
-						_nodeRead(response, moduleName, filePath, fileclient, "No contents", depth, false);
+						response.args.file = fileToLoad;
+						return ternWorker.postMessage(response);
 					}
+					_failedRead(response, moduleName, 'Could not read module: ' + moduleName);
 				},
 				function(err) {
-					_nodeRead(response, moduleName, filePath, fileclient, err, depth, false);
+					_failedRead(response, moduleName, err);
 				});
 		}
 		return fileclient.read(modulePath + "/package.json", false, false, {
 			readIfExists: true
 		}).then(function(json) {
-				if (json) {
-					var val = JSON.parse(json);
-					var mainPath = null;
-					var main = val.main;
-					if (main) {
-						if (!/(\.js)$/.test(main)) {
-							main += ".js";
-						}
-					} else {
-						main = "index.js";
+			if (json) {
+				var val = JSON.parse(json);
+				var mainPath = null;
+				var main = val.main;
+				if (main) {
+					if (!/(\.js)$/.test(main)) {
+						main += ".js";
 					}
-					mainPath = modulePath + "/" + main;
-					return fileclient.read(mainPath).then(function(contents) {
-							response.args.contents = contents;
-							response.args.file = mainPath;
-							response.args.path = main;
-							if (TRACE) console.log(mainPath);
-							ternWorker.postMessage(response);
-						},
-						function(err) {
-							_failedRead(response, "node_modules", err);
-						});
+				} else {
+					main = "index.js";
 				}
-				_nodeRead(response, moduleName, parentFolder, fileclient, "No contents", depth + 1, true);
-			},
-			function(err) {
-				// if it fails, try to parent folder
-				_nodeRead(response, moduleName, parentFolder, fileclient, err, depth + 1, true);
-			});
+				mainPath = modulePath + "/" + main;
+				return fileclient.read(mainPath).then(function(contents) {
+						response.args.contents = contents;
+						response.args.file = mainPath;
+						response.args.path = main;
+						if (TRACE) { console.log(mainPath); }
+						ternWorker.postMessage(response);
+					},
+					function(err) {
+						_failedRead(response, "node_modules", err);
+					});
+			}
+			_nodeRead(response, moduleName, parentFolder, fileclient, "No contents", depth + 1, true);
+		},
+		function(err) {
+			// if it fails, try to parent folder
+			_nodeRead(response, moduleName, parentFolder, fileclient, err, depth + 1, true);
+		});
 	}
 	/**
 	 * @since 12.0
@@ -431,7 +541,7 @@ define([
 						contentType: {
 							name: 'JavaScript'
 						}
-					}); //$NON-NLS-1$
+					});
 					if (rel && rel.length > 0) {
 						return fileclient.read(rel[0].location).then(function(contents) {
 							response.args.contents = contents;
@@ -479,27 +589,8 @@ define([
 		messageQueue = [];
 	}
 
-	/**
-	 * @description Queries the Tern server to return all contributed environment names from the installed plugins
-	 * @returns {Object} The object of contributed environments or null
-	 * @since 9.0
-	 */
-	function getEnvironments() {
-		var envDeferred = new Deferred();
-		if (!contributedEnvs) {
-			ternWorker.postMessage({
-				request: 'environments'
-			}, function(response) { //$NON-NLS-1$
-				contributedEnvs = response.envs;
-				envDeferred.resolve(response.envs);
-			});
-		} else {
-			return envDeferred.resolve(contributedEnvs);
-		}
-		return envDeferred;
-	}
-
-	provider.registerService("orion.edit.contentassist", new TernAssist.TernContentAssist(astManager, ternWorker, getEnvironments, CUProvider, jsProject), //$NON-NLS-1$
+	
+	provider.registerService("orion.edit.contentassist", new TernAssist.TernContentAssist(astManager, ternWorker, CUProvider, jsProject), //$NON-NLS-1$
 		{
 			contentType: ["application/javascript", "text/html"], //$NON-NLS-1$ //$NON-NLS-2$
 			nls: 'javascript/nls/messages', //$NON-NLS-1$
@@ -508,26 +599,6 @@ define([
 			charTriggers: "[.]", //$NON-NLS-1$
 			excludedStyles: "(string.*)", //$NON-NLS-1$
 			autoApply: false
-		});
-
-	provider.registerService("orion.edit.contentassist", //$NON-NLS-1$
-		{
-			/** @callback */
-			computeContentAssist: function(editorContext, params) {
-				return editorContext.getFileMetadata().then(function(meta) {
-					if (meta.name === ".tern-project") {
-						return editorContext.getText().then(function(text) {
-							return TernProjectAssist.getProposals(text, params);
-						});
-					}
-				});
-			}
-		},
-		{
-			contentType: ["application/json"], //$NON-NLS-1$
-			nls: 'javascript/nls/messages', //$NON-NLS-1$
-			name: 'ternProjectAssist', //$NON-NLS-1$
-			id: "orion.edit.contentassist.javascript.tern.project" //$NON-NLS-1$
 		});
 
 	/**
@@ -539,6 +610,13 @@ define([
 			name: javascriptMessages["sourceOutline"],
 			title: javascriptMessages['sourceOutlineTitle'],
 			id: "orion.javascript.outliner.source" //$NON-NLS-1$
+		});
+	provider.registerService("orion.edit.outliner", new AstOutliner.JSOutliner(astManager), //$NON-NLS-1$
+		{
+			contentType: ["application/javascript"], //$NON-NLS-1$
+			name: javascriptMessages["astOutline"],
+			title: javascriptMessages['astOutlineTitle'],
+			id: "orion.javascript.outliner.ast" //$NON-NLS-1$
 		});
 
 	/**
@@ -558,24 +636,10 @@ define([
 			contentType: ["application/javascript", "text/html"] //$NON-NLS-1$ //$NON-NLS-2$
 		});
 
-	provider.registerService("orion.edit.validator", //$NON-NLS-1$
+	provider.registerService("orion.debug.hoverEvaluationProvider", new Hover.JavaScriptDebugHover(astManager, scriptresolver, ternWorker, CUProvider), //$NON-NLS-1$
 		{
-			/**
-			 * @callback
-			 */
-			computeProblems: function(editorContext, context, config) {
-				return editorContext.getFileMetadata().then(function(meta) {
-					if (meta.name === '.tern-project') {
-						return editorContext.getText().then(function(text) {
-							return TernProjectValidator.validateAST(text);
-						});
-					}
-					return null;
-				});
-			}
-		},
-		{
-			contentType: ["application/json"] //$NON-NLS-1$
+			name: javascriptMessages['jsHoverEvaluationProvider'],
+			contentType: ["application/javascript", "text/html"] //$NON-NLS-1$ //$NON-NLS-2$
 		});
 
 	/**
@@ -617,8 +681,8 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		generateDocCommand, {
-			name: javascriptMessages["generateDocName"], //$NON-NLS-1$
-			tooltip: javascriptMessages['generateDocTooltip'], //$NON-NLS-1$
+			name: javascriptMessages["generateDocName"],
+			tooltip: javascriptMessages['generateDocTooltip'],
 			id: "generate.js.doc.comment", //$NON-NLS-1$
 			key: ["j", false, true, !Util.isMac, Util.isMac], //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'] //$NON-NLS-1$ //$NON-NLS-2$
@@ -628,8 +692,8 @@ define([
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		new OpenDeclCommand.OpenDeclarationCommand(ternWorker, "replace"), //$NON-NLS-1$
 		{
-			name: javascriptMessages["openDeclName"], //$NON-NLS-1$
-			tooltip: javascriptMessages['openDeclTooltip'], //$NON-NLS-1$
+			name: javascriptMessages["openDeclName"],
+			tooltip: javascriptMessages['openDeclTooltip'],
 			id: "open.js.decl", //$NON-NLS-1$
 			key: [114, false, false, false, false],
 			contentType: ['application/javascript', 'text/html'] //$NON-NLS-1$ //$NON-NLS-2$
@@ -640,8 +704,8 @@ define([
 		{},
 		{
 			id: "js.references", //$NON-NLS-1$
-			name: javascriptMessages['referencesMenuName'], //$NON-NLS-1$
-			tooltip: javascriptMessages['referencesMenuTooltip'] //$NON-NLS-1$
+			name: javascriptMessages['referencesMenuName'],
+			tooltip: javascriptMessages['referencesMenuTooltip']
 		});
 	var refscommand = new RefsCommand(ternWorker,
 		astManager,
@@ -695,8 +759,8 @@ define([
 	var renameCommand = new RenameCommand.RenameCommand(ternWorker, scriptresolver);
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		renameCommand, {
-			name: javascriptMessages['renameElement'], //$NON-NLS-1$
-			tooltip: javascriptMessages['renameElementTooltip'], //$NON-NLS-1$
+			name: javascriptMessages['renameElement'],
+			tooltip: javascriptMessages['renameElementTooltip'],
 			id: "rename.js.element", //$NON-NLS-1$
 			key: ['R', false, true, !Util.isMac, Util.isMac], //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'] //$NON-NLS-1$ //$NON-NLS-2$
@@ -706,8 +770,37 @@ define([
 	var quickFixComputer = new QuickFixes.JavaScriptQuickfixes(astManager, renameCommand, generateDocCommand, jsProject, ternWorker);
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
+		{
+			/** @callback */
+			execute: function(editorContext, context) {
+				context.annotation.fixid = 'ignore-in-file'; //$NON-NLS-1$
+				return quickFixComputer.execute(editorContext, context);
+			}
+		},
+		{
+			name: javascriptMessages["ignoreInFileFixName"],
+			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+			id: "ignore.in.file.fix", //$NON-NLS-1$
+			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
+			validationProperties: [{
+					source: "annotation:id", //$NON-NLS-1$
+					match: "^(?:.*\\S.*)$" //$NON-NLS-1$
+				},
+				{
+					source: "annotation:data:ruleId", //$NON-NLS-1$
+					match: "^(?:.*\\S.*)$" //$NON-NLS-1$
+				},
+				{
+					source: "readonly", //$NON-NLS-1$
+					match: false
+				}
+			]
+		}
+	);
+
+	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["curlyFixName"], //$NON-NLS-1$
+			name: javascriptMessages["curlyFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "curly.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -725,7 +818,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["removeExtraParensFixName"], //$NON-NLS-1$
+			name: javascriptMessages["removeExtraParensFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "rm.extra.parens.fix", //$NON-NLS-1$
@@ -744,7 +837,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["removeExtraSemiFixName"], //$NON-NLS-1$
+			name: javascriptMessages["removeExtraSemiFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "rm.extra.semi.fix", //$NON-NLS-1$
@@ -763,7 +856,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["addFallthroughCommentFixName"], //$NON-NLS-1$
+			name: javascriptMessages["addFallthroughCommentFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "add.fallthrough.comment.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -790,7 +883,7 @@ define([
 			}
 		},
 		{
-			name: javascriptMessages["addBBreakFixName"], //$NON-NLS-1$
+			name: javascriptMessages["addBBreakFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "add.fallthrough.break.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -808,18 +901,18 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["addEmptyCommentFixName"], //$NON-NLS-1$
+			name: javascriptMessages["addEmptyCommentFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "add.empty.comment.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
 			validationProperties: [{
 					source: "annotation:id",
 					match: "^(?:no-empty-block)$"
-				}, //$NON-NLS-1$ //$NON-NLS-2$
+				},
 				{
 					source: "readonly",
 					match: false
-				} //$NON-NLS-1$
+				}
 			]
 		}
 	);
@@ -833,18 +926,18 @@ define([
 			validationProperties: [{
 					source: "annotation:id",
 					match: "^(?:no-undef-defined-inenv)$"
-				}, //$NON-NLS-1$ //$NON-NLS-2$
+				},
 				{
 					source: "readonly",
 					match: false
-				} //$NON-NLS-1$
+				}
 			]
 		}
 	);
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["addESLintEnvFixName"], //$NON-NLS-1$
+			name: javascriptMessages["addESLintEnvFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "add.module.eslint-env.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -862,7 +955,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noReservedKeysFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noReservedKeysFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "update.reserved.property.fix", //$NON-NLS-1$
@@ -881,7 +974,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["useIsNanFixName"], //$NON-NLS-1$
+			name: javascriptMessages["useIsNanFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "use.isnan.fix", //$NON-NLS-1$
@@ -900,7 +993,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["addESLintGlobalFixName"], //$NON-NLS-1$
+			name: javascriptMessages["addESLintGlobalFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "add.eslint-global.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -918,7 +1011,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["openDefinition"],//$NON-NLS-1$
+			name: javascriptMessages["openDefinition"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "open.definition.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -938,14 +1031,14 @@ define([
 		{
 			/** @callback */
 			execute: function(editorContext, context) {
-				if (context.annotation.id === 'no-unused-params-expr') { //$NON-NLS-1$
+				if (context.annotation.id === 'no-unused-params-expr') {
 					context.annotation.fixid = 'no-unused-params'; //$NON-NLS-1$
 				}
 				return quickFixComputer.execute(editorContext, context);
 			}
 		},
 		{
-			name: javascriptMessages["removeUnusedParamsFixName"],//$NON-NLS-1$
+			name: javascriptMessages["removeUnusedParamsFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "remove.unused.param.fix", //$NON-NLS-1$
@@ -964,7 +1057,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["commentCallbackFixName"], //$NON-NLS-1$
+			name: javascriptMessages["commentCallbackFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "comment.callback.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -982,7 +1075,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["eqeqeqFixName"], //$NON-NLS-1$
+			name: javascriptMessages["eqeqeqFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "eqeqeq.fix", //$NON-NLS-1$
@@ -1003,20 +1096,20 @@ define([
 		{
 			/** @callback */
 			execute: function(editorContext, context) {
-				if (context.annotation.id === 'unknown-require-not-running' || context.annotation.id === 'missing-requirejs') { //$NON-NLS-1$ //$NON-NLS-2$
+				if (context.annotation.id === 'unknown-require-not-running' || context.annotation.id === 'missing-requirejs') {
 					context.annotation.fixid = 'unknown-require-plugin'; //$NON-NLS-1$
 				}
 				return quickFixComputer.execute(editorContext, context);
 			}
 		},
 		{
-			name: javascriptMessages["unknownRequirePluginFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unknownRequirePluginFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "unknown.require.plugin.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
 			validationProperties: [{
 					source: "annotation:id", //$NON-NLS-1$
-					match: "^(?:unknown-require-plugin|unknown-require-not-running|missing-requirejs)$" //$NON-NLS-1$
+					match: "^(?:unknown-require-not-running|missing-requirejs)$" //$NON-NLS-1$
 				},
 				{
 					source: "readonly", //$NON-NLS-1$
@@ -1028,7 +1121,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noeqnullFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noeqnullFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "noeqnull.fix", //$NON-NLS-1$
@@ -1047,7 +1140,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noundefinitFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noundefinitFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.undef.init.fix", //$NON-NLS-1$
@@ -1066,7 +1159,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noselfassignFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noselfassignFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.self.assign.fix", //$NON-NLS-1$
@@ -1094,7 +1187,7 @@ define([
 			}
 		},
 		{
-			name: javascriptMessages["noselfassignRenameFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noselfassignRenameFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.self.assign.rename.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1112,7 +1205,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["newparensFixName"], //$NON-NLS-1$
+			name: javascriptMessages["newparensFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "new.parens.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1130,7 +1223,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["unreachableFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unreachableFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "remove.unreachable.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1148,7 +1241,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["sparseArrayFixName"], //$NON-NLS-1$
+			name: javascriptMessages["sparseArrayFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "sparse.array.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1166,7 +1259,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["semiFixName"], //$NON-NLS-1$
+			name: javascriptMessages["semiFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "semi.fix", //$NON-NLS-1$
@@ -1185,7 +1278,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["unusedVarsUnusedFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unusedVarsUnusedFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "unused.var.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1203,7 +1296,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["unreadVarsFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unreadVarsFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "unread.var.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1221,7 +1314,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["unusedFuncDeclFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unusedFuncDeclFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "unused.func.decl.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1239,7 +1332,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noElseReturnFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noElseReturnFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.else.return.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1257,7 +1350,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noCommaDangleFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noCommaDangleFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.comma.dangle.fix", //$NON-NLS-1$
@@ -1276,7 +1369,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noThrowLiteralFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noThrowLiteralFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.throw.literal.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1294,7 +1387,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["missingNlsFixName"], //$NON-NLS-1$
+			name: javascriptMessages["missingNlsFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "missing.nls.fix", //$NON-NLS-1$
@@ -1313,7 +1406,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["missingDocFixName"], //$NON-NLS-1$
+			name: javascriptMessages["missingDocFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "missing.doc.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-1$ //$NON-NLS-2$
@@ -1331,7 +1424,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["unnecessaryNlsFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unnecessaryNlsFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "unnecessary.nls.fix", //$NON-NLS-1$
@@ -1350,7 +1443,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noNewArrayFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noNewArrayFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.new.array.literal.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1368,7 +1461,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noShadowFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noShadowFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.shadow.fix", //$NON-NLS-1$
 			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
@@ -1386,7 +1479,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noDebuggerFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noDebuggerFixName"],
 			fixAllEnabled: true,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "no.debugger.fix", //$NON-NLS-1$
@@ -1551,7 +1644,7 @@ define([
 			}
 		},
 		{
-			name: javascriptMessages["removeDuplicateCaseFixName"], //$NON-NLS-1$
+			name: javascriptMessages["removeDuplicateCaseFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "remove.duplicate.case.fix", //$NON-NLS-1$
@@ -1570,7 +1663,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["checkTernPluginFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unknownRequirePluginFixName"],
 			fixAllEnabled: false,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "check.tern.plugin.fix", //$NON-NLS-1$
@@ -1589,7 +1682,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["checkTernLibFixName"], //$NON-NLS-1$
+			name: javascriptMessages["unknownRequirePluginFixName"],
 			fixAllEnabled: false,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "check.tern.lib.fix", //$NON-NLS-1$
@@ -1605,10 +1698,37 @@ define([
 			]
 		}
 	);
+	
+	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
+		{
+			/** @callback */
+			execute: function(editorContext, context) {
+				if (context.annotation.id === 'unknown-require-plugin' || context.annotation.id === 'unknown-require') {
+					context.annotation.fixid = 'unknown-require-packagejson'; //$NON-NLS-1$
+				}
+				return quickFixComputer.execute(editorContext, context);
+			}
+		}, {
+			name: javascriptMessages.unknownRequirePackagejsonFixName,
+			fixAllEnabled: false,
+			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
+			id: "check.tern.lib.fix.packagejson", //$NON-NLS-1$
+			contentType: ['application/javascript', 'text/html'], //$NON-NLS-1$ //$NON-NLS-2$
+			validationProperties: [{
+					source: "annotation:id", //$NON-NLS-1$
+					match: "^(?:unknown-require-plugin|unknown-require)$" //$NON-NLS-1$
+				},
+				{
+					source: "readonly", //$NON-NLS-1$
+					match: false
+				}
+			]
+		}
+	);
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["forbiddenExportImportFixName"], //$NON-NLS-1$
+			name: javascriptMessages["forbiddenExportImportFixName"],
 			fixAllEnabled: false,
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			id: "forbidden.export.import.fix", //$NON-NLS-1$
@@ -1646,7 +1766,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["quoteFixName"], //$NON-NLS-1$
+			name: javascriptMessages["quoteFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "quote.fix", //$NON-NLS-1$
@@ -1665,7 +1785,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noUnusedExpressionsFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noUnusedExpressionsFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "no.unused.expressions.fix", //$NON-NLS-1$
@@ -1684,7 +1804,7 @@ define([
 
 	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
 		quickFixComputer, {
-			name: javascriptMessages["noImplicitCoercionFixName"], //$NON-NLS-1$
+			name: javascriptMessages["noImplicitCoercionFixName"],
 			scopeId: "orion.edit.quickfix", //$NON-NLS-1$
 			fixAllEnabled: true,
 			id: "no.implicit.coercion.fix", //$NON-NLS-1$
@@ -1725,19 +1845,19 @@ define([
 	 */
 	provider.registerService("orion.cm.managedservice", validator, {
 		pid: "eslint.config"
-	}); //$NON-NLS-1$ //$NON-NLS-2$
+	});
 	/**
 	 * new sectioned pref block ids
 	 */
 	provider.registerService("orion.cm.managedservice", validator, {
 		pid: "eslint.config.potential"
-	}); //$NON-NLS-1$ //$NON-NLS-2$
+	});
 	provider.registerService("orion.cm.managedservice", validator, {
 		pid: "eslint.config.practices"
-	}); //$NON-NLS-1$ //$NON-NLS-2$
+	});
 	provider.registerService("orion.cm.managedservice", validator, {
 		pid: "eslint.config.codestyle"
-	}); //$NON-NLS-1$ //$NON-NLS-2$
+	});
 
 	/**
 	 * ESLint settings
@@ -1745,18 +1865,23 @@ define([
 	var ignore = 0,
 		warning = 1,
 		error = 2,
+		info = 3,
 		severities = [
 			{
-				label: javascriptMessages['ignore'],
-				value: ignore
+				label: javascriptMessages['error'],
+				value: error
 			},
 			{
 				label: javascriptMessages['warning'],
 				value: warning
 			},
 			{
-				label: javascriptMessages['error'],
-				value: error
+				label: javascriptMessages['info'],
+				value: info
+			},
+			{
+				label: javascriptMessages['ignore'],
+				value: ignore
 			}];
 
 	var doubleQuote = 'double';
@@ -1787,6 +1912,18 @@ define([
 			label: javascriptMessages['never'],
 			value: Never
 		}];
+
+	var allKind = "all";
+	var functionsKind = "functions";
+	var extraParensKinds = [
+		{
+			label: javascriptMessages['allKind'],
+			value: allKind
+		},
+		{
+			label: javascriptMessages['functionKind'],
+			value: functionsKind
+		}];
 	provider.registerService("orion.core.setting", //$NON-NLS-1$
 		{},
 		{
@@ -1801,70 +1938,99 @@ define([
 					id: "no-cond-assign", //$NON-NLS-1$
 					name: javascriptMessages["noCondAssign"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-constant-condition", //$NON-NLS-1$
 					name: javascriptMessages["noConstantCondition"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-const-assign", //$NON-NLS-1$
 					name: javascriptMessages["noConstAssign"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-control-regex", //$NON-NLS-1$
 					name: javascriptMessages["no-control-regex"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-empty-character-class", //$NON-NLS-1$
 					name: javascriptMessages["no-empty-character-class"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-obj-calls", //$NON-NLS-1$
 					name: javascriptMessages["no-obj-calls"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-negated-in-lhs", //$NON-NLS-1$
 					name: javascriptMessages["no-negated-in-lhs"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-extra-boolean-cast", //$NON-NLS-1$
 					name: javascriptMessages["no-extra-boolean-cast"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-extra-parens", //$NON-NLS-1$
 					name: javascriptMessages["no-extra-parens"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
+				},
+				{
+					id: "no-extra-parens!1", //$NON-NLS-1$
+					dependsOn: "no-extra-parens",
+					name: javascriptMessages["no-extra-parens-kinds"],
+					type: "string", //$NON-NLS-1$
+					defaultValue: allKind,
+					options: extraParensKinds
+				},
+				{
+					id: "no-extra-parens:conditionalAssign", //$NON-NLS-1$
+					dependsOn: "no-extra-parens",
+					name: javascriptMessages["no-extra-parens-conditionalAssign"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
+				},
+				{
+					id: "no-extra-parens:returnAssign", //$NON-NLS-1$
+					dependsOn: "no-extra-parens",
+					name: javascriptMessages["no-extra-parens-returnAssign"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
+				},
+				{
+					id: "no-extra-parens:nestedBinaryExpressions", //$NON-NLS-1$
+					dependsOn: "no-extra-parens",
+					name: javascriptMessages["no-extra-parens-nestedBinaryExpressions"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
 				},
 				{
 					id: "no-debugger", //$NON-NLS-1$
 					name: javascriptMessages["noDebugger"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
@@ -1885,42 +2051,49 @@ define([
 					id: "no-duplicate-case", //$NON-NLS-1$
 					name: javascriptMessages["no-duplicate-case"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-dupe-keys", //$NON-NLS-1$
 					name: javascriptMessages["noDupeKeys"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "valid-typeof", //$NON-NLS-1$
 					name: javascriptMessages["validTypeof"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-invalid-regexp", //$NON-NLS-1$
 					name: javascriptMessages["no-invalid-regexp"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
+				},
+				{
+					id: "no-invalid-regexp:allowConstructorFlags", //$NON-NLS-1$
+					dependsOn: "no-invalid-regexp",
+					name: javascriptMessages["no-invalid-regexp-flags"],
+					type: "string", //$NON-NLS-1$
+					defaultValue: ""
 				},
 				{
 					id: "no-regex-spaces", //$NON-NLS-1$
 					name: javascriptMessages["noRegexSpaces"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "use-isnan", //$NON-NLS-1$
 					name: javascriptMessages["useIsNaN"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
@@ -1934,14 +2107,14 @@ define([
 					id: "no-sparse-arrays", //$NON-NLS-1$
 					name: javascriptMessages["noSparseArrays"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-fallthrough", //$NON-NLS-1$
 					name: javascriptMessages["noFallthrough"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
@@ -1962,16 +2135,52 @@ define([
 					id: "no-extra-semi", //$NON-NLS-1$
 					name: javascriptMessages["unnecessarySemis"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-unreachable", //$NON-NLS-1$
 					name: javascriptMessages["noUnreachable"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
-				}]
+				},
+				{
+					id: "no-irregular-whitespace", //$NON-NLS-1$
+					name: javascriptMessages["no-irregular-whitespace"],
+					type: "number", //$NON-NLS-1$
+					defaultValue: ignore,
+					options: severities
+				},
+				{
+					id: "no-irregular-whitespace:skipStrings", //$NON-NLS-1$
+					dependsOn: "no-irregular-whitespace",
+					name: javascriptMessages["no-irregular-whitespace-skipStrings"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
+				},
+				{
+					id: "no-irregular-whitespace:skipComments", //$NON-NLS-1$
+					dependsOn: "no-irregular-whitespace",
+					name: javascriptMessages["no-irregular-whitespace-skipComments"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
+				},
+				{
+					id: "no-irregular-whitespace:skipRegExps", //$NON-NLS-1$
+					dependsOn: "no-irregular-whitespace",
+					name: javascriptMessages["no-irregular-whitespace-skipRegexps"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
+				},
+				{
+					id: "no-irregular-whitespace:skipTemplates", //$NON-NLS-1$
+					dependsOn: "no-irregular-whitespace",
+					name: javascriptMessages["no-irregular-whitespace-skipTemplates"],
+					type: "boolean", //$NON-NLS-1$
+					defaultValue: false
+				},
+				]
 			},
 			{
 				pid: "eslint.config.practices", //$NON-NLS-1$
@@ -1984,35 +2193,35 @@ define([
 					id: "no-eq-null", //$NON-NLS-1$
 					name: javascriptMessages["no-eq-null"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-self-assign", //$NON-NLS-1$
 					name: javascriptMessages["no-self-assign"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-self-compare", //$NON-NLS-1$
 					name: javascriptMessages["no-self-compare"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "eqeqeq", //$NON-NLS-1$
 					name: javascriptMessages["noEqeqeq"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-caller", //$NON-NLS-1$
 					name: javascriptMessages["noCaller"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
@@ -2026,42 +2235,42 @@ define([
 					id: "no-new-array", //$NON-NLS-1$
 					name: javascriptMessages["noNewArray"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-new-func", //$NON-NLS-1$
 					name: javascriptMessages["noNewFunc"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-new-object", //$NON-NLS-1$
 					name: javascriptMessages["noNewObject"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-with", //$NON-NLS-1$
 					name: javascriptMessages["noWith"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-iterator", //$NON-NLS-1$
 					name: javascriptMessages["noIterator"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "no-proto", //$NON-NLS-1$
 					name: javascriptMessages["noProto"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
@@ -2075,27 +2284,27 @@ define([
 					id: "no-new-wrappers", //$NON-NLS-1$
 					name: javascriptMessages["noNewWrappers"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-undef-init", //$NON-NLS-1$
 					name: javascriptMessages["noUndefInit"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "accessor-pairs", //$NON-NLS-1$
 					name: javascriptMessages["accessor-pairs"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-shadow-global", //$NON-NLS-1$
 					name: javascriptMessages["noShadowGlobals"],
-					defaultValue: warning,
+					defaultValue: ignore,
 					type: "number", //$NON-NLS-1$
 					options: severities
 				},
@@ -2103,42 +2312,42 @@ define([
 					id: "no-throw-literal", //$NON-NLS-1$
 					name: javascriptMessages["noThrowLiteral"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-use-before-define", //$NON-NLS-1$
 					name: javascriptMessages["useBeforeDefine"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "check-tern-plugin", //$NON-NLS-1$
 					name: javascriptMessages["check-tern-plugin"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "radix", //$NON-NLS-1$
 					name: javascriptMessages['radix'],
 					type: 'number', //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-empty-label", //$NON-NLS-1$
 					name: javascriptMessages["no-empty-label"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "missing-requirejs", //$NON-NLS-1$
 					name: javascriptMessages["missingRequirejs"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
@@ -2152,77 +2361,77 @@ define([
 					id: "no-undef-expression", //$NON-NLS-1$
 					name: javascriptMessages["undefExpression"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-undef", //$NON-NLS-1$
 					name: javascriptMessages["undefMember"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "unknown-require", //$NON-NLS-1$
 					name: javascriptMessages["unknownRequire"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-else-return", //$NON-NLS-1$
 					name: javascriptMessages["no-else-return"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-unused-params", //$NON-NLS-1$
 					name: javascriptMessages["unusedParams"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-unused-vars", //$NON-NLS-1$
 					name: javascriptMessages["unusedVars"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-redeclare", //$NON-NLS-1$
 					name: javascriptMessages['varRedecl'],
 					type: 'number', //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-shadow", //$NON-NLS-1$
 					name: javascriptMessages["varShadow"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-void", //$NON-NLS-1$
 					name: javascriptMessages["no-void"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: ignore,
 					options: severities
 				},
 				{
 					id: "no-extra-bind", //$NON-NLS-1$
 					name: javascriptMessages["no-extra-bind"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "no-implicit-coercion", //$NON-NLS-1$
 					name: javascriptMessages["no-implicit-coercion"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
@@ -2230,27 +2439,27 @@ define([
 					dependsOn: "no-implicit-coercion",
 					name: javascriptMessages["no-implicit-coercion-boolean"],
 					type: "boolean", //$NON-NLS-1$
-					defaultValue: true,
+					defaultValue: true
 				},
 				{
 					id: "no-implicit-coercion:number", //$NON-NLS-1$
 					dependsOn: "no-implicit-coercion",
 					name: javascriptMessages["no-implicit-coercion-number"],
 					type: "boolean", //$NON-NLS-1$
-					defaultValue: true,
+					defaultValue: true
 				},
 				{
 					id: "no-implicit-coercion:string", //$NON-NLS-1$
 					dependsOn: "no-implicit-coercion",
 					name: javascriptMessages["no-implicit-coercion-string"],
 					type: "boolean", //$NON-NLS-1$
-					defaultValue: true,
+					defaultValue: true
 				},
 				{
 					id: "no-extend-native", //$NON-NLS-1$
 					name: javascriptMessages["no-extend-native"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
@@ -2264,7 +2473,7 @@ define([
 					id: "no-lone-blocks", //$NON-NLS-1$
 					name: javascriptMessages["no-lone-blocks"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: ignore,
 					options: severities
 				},
 				{
@@ -2300,7 +2509,7 @@ define([
 					id: "no-param-reassign", //$NON-NLS-1$
 					name: javascriptMessages["no-param-reassign"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
@@ -2314,7 +2523,7 @@ define([
 					id: "no-native-reassign", //$NON-NLS-1$
 					name: javascriptMessages["no-native-reassign"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
@@ -2328,7 +2537,7 @@ define([
 					id: "no-unused-expressions", //$NON-NLS-1$
 					name: javascriptMessages["no-unused-expressions"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: ignore,
 					options: severities
 				},
 				{
@@ -2349,7 +2558,7 @@ define([
 					id: "no-invalid-this", //$NON-NLS-1$
 					name: javascriptMessages["no-invalid-this"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				}, ]
 			},
@@ -2371,14 +2580,14 @@ define([
 					id: "new-parens", //$NON-NLS-1$
 					name: javascriptMessages["newParens"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: error,
+					defaultValue: warning,
 					options: severities
 				},
 				{
 					id: "semi", //$NON-NLS-1$
 					name: javascriptMessages["missingSemi"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
@@ -2421,14 +2630,14 @@ define([
 					id: "no-jslint", //$NON-NLS-1$
 					name: javascriptMessages["unsupportedJSLint"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: info,
 					options: severities
 				},
 				{
 					id: "quotes", //$NON-NLS-1$
 					name: javascriptMessages["quotes"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: ignore,
 					options: severities
 				},
 				{
@@ -2457,7 +2666,7 @@ define([
 					id: "no-trailing-spaces", //$NON-NLS-1$
 					name: javascriptMessages["noTrailingSpaces"],
 					type: "number", //$NON-NLS-1$
-					defaultValue: warning,
+					defaultValue: ignore,
 					options: severities
 				},
 				{
@@ -2482,7 +2691,7 @@ define([
 	// register preferences for formatting when modified (updated call)
 	provider.registerService("orion.cm.managedservice", jsFormatter, {
 		pid: 'jsbeautify.config.js'
-	}); //$NON-NLS-1$ //$NON-NLS-2$
+	});
 
 	var unix = "\n";
 	var mac = "\r";
@@ -2564,125 +2773,125 @@ define([
 	{
 		settings: [{
 			pid: 'jsbeautify.config.js', //$NON-NLS-1$
-			name: javascriptMessages['javascriptFormattingSettings'], //$NON-NLS-1$
-			tags: 'beautify javascript js formatting'.split(' '), //$NON-NLS-1$//$NON-NLS-2$
+			name: javascriptMessages['javascriptFormattingSettings'],
+			tags: 'beautify javascript js formatting'.split(' '), //$NON-NLS-1$
 			category: 'javascriptFormatting', //$NON-NLS-1$
-			categoryLabel: javascriptMessages['javascriptFormatting'], //$NON-NLS-1$
+			categoryLabel: javascriptMessages['javascriptFormatting'],
 			properties: [
 				{
 					id: 'js_indent_size', //$NON-NLS-1$
-					name: javascriptMessages['js_indent_size'], //$NON-NLS-1$
+					name: javascriptMessages['js_indent_size'],
 					type: 'number', //$NON-NLS-1$
 					defaultValue: 4
 				},
 				{
 					id: 'js_indent_char', //$NON-NLS-1$
-					name: javascriptMessages['js_indent_char'], //$NON-NLS-1$
+					name: javascriptMessages['js_indent_char'],
 					type: 'string', //$NON-NLS-1$
 					defaultValue: space,
 					options: indentation_characters
 				},
 				{
 					id: 'js_eol', //$NON-NLS-1$
-					name: javascriptMessages['js_eol'], //$NON-NLS-1$
+					name: javascriptMessages['js_eol'],
 					type: 'string', //$NON-NLS-1$
 					defaultValue: unix,
 					options: eof_characters
 				},
 				{
 					id: 'js_end_with_newline', //$NON-NLS-1$
-					name: javascriptMessages['js_end_with_newline'], //$NON-NLS-1$
+					name: javascriptMessages['js_end_with_newline'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'js_preserve_newlines', //$NON-NLS-1$
-					name: javascriptMessages['js_preserve_newlines'], //$NON-NLS-1$
+					name: javascriptMessages['js_preserve_newlines'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: true
 				},
 				{
 					id: 'js_max_preserve_newlines', //$NON-NLS-1$
-					name: javascriptMessages['js_max_preserve_newlines'], //$NON-NLS-1$
+					name: javascriptMessages['js_max_preserve_newlines'],
 					type: 'number', //$NON-NLS-1$
 					defaultValue: 10
 				},
 				{
 					id: 'js_brace_style', //$NON-NLS-1$
-					name: javascriptMessages['js_brace_style'], //$NON-NLS-1$
+					name: javascriptMessages['js_brace_style'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: collapse,
 					options: brace_styles
 				},
 				{
 					id: 'js_wrap_line_length', //$NON-NLS-1$
-					name: javascriptMessages['js_wrap_line_length'], //$NON-NLS-1$
+					name: javascriptMessages['js_wrap_line_length'],
 					type: 'number', //$NON-NLS-1$
 					defaultValue: 0
 				},
 				{
 					id: 'indent_level', //$NON-NLS-1$
-					name: javascriptMessages['indent_level'], //$NON-NLS-1$
+					name: javascriptMessages['indent_level'],
 					type: 'number', //$NON-NLS-1$
 					defaultValue: 0
 				},
 				{
 					id: 'space_in_paren', //$NON-NLS-1$
-					name: javascriptMessages['space_in_paren'], //$NON-NLS-1$
+					name: javascriptMessages['space_in_paren'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'space_in_empty_paren', //$NON-NLS-1$
-					name: javascriptMessages['space_in_empty_paren'], //$NON-NLS-1$
+					name: javascriptMessages['space_in_empty_paren'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'space_after_anon_function', //$NON-NLS-1$
-					name: javascriptMessages['space_after_anon_function'], //$NON-NLS-1$
+					name: javascriptMessages['space_after_anon_function'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'break_chained_methods', //$NON-NLS-1$
-					name: javascriptMessages['break_chained_methods'], //$NON-NLS-1$
+					name: javascriptMessages['break_chained_methods'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'keep_array_indentation', //$NON-NLS-1$
-					name: javascriptMessages['keep_array_indentation'], //$NON-NLS-1$
+					name: javascriptMessages['keep_array_indentation'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'space_before_conditional', //$NON-NLS-1$
-					name: javascriptMessages['space_before_conditional'], //$NON-NLS-1$
+					name: javascriptMessages['space_before_conditional'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: true
 				},
 				{
 					id: 'unescape_strings', //$NON-NLS-1$
-					name: javascriptMessages['unescape_strings'], //$NON-NLS-1$
+					name: javascriptMessages['unescape_strings'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'e4x', //$NON-NLS-1$
-					name: javascriptMessages['e4x'], //$NON-NLS-1$
+					name: javascriptMessages['e4x'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'comma_first', //$NON-NLS-1$
-					name: javascriptMessages['comma_first'], //$NON-NLS-1$
+					name: javascriptMessages['comma_first'],
 					type: 'boolean', //$NON-NLS-1$
 					defaultValue: false
 				},
 				{
 					id: 'operator_position', //$NON-NLS-1$
-					name: javascriptMessages['operator_position'], //$NON-NLS-1$
+					name: javascriptMessages['operator_position'],
 					type: 'string', //$NON-NLS-1$
 					defaultValue: before_newline,
 					options: operator_positions
@@ -2693,7 +2902,7 @@ define([
 	/**
 	 * Register syntax styling for js, json and json schema content
 	 */
-	var newGrammars = {};
+	var newGrammars = Object.create(null);
 	mJS.grammars.forEach(function(current) {
 		newGrammars[current.id] = current;
 	});
@@ -2706,11 +2915,9 @@ define([
 	mEJS.grammars.forEach(function(current) {
 		newGrammars[current.id] = current;
 	});
-	for (var current in newGrammars) {
-		if (newGrammars.hasOwnProperty(current)) {
-			provider.registerService("orion.edit.highlighter", {}, newGrammars[current]); //$NON-NLS-1$
-		}
-	}
+	Object.keys(newGrammars).forEach(function(key) {
+		provider.registerService("orion.edit.highlighter", {}, newGrammars[key]); //$NON-NLS-1$
+	});
 	provider.connect(function() {
 		var fc = serviceRegistry.getService("orion.core.file.client"); //$NON-NLS-1$
 		fc.addEventListener("Changed", jsProject.onFileChanged.bind(jsProject));

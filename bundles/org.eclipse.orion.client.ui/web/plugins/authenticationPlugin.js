@@ -9,7 +9,12 @@
  * Contributors: IBM Corporation - initial API and implementation
  ******************************************************************************/
 /*eslint-env browser, amd*/
-define(["orion/xhr", 'orion/xsrfUtils', "orion/plugin", "domReady!"], function(xhr, xsrfUtils, PluginProvider) {
+define([
+	"orion/xhr",
+	"orion/plugin",
+	"plugins/authForm",
+	"domReady!"
+], function(xhr, PluginProvider, authForm) {
 	
 	function connect() {
 		var headers = {
@@ -23,9 +28,6 @@ define(["orion/xhr", 'orion/xsrfUtils', "orion/plugin", "domReady!"], function(x
 	}
 
 	function registerServiceProviders(provider) {
-		function qualifyURL(url) {
-			return new URL(url, self.location.href).href;
-		}
 		var loginData;
 	
 		var serviceImpl = {
@@ -41,6 +43,9 @@ define(["orion/xhr", 'orion/xsrfUtils', "orion/plugin", "domReady!"], function(x
 					timeout: 15000
 				}).then(function(result) {
 					loginData = result.response ? JSON.parse(result.response) : null;
+					if (loginData) {
+						localStorage.setItem('orion.user', JSON.stringify(loginData))
+					}
 					return loginData;
 				}, function(error) {
 					loginData = null;
@@ -53,6 +58,7 @@ define(["orion/xhr", 'orion/xsrfUtils', "orion/plugin", "domReady!"], function(x
 			},
 			logout: function() { /* don't wait for the login response, notify anyway */
 				loginData = null;
+				localStorage.removeItem('orion.user')
 				return xhr("POST", "../logout", { //$NON-NLS-0$
 					headers: {
 						"Orion-Version": "1" //$NON-NLS-0$
@@ -66,7 +72,7 @@ define(["orion/xhr", 'orion/xsrfUtils', "orion/plugin", "domReady!"], function(x
 				});
 			},
 			getAuthForm: function(notify) {
-				return qualifyURL(notify ? ('../mixloginstatic/landing.html?redirect=' + encodeURIComponent(notify) + '&key=FORMOAuthUser') : '../mixloginstatic/LoginWindow.html');
+				return authForm(notify);
 			},
 	
 			getKey: function() {

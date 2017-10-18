@@ -118,16 +118,98 @@ define([
 	}
 
 	/**
+	 * @name appendPath
+	 * @description Appends the given paths together, ensuring no extra slashes appear in the paths
+	 * @param {String} path The path
+	 * @param {String} addition The addition to the path
+	 * @returns {String} The combined path
+	 * @since 14.0
+	 */
+	function appendPath(path, addition) {
+		if (typeof path === 'string' && typeof addition === 'string') {
+			var newpath = path;
+			if (newpath.charAt(newpath.length - 1) !== '/') {
+				newpath += '/';
+			}
+			if (addition.charAt(0) === '/') {
+				newpath += addition.slice(1);
+			} else {
+				newpath += addition;
+			}
+			return newpath;
+		}
+		return null;
+	}
+
+	/**
+	 * @name resolvePath
+	 * @description Resolves the 
+	 * @param {String} path The path to resolve, assumed to be relative
+	 * @param {File} file The Tern file object to resolve against
+	 * @returns {Boolean} The resolved path or null
+	 * @since 14.0
+	 */
+	function resolvePath(path, file) {
+		var _p = path,
+			filepath = file.name.slice(0, file.name.lastIndexOf('/'));
+		var rel = /^\.\.\//.exec(_p);
+		if (rel) {
+			while (rel !== null) {
+				filepath = filepath.slice(0, filepath.lastIndexOf('/'));
+				_p = _p.slice(3);
+				rel = /^\.\.\//.exec(_p);
+			}
+			return appendPath(filepath, _p);
+		} 
+		rel = /^\.\//.test(_p);
+		if(rel) {
+			while (rel) {
+				_p = _p.slice(2);
+				rel = /^\.\//.test(_p);
+			}
+			return appendPath(filepath, _p);
+		}
+		return null;
+	}
+
+	/**
 	 * The Tern delegate
 	 * @since 13.0
 	 */
 	var _tern = {
-		init: function init(server, file) {
+		init: function init(server, file, config) {
 			this.server = server;
 			this.plugins = server.options.plugins;
 			this.optionalPlugins = server.options.optionalPlugins;
 			this.optionalDefs = server.options.optionalDefs;
 			this.file = file;
+			this.config = config;
+		},
+		/**
+		 * @name hasFile
+		 * @description Returns if Tern knows about the file 
+		 * @function
+		 * @param {String} path The full or relative path to the file
+		 * @param {File} file the original file we are trying to find the relative path to
+		 * @returns {Boolean} True if Tern knows about the file, false otherwise
+		 * @since 14.0
+		 */
+		hasFile: function hasFile(path, file) {
+			if(path && this.server && this.server.fileMap) {
+				if(this.server.fileMap[path]) {
+					return true;
+				}
+				if(path.indexOf('.') === 0 && file) {
+					var p = resolvePath(path, file);
+					if(p) {
+						if(p.lastIndexOf('.js') < 0) {
+							p += ".js";
+						}
+						return this.server.fileMap[p];
+					}
+				}
+			}
+			return false;
 		},
 		findRefs: function findRefs(query, file) {
 			try {
@@ -185,15 +267,22 @@ define([
 				}
 			}
 		},
-		libKnown: function libKnown(name) {
+		/**
+		 * @name libKnown
+		 * @description Checks if the library with the given name is known to Tern or the computed environment
+		 * @function
+		 * @param {string} libName The name of the library
+		 * @returns {bool} True if the library name if known, false otherwise
+		 */
+		libKnown: function libKnown(libName) {
 			if(this.server.mod && this.server.mod.modules) {
-				if(this.server.mod.modules.knownModules && this.server.mod.modules.knownModules[name]) {
+				if(this.server.mod.modules.knownModules && this.server.mod.modules.knownModules[libName]) {
 					return true;
 				}
 				var keys = Object.keys(this.server.mod.modules.modules);
 				for(var i = 0, len = keys.length; i < len; i++) {
 					var mod = this.server.mod.modules.modules[keys[i]];
-					if(mod && mod.modName === name) {
+					if(mod && mod.modName === libName) {
 						return true;
 					}
 				}
@@ -202,9 +291,16 @@ define([
 				keys = Object.keys(this.server.mod.requireJS.interfaces);
 				for(i = 0, len = keys.length; i < len; i++) {
 					mod = this.server.mod.requireJS.interfaces[keys[i]];
-					if(mod && mod.reqName === name) {
+					if(mod && mod.reqName === libName) {
 						return true;
 					}
+				}
+			}
+			//@see https://bugs.eclipse.org/bugs/show_bug.cgi?id=512833
+			//if the computed environment includes the lib, don't nag about it
+			if(this.config && this.config.env) {
+				if(this.config.env[libName]) {
+					return true;
 				}
 			}
 			return false;
@@ -236,7 +332,7 @@ define([
 		run: function(server, query, file) {
 			var config = query.config;
 			config.tern = _tern;
-			_tern.init(server, file);
+			_tern.init(server, file, config);
 			if (!config.parserOptions) {
 				var parserOptions = Object.create(null);
 				parserOptions.ecmaVersion = server.options.ecmaVersion;
@@ -285,16 +381,23 @@ define([
 							ruleId: element.ruleId,
 							source: element.source
 						};
-						if (element.node && element.node.range) {
-							strippedMessage.node = {
-								range: element.node.range
-							};
-						}
-						if (element.related) {
-							strippedMessage.related = {
-								range: element.related.range
-							};
-						}
+					if (element.node && element.node.range) {
+						strippedMessage.node = {
+							range: element.node.range
+						};
+					}
+					if (element.related) {
+						strippedMessage.related = {
+							range: element.related.range
+						};
+					}
+					// Don't insert annotations at Program node start (0) as we may be in a HTML file script block
+					if (strippedMessage.node && strippedMessage.nodeType === 'Program'){
+						strippedMessage.line = undefined;
+						strippedMessage.column = undefined;
+						var programStartRange = Finder.findProgramStartRange(file.ast);
+						strippedMessage.node.range = programStartRange;
+					}
 					strippedMessages.push(strippedMessage);
 				});
 			} catch(e) {

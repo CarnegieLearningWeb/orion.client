@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2009, 2012 IBM Corporation and others.
+ * Copyright (c) 2009, 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -13,8 +13,9 @@ define([
 	'i18n!orion/nls/messages',
 	'orion/webui/littlelib',
 	'orion/i18nUtil',
-	'orion/bidiUtils'
-], function(messages, lib, i18nUtil, bidiUtils) {
+	'orion/bidiUtils',
+	'orion/urlModifier'
+], function(messages, lib, i18nUtil, bidiUtils, urlModifier) {
 	/**
 	 * This class contains static utility methods. It is not intended to be instantiated.
 	 * @class This class contains static utility methods.
@@ -277,9 +278,9 @@ define([
 	 */
 	function followLink(href, event) {
 		if (event && openInNewWindow(event)) {
-			window.open(href);
+			window.open(urlModifier(href));
 		} else {
-			window.location = href;
+			window.location = urlModifier(href);
 		}
 	}
 	
@@ -331,13 +332,13 @@ define([
 	/**
 	 * Returns the folder name from path.
 	 * @param {String} filePath
-	 * @param {String} fileName
 	 * @param {Boolean} keepTailSlash
 	 * @returns {String}
 	 */
-	function path2FolderName(filePath, fileName, keepTailSlash){
-		var tail = keepTailSlash ? 0: 1;
-		return filePath.substring(0, filePath.length - encodeURIComponent(fileName).length - tail);
+	function path2FolderName(filePath, keepTailSlash){
+		var pathSegs = filePath.split("/");
+		pathSegs.splice(pathSegs.length -1, 1);
+		return keepTailSlash ? pathSegs.join("/") + "/" : pathSegs.join("/");
 	}
 	
 	function _timeDifference(timeStamp) {
@@ -405,6 +406,23 @@ define([
 		}
 		return messages["justNow"];
 	}
+	
+	/**
+	 * Returns the initial of given name.
+	 * For standard names: "First [Midddles] Last", returns capital "FL";
+	 * For others, returns substr(0, 2).
+	 * 
+	 * @param {string} name -
+	 * @return {string} - initial
+	 */
+	function getNameInitial(name) {
+		var namePart = name.split(' ');
+		if (namePart.length >= 2) {
+			return (namePart[0].charAt(0) + namePart[namePart.length - 1].charAt(0)).toUpperCase();
+		} else {
+			return name.substr(0, 2);
+		}
+	}
 	//return module exports
 	return {
 		getUserKeyString: getUserKeyString,
@@ -416,6 +434,7 @@ define([
 		isFormElement: isFormElement,
 		path2FolderName: path2FolderName,
 		timeElapsed: timeElapsed,
-		displayableTimeElapsed: displayableTimeElapsed
+		displayableTimeElapsed: displayableTimeElapsed,
+		getNameInitial: getNameInitial
 	};
 });

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2011, 2014 IBM Corporation and others.
+ * Copyright (c) 2011, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -305,7 +305,7 @@ define([
 		 * @since 10.0 
 		 */
 		isCompletingCommentOpen: function(node) {
-			if(node 	&& node.type === 'tag' && node.name.match(/^!-{0,2}$/)){
+			if(node && node.type === 'tag' && node.name.match(/^!-{0,2}$/)){
 				return true;
 			}
 			return false;
@@ -419,7 +419,7 @@ define([
 					var hover = Object.create(null);
 					hover.type = 'markdown'; //$NON-NLS-1$
 					hover.content = "";
-					if (tag.category === "Obsolete and deprecated elements"){
+					if (tag.obsolete){
 						hover.content += Messages['obsoleteTag'];
 					}
 					if (tag.doc){
@@ -462,10 +462,12 @@ define([
 							}
 							break;
 					}
-					if (tag.category === "Obsolete and deprecated elements"){
-						desc += Messages['obsoleteTagDesc'];
+					var style = "emphasis";
+					if (tag.obsolete){
+						style = "strikethrough";
+						//desc += Messages['obsoleteTagDesc'];
 					}
-					var proposal = this.makeComputedProposal(proposalText, tag.name, desc, hover, params.prefix);
+					var proposal = this.makeComputedProposal(proposalText, tag.name, desc, hover, params.prefix, style);
 					// The prefix not being includes prevents content assist staying open while typing
 //					if (source.charAt(params.offset - prefix.length - 1) === '<'){
 //						prefix = '<' + prefix;
@@ -694,10 +696,11 @@ define([
 		_hasAttribute: function(node, attribute) {
 			return node
 					&& node.type === 'tag'
-					&& typeof node.attributes === 'object'
+					&& Array.isArray(node.attributes)
 					&& attribute
-					&& !!node.attributes[attribute]
-					&& node.attributes[attribute].value !== null; // a complete attribute needs a value
+					&& node.attributes.some(function(att) {
+						return att.name === attribute && att.value !== null;
+					});
 		},
 		
 		/**
@@ -790,9 +793,10 @@ define([
 		 * @param {String} description The description for the proposal
 		 * @param {Object} hover The markdown hover object for the proposal
 		 * @param {String} prefix The prefix for the proposal
+		 * @param {String} style The optional style. If omitted, defaults to 'emphasis'
 		 * @since 10.0   
 		 */
-		makeComputedProposal: function(proposal, name, description, hover, prefix) {
+		makeComputedProposal: function(proposal, name, description, hover, prefix, style) {
 			return {
 				proposal: proposal,
 				relevance: 100,
@@ -800,7 +804,7 @@ define([
 				description: description,
 				hover: hover,
 				prefix: prefix,
-				style: 'emphasis', //$NON-NLS-1$
+				style: typeof style === 'string' ? style : 'emphasis', //$NON-NLS-1$
 				overwrite: true,
 				kind: 'html' //$NON-NLS-1$
 		    };

@@ -1,31 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 	<head>
-		<meta name="copyright" content="Copyright (c) IBM Corporation and others 2012, 2014." >
-		<meta http-equiv="Content-Language" content="en-us">
 		<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<meta name="copyright" content="Copyright (c) IBM Corporation and others 2012, 2017." >
+		<meta http-equiv="Content-Language" content="en-us">
 		<link rel="icon" href="../images/initproject.png" type="image/png">
 		<title>Settings</title>
 		<link rel="stylesheet" type="text/css" href="settings.css"/>
+		<script src="../orion/requireErrorHandler.js"></script>
 		<script src="../requirejs/require.js"></script>
 		<script>
 			/*eslint-env browser, amd*/
 			require(["../orion/require-config.js"], function(config){
 				function load() {
-					require(["settings/settings"], null, config.errback);
+					require(["settings/settings"], null, self.errback);
 				}
-				if (sessionStorage.settingsSplashShown) {
-					load();
-				} else {
-					sessionStorage.settingsSplashShown = true;
-					require.config({config: {"orion/splash": {splashID: "Settings"}}});
-					require(["orion/splash"], load, load);
-				}
-			});
+				require.config({config: {"orion/splash": {splashID: "Settings"}}});
+				require(["orion/splash"], load, load);
+			}, self.errback);
 		</script>
 	</head>
 	
-	<body id="orion-settings" class="orionPage">
+	<body id="orion-settings" class="orionPage lightPage">
 		<nav id="sideMenu" class="sideMenu"></nav>
 		<div id="pageContent" class="content-fixedHeight">
 			<div id="sideMenuToggle" class="sideMenuToggle"></div>
@@ -41,18 +37,26 @@
 				<div class="split splitLayout settingsSplitLayout" style="left: 300px;"></div>
 				<div id="rightPane" class="mainpane mainPanelLayout hasSplit">
 					<div class="fixedToolbarHolder">
-						<div class="toolbarTarget workingTarget toolbarTarget-toolbarHidden" tabindex="0" id="settings">
+						<div class="toolbarTarget workingTarget toolbarTarget-toolbarHidden" tabindex="0" id="settings" role="tabpanel">
 						</div>				
+					</div>
 				</div>
 			</div>
+			<div class="footer-fixed-bottom footer" id="footer"></div>
 		</div>
-		<div class="footer-fixed-bottom footer" id="footer"></div>
+		<div id="splash" class="splash">
+			<div id="splashContainer" class="splashContainer">
+				<div class="splashLoadingImage initial"></div>
+			</div>
 		</div>
 		<script>
-			if (!sessionStorage.settingsSplashShown) {
-				var splash = document.createElement("div");
-				splash.id = splash.className = "splash";
-				document.body.appendChild(splash);
+			var themeVal = localStorage.getItem("pageTheme");
+			if (themeVal && typeof themeVal === "string" || themeVal instanceof String && themeVal.length > 0) {
+				themeVal.split(" ").forEach(function(clazz) {
+					if (!document.body.classList.contains(clazz)) {
+						document.body.classList.add(clazz);
+					}
+				});
 			}
 		</script>
 	</body>

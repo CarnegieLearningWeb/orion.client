@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2017 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -27,14 +27,12 @@ define([
 	 * @public
 	 * @param {javascript.ASTManager} astManager An AST manager to create ASTs with
 	 * @param {TernWorker} ternWorker The worker running Tern
-	 * @param {Function} pluginEnvironments The function to use to query the Tern server for contributed plugins
-	 * @param {Object} cuprovider The CU Provider that caches compilation units
+	 * @param {?} cuprovider The CU Provider that caches compilation units
 	 * @param {JavaScriptProject} jsproject The backing Javascript project
 	 */
-	function TernContentAssist(astManager, ternWorker, pluginEnvironments, cuprovider, jsproject) {
+	function TernContentAssist(astManager, ternWorker, cuprovider, jsproject) {
 		this.astManager = astManager;
 		this.ternworker = ternWorker;
-		this.pluginenvs = pluginEnvironments;
 		this.cuprovider = cuprovider;
 		this.timeout = null;
 		this.jsProject = jsproject;
@@ -52,7 +50,7 @@ define([
 			var index = offset;
 			while (index > 0) {
 				var char = text.substring(index - 1, index);
-				if (/[A-Za-z0-9_]/.test(char)) {
+				if (/[A-Za-z0-9_$]/.test(char)) {
 					index--;
 				} else {
 					break;
@@ -64,10 +62,9 @@ define([
 		 * @callback 
 		 */
 		computePrefix: function(editorContext, offset) {
-			var that = this;
 			return editorContext.getText().then(function (text) {
-				return text.substring(that._getPrefixStart(text, offset), offset);
-			});
+				return text.substring(this._getPrefixStart(text, offset), offset);
+			}.bind(this));
 		},
 		/**
 		 * Called by the framework to initialize this provider before any <tt>computeContentAssist</tt> calls.
@@ -80,69 +77,63 @@ define([
 		 * @description Implements the Orion content assist API v4.0
 		 */
 		computeContentAssist: function(editorContext, params) {
-			var that = this;
 			return editorContext.getFileMetadata().then(function(meta) {
 			    if(meta.contentType.id === 'text/html') {
 			        return editorContext.getText().then(function(text) {
-			        	var cu = that.cuprovider.getCompilationUnit(function(){
+			        	var cu = this.cuprovider.getCompilationUnit(function(){
 		            		return Finder.findScriptBlocks(text);
 		            	}, meta);
     			        if(cu.validOffset(params.offset)) {
-    			            return that.astManager.getAST(cu.getEditorContext()).then(function(ast) {
-			            		return that.doAssist(ast, params, meta, {ecma5:true, ecma6:true, ecma7: true, browser:true}, text);
-			            	});
+    			            return this.astManager.getAST(cu.getEditorContext()).then(function(ast) {
+			            		return this.doAssist(ast, params, meta, {ecma5:true, ecma6:true, ecma7: true, browser:true}, text);
+			            	}.bind(this));
     			        }
     			        return [];
-			        });
+			        }.bind(this));
 			    } 
-		        return that.astManager.getAST(editorContext).then(function(ast) {
-	        		return that.doAssist(ast, params, meta, {ecma5: true, ecma6: true, ecma7: true});
-	        	});
-			});
+		        return this.astManager.getAST(editorContext).then(function(ast) {
+	        		return this.doAssist(ast, params, meta, {ecma5: true, ecma6: true, ecma7: true});
+	        	}.bind(this));
+			}.bind(this));
 		},
 
 		doAssist: function(ast, params, meta, envs, htmlsource) {
-			return this.jsProject.getEcmaLevel().then(function(ecma) {
-				return this.jsProject.getESlintOptions().then(function(eslint) {
-				    var files = [
-				    	{type:'full', name: meta.location, text: htmlsource ? htmlsource : ast.sourceFile.text} //$NON-NLS-1$
-				    ];
-				    if(typeof params.keywords === 'undefined') {
-				    	params.keywords = true;
-				    }
-				    params.ecma = ecma;
-				    if(eslint && eslint.env) {
-				    	Objects.mixin(envs, eslint.env);
-				    }
-				    var env = this.getActiveEnvironments(ast, envs);
-				    var args = {params: params, meta: meta, envs: env, files: files};
-					var deferred = new Deferred();
-					var that = this;
-					this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
-						/* @callback */ function(response, err) {
-							clearTimeout(that.timeout);
-							var p = [];
-							if(Array.isArray(response.proposals)) {
-								p = response.proposals;
-							}
-				        	deferred.resolve(sortProposals(p, args));
+			return this.jsProject.getComputedEnvironment().then(function(cenv) {
+				Objects.mixin(envs, cenv && cenv.envs ? cenv.envs : {});
+			    var files = [
+			    	{type:'full', name: meta.location, text: htmlsource ? htmlsource : ast.sourceFile.text} //$NON-NLS-1$
+			    ];
+			    if(typeof params.keywords === 'undefined') {
+			    	params.keywords = true;
+			    }
+			    params.ecma = typeof cenv.ecmaVersion === 'number' ? cenv.ecmaVersion : 6;
+			    var env = this.getActiveEnvironments(ast, envs);
+			    var args = {params: params, meta: meta, envs: env, files: files};
+				var deferred = new Deferred();
+				var that = this;
+				this.ternworker.postMessage({request: 'completions', args: args}, //$NON-NLS-1$
+					/* @callback */ function(response, err) {
+						clearTimeout(that.timeout);
+						var p = [];
+						if(Array.isArray(response.proposals)) {
+							p = response.proposals;
 						}
-		        	);
-					
-					if(this.timeout) {
-						clearTimeout(this.timeout);
+			        	deferred.resolve(sortProposals(p, args));
 					}
-					this.timeout = setTimeout(function() {
-						if(deferred) {
-							// In the editor we can't return an error message here or it will be treated as a proposal and inserted into text
-							deferred.resolve(params.timeoutReturn ? params.timeoutReturn : []);
-						}
-						that.timeout = null;
-					}, params.timeout ? params.timeout : 5000);
-					return deferred;
-				}.bind(this));
+	        	);
+				
+				if(this.timeout) {
+					clearTimeout(this.timeout);
+				}
+				this.timeout = setTimeout(function() {
+					if(deferred) {
+						// In the editor we can't return an error message here or it will be treated as a proposal and inserted into text
+						deferred.resolve(params.timeoutReturn ? params.timeoutReturn : []);
+					}
+					that.timeout = null;
+				}, params.timeout ? params.timeout : 5000);
+				return deferred;
 			}.bind(this));
-
 		},
 		getActiveEnvironments: function getActiveEnvironements(ast, defenvs) {
 			var env = Object.create(null);
@@ -159,11 +150,11 @@ define([
 			                	// Collapse whitespace around ,
 							    var string = value.replace(/\s*,\s*/g, ",");
 							    string.split(/,+/).forEach(function(_name) {
-							        _name = _name.trim();
-							        if (!_name) {
+							        var _n = _name.trim();
+							        if (!_n) {
 							            return;
 							        }
-							        env[_name] = true;
+							        env[_n] = true;
 							    });
 			                }
 			            }
@@ -185,6 +176,8 @@ define([
 	});
 
 	var operators = {
+		'async': true,
+		'await': true,
     	'delete': true,
     	'new': true,
     	'instanceof': true,
@@ -203,6 +196,10 @@ define([
     function getKeywordLink(keyword) {
     	var key = keyword;
     	switch(keyword) {
+    		case 'async': {
+    			key = 'async_function';
+    			break;
+    		}
     		case 'do': {
     			key = 'do...while'; //$NON-NLS-1$
     			break;
@@ -255,14 +252,15 @@ define([
         if(typeof completion.overwrite === 'boolean') {
         	proposal.overwrite = completion.overwrite;
         }
-        if(typeof completion.prefix === 'string') {
-        	//args.params.prefix = completion.prefix;
+        if(typeof completion.prefix === 'string'){
         	proposal.prefix = completion.prefix;
+    	} else if (typeof args.params.prefix === 'string') {
+        	proposal.prefix = args.params.prefix;
         }
         proposal.name = proposal.proposal = completion.name;
         if(typeof completion.type !== 'undefined') {
             if(/^fn/.test(completion.type)) {
-            	//TODO proposal.tags = [{content: 'F', cssClass: 'iconTagPurple'}];
+            	proposal.tags = [{cssClass: 'iconFunction'}];
             	calculateFunctionProposal(completion, args, proposal);
             } else if(completion.type === 'template' || completion.type === 'jsdoc_template') {
             	var prefix = proposal.prefix;
@@ -302,6 +300,7 @@ define([
 		        if(typeof completion.prefix === 'string') {
 		        	_prop.prefix = completion.prefix;
 		        }
+		        _prop.tags = [{cssClass: "iconTemplate"}];
 		        return _prop;
             } else {
             	if(typeof completion.description === 'string') {
@@ -309,13 +308,31 @@ define([
             	} else {
 	    		    proposal.description = convertTypes(' : ' + completion.type); //$NON-NLS-1$
 			    }
+			    switch(completion.type) {
+			    	case "bool": {
+			    		proposal.tags = [{cssClass: "iconBoolean"}];
+			    		break;
+		    		}
+			    	case "string": {
+			    		proposal.tags = [{cssClass: "iconString"}];
+			    		break;
+		    		}
+			    	case "number": {
+			    		proposal.tags = [{cssClass: "iconNumber"}];
+			    		break;
+		    		}
+		    		default: {
+		    			proposal.tags = [{cssClass: "iconObject"}];
+		    		}
+			    }
 		    }
         } else if(completion.isKeyword) {
         	proposal.relevance -= 2; //103
-        	proposal.description = Messages['keywordProposalDescription'];
+        	proposal.description = "";
         	proposal.isKeyword = true;
         	completion.doc = Messages['keywordHoverProposal'];
         	completion.url = getKeywordLink(proposal.name);
+        	proposal.tags = [{cssClass: "iconKeyword"}];
         } else {
         	proposal.description = '';
         }
@@ -325,7 +342,10 @@ define([
         if(!completion.doc) {
             obj.content += proposal.name;
         } else {
-        	var _h = Hover.formatMarkdownHover(completion.doc);
+        	if(completion.doc.indexOf('@deprecated') > -1) {
+        		proposal.style = 'strikethrough';
+        	}
+        	_h = Hover.formatMarkdownHover(completion.doc);
         	if(_h) {
         		obj.content += _h.content;
         	} else {

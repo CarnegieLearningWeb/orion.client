@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2017 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -23,7 +23,6 @@ define([
 
 	return function(worker) {
 		var ternAssist;
-		var envs = Object.create(null);
 		var astManager = new ASTManager.ASTManager();
 		var jsFile = 'tern_content_assist_index_test_script.js';
 		var htmlFile = 'tern_content_assist_index_test_script.html';
@@ -32,6 +31,9 @@ define([
 			getEcmaLevel: function getEcmaLevel() {},
 			getESlintOptions: function getESlintOptions() {
 				return new Deferred().resolve(null);
+			},
+			getComputedEnvironment: function getComputedEnvironment() {
+				return new Deferred().resolve({});
 			}
 		};
 	
@@ -66,7 +68,6 @@ define([
 			worker.postMessage({request: 'delFile', args:{file: jsFile}});
 			worker.postMessage({request: 'delFile', args:{file: htmlFile}});
 			
-			envs = typeof options.env === 'object' ? options.env : Object.create(null);
 			var editorContext = {
 				/*override*/
 				getText: function() {
@@ -184,9 +185,7 @@ define([
 			this.timeout(10000);
 			before('Message the server for warm up', function(done) {
 				CUProvider.setUseCache(false);
-				ternAssist = new TernAssist.TernContentAssist(astManager, worker, function() {
-					return new Deferred().resolve(envs);
-				}, CUProvider, jsProject);
+				ternAssist = new TernAssist.TernContentAssist(astManager, worker, CUProvider, jsProject);
 				worker.start(done); // Reset the tern server state to remove any prior files
 			});
 		

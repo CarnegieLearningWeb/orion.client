@@ -12,18 +12,18 @@
 /*eslint-env browser, amd*/
 define(['orion/browserCompatibility', 'orion/bootstrap', 'orion/status', 'orion/progress', 'orion/commandRegistry', 'orion/fileClient', 'orion/operationsClient',
 		'orion/searchClient', 'orion/selection', 'orion/dialogs', 'orion/globalCommands', 'orion/sites/siteUtils', 'orion/sites/siteCommands', 
-		'orion/sites/sitesExplorer', 'i18n!orion/sites/nls/messages'], 
-	function(mBrowserCompatibility, mBootstrap, mStatus, mProgress, mCommandRegistry, mFileClient, mOperationsClient, mSearchClient, mSelection, mDialogs, mGlobalCommands, mSiteUtils, mSiteCommands, SitesExplorer, messages) {
+		'orion/sites/sitesExplorer', 'i18n!orion/sites/nls/messages', 'orion/urlModifier'], 
+	function(mBrowserCompatibility, mBootstrap, mStatus, mProgress, mCommandRegistry, mFileClient, mOperationsClient, mSearchClient, mSelection, mDialogs, mGlobalCommands, mSiteUtils, mSiteCommands, SitesExplorer, messages, urlModifier) {
 		mBootstrap.startup().then(function(core) {
 			var serviceRegistry = core.serviceRegistry;
 			var preferences = core.preferences;
 			// Register services
-			var dialogService = new mDialogs.DialogService(serviceRegistry);
+			var commandRegistry = new mCommandRegistry.CommandRegistry({ });
+			var dialogService = new mDialogs.DialogService(serviceRegistry, commandRegistry);
 			var operationsClient = new mOperationsClient.OperationsClient(serviceRegistry);
 			var statusService = new mStatus.StatusReportingService(serviceRegistry, operationsClient, "statusPane", "notifications", "notificationArea"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			
 			var selection = new mSelection.Selection(serviceRegistry);
-			var commandRegistry = new mCommandRegistry.CommandRegistry({ });
 			var progressService = new mProgress.ProgressService(serviceRegistry, operationsClient, commandRegistry);
 
 			var fileClient = new mFileClient.FileClient(serviceRegistry);
@@ -32,7 +32,7 @@ define(['orion/browserCompatibility', 'orion/bootstrap', 'orion/status', 'orion/
 			function createCommands() {
 				var errorHandler = statusService.setProgressResult.bind(statusService);
 				var goToUrl = function(url) {
-					window.location = url;
+					window.location = urlModifier(url);
 				};
 				mSiteCommands.createSiteServiceCommands(serviceRegistry, commandRegistry, {
 					createCallback: goToUrl,

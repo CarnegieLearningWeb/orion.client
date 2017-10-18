@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,23 +9,30 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'), writeError = api.writeError;
-var path = require('path');
-var git = require('nodegit');
-var express = require('express');
-var bodyParser = require('body-parser');
-var clone = require('./clone');
-var commitm = require('./commit');
+var api = require('../api'),
+	git = require('nodegit'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	clone = require('./clone'),
+	commitm = require('./commit'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+	
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
 
 	return express.Router()
 	.use(bodyParser.json())
-	.get('/:refName/file/*', getBlame);
+	.use(responseTime({digits: 2, header: "X-GitapiBlame-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
+	.get('/:refName'+ fileRoot + "/*", getBlame);
 	
 function getBlame(req, res) {
 	var blamerepo,fileDir, fileRelativePath;
@@ -49,14 +56,14 @@ function getBlame(req, res) {
 			var sendingBlamejason;
 			sendingBlamejason = {
 				"Children" : blamejason,
-				"CloneLocation": "/gitapi/clone" + fileDir ,
-				"Location": "/gitapi/blame/"+ req.params.refName + fileDir + fileRelativePath,
+				"CloneLocation": gitRoot + "/clone" + fileDir ,
+				"Location": gitRoot + "/blame/"+ req.params.refName + fileDir + fileRelativePath,
 				"Type" : "Blame"
 			};
-			res.status(200).json(sendingBlamejason);
+			api.writeResponse(200, res, null, sendingBlamejason, true);
 		});
 	}).catch(function(err){
-		writeError(403, res, err);
+		api.writeError(403, res, err);
 	});
 }
 

@@ -18,8 +18,8 @@
 }
 
 .core-sprite-progress {
-	height:14px;
-	width:14px;
+	height:12px;
+	width:12px;
 	-webkit-animation: progressAnimation .7s infinite linear;
 	-moz-animation: progressAnimation .7s infinite linear;
 	animation: progressAnimation .7s infinite linear;
@@ -27,6 +27,10 @@
 	background-image: none;
 	padding: 0px;
 	padding-top:2px;
+	margin-bottom: 1px;
+	margin-top: 2px;
+	margin-left: 0;
+	margin-right: 0;
 	border:2px solid rgba(1,1,1,0.7);
 	border-top:0px solid rgba(1,1,1,0);
 	outline: none;
@@ -63,7 +67,6 @@
 .core-sprite-information{ background-position: 0 -365px; width: 16px; height: 16px; } 
 .core-sprite-initproject{ background-position: 0 -383px; width: 16px; height: 16px; } 
 .core-sprite-link{ background-position: 0 -419px; width: 16px; height: 16px; } 
-.core-sprite-list{ background-position: 0 -437px; width: 16px; height: 16px; } 
 .core-sprite-none{ background-position: 0 -491px; width: 16px; height: 16px; } 
 .core-sprite-ok{ background-position: 0 -509px; width: 16px; height: 16px; } 
 .core-sprite-replaceAll{ background-position: 0 -608px; width: 16px; height: 16px; } 
@@ -88,7 +91,7 @@
 .core-sprite-applicationnotdeployed {
 	border-radius: 50%;
 	background-color: white;
-	border: 1px solid grey;
+	border: 1px solid #707070;
 	width: 12px;
 	height: 12px; 
 }
@@ -114,6 +117,7 @@
 .core-sprite-edit,
 .core-sprite-leftarrow,
 .core-sprite-rightarrow,
+.core-sprite-forward,
 .file-sprite-css,
 .file-sprite-html,
 .file-sprite-javascript,
@@ -156,7 +160,8 @@
 .core-sprite-checkmark,
 .core-sprite-save,
 .core-sprite-questionmark,
-.core-sprite-eraser
+.core-sprite-eraser,
+.core-sprite-list
 {
 	color: inherit;
 	font-size: 16px;
@@ -293,6 +298,7 @@
 .core-sprite-close:before{ content:'\E02A'; }
 .core-sprite-leftarrow:before{content:'\E015';}
 .core-sprite-rightarrow:before{content:'\E016';}
+.core-sprite-forward:before{content:'\E01B';}
 .core-sprite-deploy:before{content:'\E032';}
 .core-sprite-warning:before{content:'\E033';}
 .core-sprite-error:before{content:'\E034';}
@@ -331,6 +337,8 @@
 .core-sprite-vertical:before{ content:'\E041'; }
 .core-sprite-pip:before{ content:'\E067'; }
 .core-sprite-questionmark:before{ content:'\E043'; }
+.core-sprite-list:before{ content:'\E035'; }
+
 
 /* icons for file types - possibly more to come - at least one for images */ 
 

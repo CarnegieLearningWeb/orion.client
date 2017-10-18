@@ -13,6 +13,7 @@
 
 define([
 	'i18n!git/nls/gitmessages',
+	'orion/bidiUtils',
 	'orion/commandRegistry',
 	'orion/explorers/explorer',
 	'orion/URITemplate',
@@ -22,9 +23,9 @@ define([
 	'orion/Deferred',
 	'orion/git/gitCommands',
 	'orion/objects'
-], function(messages, mCommandRegistry, mExplorer, URITemplate, i18nUtil, uiUtil, util, Deferred, mGitCommands, objects) {
+], function(messages, bidiUtils, mCommandRegistry, mExplorer, URITemplate, i18nUtil, uiUtil, util, Deferred, mGitCommands, objects) {
 		
-	var repoTemplate = new URITemplate("git/git-repository.html#{,resource,params*}"); //$NON-NLS-0$
+	var repoTemplate = new URITemplate("#{,resource,params*}"); //$NON-NLS-0$
 
 	function GitRepoListModel(options) {
 		this.root = options.root;
@@ -357,7 +358,7 @@ define([
 						title = messages[item.Type];
 					} else if ((item.Type === "Clone" && !item.parent) || item.parent.Type === "RepoRoot") { //$NON-NLS-0$
 						if (explorer.showLinks) {
-							titleLink = require.toUrl(repoTemplate.expand({resource: repo.Location}));
+							titleLink = repoTemplate.expand({resource: repo.Location});
 						} else {
 							titleClass = "gitRepoTitle"; //$NON-NLS-0$
 						}
@@ -368,9 +369,9 @@ define([
 
 							description = repo.GitUrl ? messages["git url:"] + repo.GitUrl : messages["(no remote)"];
 							if(repo.SubmoduleStatus && repo.SubmoduleStatus.Type ==="UNINITIALIZED" ){
-								subDescription = messages["location: "] + repo.SubmoduleStatus.Path;
+								subDescription = messages["location: "] + bidiUtils.enforceSTT(repo.SubmoduleStatus.Path, 'filepath');
 							}else {
-								subDescription = repo.Content ? messages["location: "] + repo.Content.Path : ellipses;
+								subDescription = repo.Content ? messages["location: "] + bidiUtils.enforceSTT(repo.Content.Path, 'filepath') : ellipses;
 							}
 							
 
@@ -430,6 +431,9 @@ define([
 						titleDiv.href = titleLink;
 					}
 					titleDiv.textContent = title || item.Name;
+					if (bidiUtils.isBidiEnabled()) {
+						titleDiv.dir = bidiUtils.getTextDirection(titleDiv.textContent);
+					} 
 					detailsView.appendChild(titleDiv);
 					
 					var descriptionDiv = document.createElement("div"); //$NON-NLS-0$

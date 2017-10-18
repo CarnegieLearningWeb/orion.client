@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2016 IBM Corporation and others.
+ * Copyright (c) 2013, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -20,7 +20,7 @@ define([
 	var config = {
 		// 0:off, 1:warning, 2:error
 		defaults: Rules.defaults,
-		
+
 		/**
 		 * @description Sets the given rule to the given enabled value
 		 * @function
@@ -46,7 +46,7 @@ define([
 				this.rules[ruleId] = value;
 			}
 		},
-		
+
 		/**
 		 * @description Resets the rules to their default values
 		 * @function
@@ -56,13 +56,30 @@ define([
 			var keys = Object.keys(this.defaults);
 			for (var i = 0; i < keys.length; i++) {
 				var key = keys[i];
-				this.rules[key] = this.defaults[key];
+				var defaultValue = this.defaults[key];
+				if (Array.isArray(defaultValue)) {
+					var value = [];
+					defaultValue.forEach(function(element) {
+						if (typeof element === 'object') {
+							var newElement= Object.create(null);
+							Object.keys(element).forEach(function (key) {
+								newElement[key] = element[key];
+							});
+							value.push(newElement);
+						} else {
+							value.push(element);
+						}
+					});
+					this.rules[key] = value;
+				} else {
+					this.rules[key] = this.defaults[key];
+				}
 			}
 		}
 	};
 
 	var registry;
-	
+
 	/**
 	 * @description Creates a new ESLintValidator
 	 * @constructor
@@ -78,7 +95,7 @@ define([
 		config.setDefaults();
 		registry = serviceRegistry;
 	}
-	
+
 	/**
 	 * @description Log the given timing in the metrics service
 	 * @param {Number} end The total time to log
@@ -91,8 +108,8 @@ define([
 				metrics.logTiming('language tools', 'validation', end, 'application/javascript'); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 			}
 		}
- 	}
-	
+	}
+
 	/**
 	 * @description Converts the configuration rule value to an Orion problem severity string. One of 'warning', 'error'.
 	 * @param {Object} prob The problem object
@@ -112,10 +129,11 @@ define([
 		switch (val) {
 			case 1: return "warning"; //$NON-NLS-0$
 			case 2: return "error"; //$NON-NLS-0$
+			case 3: return "info";
 		}
 		return "error"; //$NON-NLS-0$
 	}
-	
+
 	/**
 	 * @description Computes the problem id to use in the framework from the ESLint problem object
 	 * @param {Object} pb The original ESLint problem
@@ -132,7 +150,7 @@ define([
 	    }
 	    return pb.ruleId;
 	}
-	
+
 	/**
 	 * @description Converts an eslint / esprima problem object to an Orion problem object
 	 * @public
@@ -140,6 +158,7 @@ define([
 	 * @returns {Object} Orion Problem object
 	 */
 	function toProblem(e) {
+		var id = getProblemId(e);
 		var start = e.start, end = e.end;
 		var descriptionKey = e.args && e.args.nls ? e.args.nls : e.ruleId;
 		var descriptionArgs = e.args || Object.create(null);
@@ -148,7 +167,7 @@ define([
 			description = i18nUtil.formatMessage.call(null, messages[descriptionKey], descriptionArgs);
 		}
 		var prob = {
-			id: getProblemId(e),
+			id: id,
 			description: description,
 			severity: getSeverity(e)
 		};
@@ -190,11 +209,74 @@ define([
 			prob.start = 0;
 			prob.end = 0;
 		}
+		// Pass along any additional data to the problem annotation (Bug 464538)
 		if (e.args && e.args.data){
-			// Pass along any additional data to the problem annotation (Bug 464538)
-			prob.data = e.args.data;
+			if (typeof e.args.data === 'object'){
+				prob.data = e.args.data;
+				prob.data.ruleId = e.ruleId;
+			} else {
+				prob.data = {data: e.args.data, ruleId: e.ruleId};
+			}
+		} else {
+			prob.data = {ruleId: e.ruleId};
 		}
 		return prob;
+	}
+
+	/**
+	 * @name configureCoreRules
+	 * @description Ensures that core linting rules are not left out because of an eslintrc file being used
+	 * @param {?} cfg The configuration map from the eslintrc file
+	 * @since 14.0
+	 */
+	function configureRules(cfg, confg) {
+		if(cfg && cfg.rules) {
+			Object.keys(cfg.rules).forEach(function(key) {
+				if(!Rules.defaults[key]) {
+					delete cfg.rules[key];
+				}
+			});
+			if(!confg || (confg && !confg.skip)) { //test hook to disable these rules unless explicitly added
+				cfg.rules["unknown-require"] = config.rules["unknown-require"];
+				cfg.rules["check-tern-plugin"] = config.rules["check-tern-plugin"];
+				cfg.rules["missing-requirejs"] = config.rules["missing-requirejs"];
+			}
+		}
+		//test hooks
+		if(confg) {
+			if(!cfg) {
+				return confg;
+			}
+			cfg.rules = confg.rules;
+		}
+		return cfg;
+	}
+
+	/**
+	 * @name prepareConfig
+	 * @description Copies all of the configuration entries from the given configuration object into the one that 
+	 * will be passed to Tern
+	 * @param {?} configuration The existing configuration object or null
+	 * @param {?} env The existing environment map or null
+	 * @returns {?} The configured options map
+	 * @since 14.0
+	 */
+	function prepareConfig(configuration, env) {
+		var c = {rules: config.rules};
+		if(configuration) {
+			Object.keys(configuration).forEach(function(key) {
+				c[key] = configuration[key];
+			});
+		}
+		if(env) {
+			if(!c.env) {
+				c.env = {};
+			}
+			Object.keys(env).forEach(function(key) {
+				c.env[key] = env[key];
+			});
+		}
+		return c;
 	}
 
 	Objects.mixin(ESLintValidator.prototype, {
@@ -227,14 +309,20 @@ define([
 						env.browser = true;
 					}
 					if(this.project) {
-						this.project.getESlintOptions().then(function(cfg) {
-							if(cfg && cfg.env) {
-								env = !env ? Object.create(null) : env;
-								Object.keys(cfg.env).forEach(function(key) {
-									env[key] = cfg.env[key];
+						this.project.getComputedEnvironment().then(function(cenv) {
+							env = !env ? Object.create(null) : env;
+							if(cenv && cenv.envs) {
+								Object.keys(cenv.envs).forEach(function(key) {
+									env[key] = cenv.envs[key];
 								});
 							}
-							this._validate(meta, text, env, deferred, cfg);
+							var eslint = cenv.eslint ? cenv.eslint.vals : null;
+							if(eslint && eslint.env) {
+								Object.keys(eslint.env).forEach(function(key) {
+									env[key] = eslint.env[key];
+								});
+							}
+							this._validate(meta, text, env, deferred, configureRules(eslint, config));
 						}.bind(this));
 					} else {
 						// need to extract all scripts from the html text
@@ -244,7 +332,7 @@ define([
 			}.bind(this));
 			return deferred;
 		},
-		
+
 		/**
 		 * @description Validates the given AST
 		 * @function
@@ -257,19 +345,12 @@ define([
 		 */
 		_validate: function(meta, text, env, deferred, configuration) {
 			// When validating snippets in an html file ignore undefined rule because other scripts may add to the window object
-			var rules = config.rules;
-			if (configuration && configuration.rules) {
-				rules = configuration.rules;
-			}
 			var files = [{type: 'full', name: meta.location, text: text}]; //$NON-NLS-1$
-			var args =  {meta: {location: meta.location}, env: env, files: files, rules: rules};
-			if (configuration && configuration.ecmaFeatures) {
-				args.ecmaFeatures = configuration.ecmaFeatures;
-			}
+			var args =  {meta: {location: meta.location}, files: files, config: prepareConfig(configuration, env)};
 			var request = {request: 'lint', args: args}; //$NON-NLS-1$
 			var start = Date.now();
 			this.ternWorker.postMessage(
-				request, 
+				request,
 				/* @callback */
 				function(type, err) {
 					var end = Date.now() - start;
@@ -354,7 +435,7 @@ define([
 				}
 			}
 		},
-		
+
 		/**
 		 * @description Hook for the test suite to enable only the given rule
 		 * @function
@@ -380,11 +461,11 @@ define([
 				}
 			}
 		},
-		
+
 		/**
-		 * All new pref ids MUST be the id of the rule they are for, but to 
+		 * All new pref ids MUST be the id of the rule they are for, but to
 		 * not break existing prefs this object translates the old pref name to its rule name
-		 * @private 
+		 * @private
 		 * @since 8.0
 		 */
 		_legacy: {
@@ -421,7 +502,7 @@ define([
 		    validate_no_redeclare: 'no-redeclare', //$NON-NLS-1$
 		    validate_no_shadow: 'no-shadow' //$NON-NLS-1$
 		}
-		
+
 	});
 	return ESLintValidator;
 });

@@ -13,7 +13,7 @@ var express = require("express");
 var bodyParser = require("body-parser");
 var target = require("./target");
 var tasks = require("../tasks");
-var util = require("../git/util");
+var api = require("../api");
 
 module.exports.router = function() {
 
@@ -65,7 +65,7 @@ function getCFdomains(appTarget, UserId, targetUrl, domainName, defaultDomainMod
 	var waitFor;
 	if (!defaultDomainMode){
 		waitFor = target.cfRequest("GET", UserId, targetUrl + appTarget.Org.entity.private_domains_url, 
-				domainName ? {"q": "name:" + util.encodeURIComponent(domainName)}: null);
+				domainName ? {"q": "name:" + api.encodeURIComponent(domainName)}: null, null, null, null, appTarget);
 	}else{
 		waitFor = Promise.resolve();
 	}
@@ -73,12 +73,12 @@ function getCFdomains(appTarget, UserId, targetUrl, domainName, defaultDomainMod
 	.then(function(result) {
 		if (defaultDomainMode || !domainName || result.total_results < 1) {
 			var qs = domainName ? {
-				"q": "name:" + util.encodeURIComponent(domainName)
+				"q": "name:" + api.encodeURIComponent(domainName)
 			} : {
 				"page": "1",
 				"results-per-page": "1"
 			};
-			return target.cfRequest("GET", UserId, targetUrl + "/v2/shared_domains", qs)
+			return target.cfRequest("GET", UserId, targetUrl + "/v2/shared_domains", qs, null, null, null, appTarget)
 			.then(function(result){
 				return result;
 			});

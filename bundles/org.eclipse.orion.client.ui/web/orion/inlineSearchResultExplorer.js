@@ -15,12 +15,12 @@ define(['i18n!orion/search/nls/messages', 'orion/Deferred', 'orion/webui/littlel
 	'orion/searchModel', 'orion/explorers/fileDetailRenderer',
 	'orion/extensionCommands',
 	'orion/objects',
-	'orion/bidiUtils'
+	'orion/bidiUtils', 'orion/urlModifier'
 ],
 function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands, 
 	mSearchUtils, mCompareView, mHighlight, mTooltip, 
 	navigatorRenderer, extensionCommands, mSearchModel, mFileDetailRenderer,
-	mExtensionCommands, objects, bidiUtils
+	mExtensionCommands, objects, bidiUtils, urlModifier
 ) {
 	var isMac = window.navigator.platform.indexOf("Mac") !== -1; //$NON-NLS-0$
     /* Internal wrapper functions*/
@@ -195,10 +195,14 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
 			if (openWithCommand && typeof openWithCommand.hrefCallback === 'function') {
 				href = openWithCommand.hrefCallback({items: item});
 			}
+			var navHandler = this.explorer.getNavHandler();
+			if(navHandler) {
+				navHandler.setSelection(modelItem);
+			}
 			if(this._ctrlKeyOn(evt)){
-				window.open(href);
+				window.open(urlModifier(href));
 			} else {
-				window.location.href = href;
+				window.location.href = urlModifier(href);
 			}
 		}.bind(this), false);
 		return link;
@@ -1232,6 +1236,12 @@ function(messages, Deferred, lib, mContentTypes, i18nUtil, mExplorer, mCommands,
         		this.getNavHandler().iterate(next, forceExpand, true);
         		currentModel = this.getNavHandler().currentModel();
         	}
+        }
+        
+        // makes sure that the behaviour is consistent with actually clicking it
+        var rowLinks = this.getRow(this.getNavHandler().currentModel()).getElementsByTagName("a");
+        for (var i = 0; i < rowLinks.length; i++){
+        	rowLinks[i].click();
         }
     };
     

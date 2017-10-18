@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2016 IBM Corporation and others.
+ * Copyright (c) 2016, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -39,6 +39,55 @@ define([
 	 * @private 
 	 */
 	var templates = [
+		{
+			prefix: "async", //$NON-NLS-1$
+			name: "async function",  //$NON-NLS-1$
+			nodes: {top:true, member:false, prop:false},
+			template: "async function ${name}(${param}) {\n"+
+   					  "    ${cursor}\n"+
+					  "}",
+			url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function", 
+			doc: Messages.asyncFunction,
+			ecma: 9
+		},
+		{
+			prefix: "async", //$NON-NLS-1$
+			name: "async function expression",  //$NON-NLS-1$
+			nodes: {top:true, member:false, prop:false},
+			template: "var ${name} = async function ${name}(${param}) {\n"+
+   					  "    ${cursor}\n"+
+					  "};",
+			url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/async_function", 
+			doc: Messages.asyncFunctionExpression,
+			ecma: 9
+		},
+		{
+			prefix: "await", //$NON-NLS-1$
+			name: "await statement",  //$NON-NLS-1$
+			nodes: {top:true, assign: true, async:true, member:false, prop:false},
+			template: "await ${statement};", //$NON-NLS-1$
+			url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await", 
+			doc: Messages.awaitExpression,
+			ecma: 9
+		},
+		{
+			prefix: "await", //$NON-NLS-1$
+			name: "await return statement",  //$NON-NLS-1$
+			nodes: {top:false, async:true, member:false, prop:false},
+			template: "return await ${statement};", //$NON-NLS-1$
+			url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await", 
+			doc: Messages.awaitExpression,
+			ecma: 9
+		},
+		{
+			prefix: "await", //$NON-NLS-1$
+			name: "await variable statement",  //$NON-NLS-1$
+			nodes: {top:true, async:true, member:false, prop:false},
+			template: "var ${variable} = await ${statement};", //$NON-NLS-1$
+			url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/await", 
+			doc: Messages.awaitExpression,
+			ecma: 9
+		},
 		{
 			prefix: "if", //$NON-NLS-1$
 			name: "if statement",  //$NON-NLS-1$
@@ -206,7 +255,6 @@ define([
 			name: "function declaration", //$NON-NLS-1$
 			nodes: {top:true, member:false, prop:false},
 			template: "/**\n"+  //$NON-NLS-1$
-					  " * @name ${name}\n"+  //$NON-NLS-1$
 					  " * @param ${parameter}\n"+  //$NON-NLS-1$
 					  " */\n"+  //$NON-NLS-1$
 					  "function ${name} (${parameter}) {\n\t${cursor}\n}", //$NON-NLS-1$
@@ -272,8 +320,7 @@ define([
 		    prefix: "require", //$NON-NLS-1$
 			name: "require function call", //$NON-NLS-1$
 			nodes: {top:true, member:false, prop:false, doc:false, jsdoc:false},
-			template: "/* eslint-env node*/\n"+ //$NON-NLS-1$
-					  "var lib = require('${cursor}');", //$NON-NLS-1$
+			template: "var lib = require('${cursor}');", //$NON-NLS-1$
 			url: "https://nodejs.org/api/modules.html#modules_modules", 
 			doc: Messages['requireSimple'],
 			ecma: 5
@@ -409,7 +456,7 @@ define([
 		},
 		{
 			prefix: "let", //$NON-NLS-1$
-			name: "let esxpression", //$NON-NLS-1$
+			name: "let expression", //$NON-NLS-1$
 			nodes: {top:true, member:false, prop:false},
 			template: "let ${name} = ${value};", //$NON-NLS-1$
 			url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let", //$NON-NLS-1$
@@ -465,6 +512,9 @@ define([
 			      		if(kind && kind.kind) {
 				      		var tmpls = Finder.findTemplatesForKind(templates, kind.kind, cachedQuery.ecma ? cachedQuery.ecma : 6);
 				      		tmpls.forEach(function(template) {
+				      			if(!kind.isasync && template.nodes.async === true) {
+				      				return;
+				      			}
 								gather(template.name, null, 0, function(c) {
 									c.template = template.template;
 									c.doc = template.doc;

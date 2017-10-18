@@ -9,7 +9,7 @@
  * Contributors: IBM Corporation - initial API and implementation
  ******************************************************************************/
 /*eslint-env browser, amd*/
-define(['orion/EventTarget'], function( EventTarget){
+define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( EventTarget, bidiUtils, urlModifier ) {
 
 	/**
 	 * InputCompletion is an alternative to datalist support in html5.
@@ -333,6 +333,9 @@ define(['orion/EventTarget'], function( EventTarget){
 				var liTextEle = this._createBoldText(category.item.value, category.boldIndex, category.boldLength);
 				td1.appendChild(liTextEle);
 				td1.style.overflow = 'hidden'; //$NON-NLS-0$
+				if (bidiUtils.isBidiEnabled()) {
+					td1.dir = bidiUtils.getTextDirection(category.item.value);
+				}
 				tr.appendChild(td1);
 				
 				if(this._onDelete) {
@@ -428,9 +431,9 @@ define(['orion/EventTarget'], function( EventTarget){
 			this._inputField.focus();
 		} else if(valueToInputField && valueToInputField.name && valueToInputField.type === "link"){ //$NON-NLS-0$
 			if(ctrlKey){
-				window.open(valueToInputField.value);
+				window.open(urlModifier(valueToInputField.value));
 			} else {
-				window.location.href = valueToInputField.value;
+				window.location.href = urlModifier(valueToInputField.value);
 			}
 		}
 		this._completionUIContainer.style.display = "none"; //$NON-NLS-0$

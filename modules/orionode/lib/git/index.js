@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,25 +9,31 @@
  *		 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'), writeError = api.writeError;
-var git = require('nodegit');
-var clone = require('./clone');
-var path = require('path');
-var fs = require('fs');
-var express = require('express');
-var bodyParser = require('body-parser');
+var api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
+	git = require('nodegit'),
+	clone = require('./clone'),
+	path = require('path'),
+	fs = require('fs'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
-
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
+	
 	return express.Router()
 	.use(bodyParser.json())
-	.get('/file*', getIndex)
-	.put('/file*', putIndex)
-	.post('/file*', postIndex);
+	.use(responseTime({digits: 2, header: "X-GitapiIndex-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
+	.get(fileRoot + '*', getIndex)
+	.put(fileRoot + '*', putIndex)
+	.post(fileRoot + '*', postIndex);
 
 function getIndex(req, res) {
 	var repo;
@@ -46,11 +52,26 @@ function getIndex(req, res) {
 	.then(function(indexResult) {
 		index = indexResult;
 		var indexEntry = index.getByPath(filePath);
+		if (!indexEntry) {
+			// new untracked file that's not in the index
+			var readIfExists = req.headers ? Boolean(req.headers['read-if-exists']).valueOf() : false;
+			if (typeof readIfExists === 'boolean' && readIfExists) {
+				return 204;
+			}
+			return 404;
+		}
 		return git.Blob.lookup(repo, indexEntry.id);
 	})
 	.then(function(blob) {
-		res.write(blob.toString());
-		res.status(200).end();
+		if (typeof blob === 'number') {
+			if (blob === 204) {
+				api.sendStatus(204, res);
+			} else {
+				writeError(404, res, filePath + " not found in index");
+			}
+		} else {
+			writeResponse(200, res, {"Content-Type":"application/octect-stream"}, blob.toString(), false, true);
+		}
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
@@ -85,10 +106,7 @@ function putIndex(req, res) {
 		return index.write();
 	})
 	.then(function() {
-		return index.writeTree();
-	})
-	.then(function() {
-		res.status(200).end();
+		writeResponse(200, res);
 	}).catch(function(err) {
 		writeError(404, res, err.message);
 	});
@@ -133,7 +151,7 @@ function postIndex(req, res) {
 		return git.Reset.default(repo, commit, [filePath]);
 	})
 	.then(function() {
-		res.status(200).end();
+		writeResponse(200, res);
 	}).catch(function(err) {
 		writeError(404, res, err.message);
 	});

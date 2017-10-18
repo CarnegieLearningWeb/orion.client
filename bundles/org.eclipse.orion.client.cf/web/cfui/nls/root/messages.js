@@ -93,6 +93,7 @@ define({//Default message bundle
 	"gettingLogs": "Fetching logs. This may take a few minutes.  You can continue to work in other pages while we collect the logs.",
 	"launchConfDropdownLabel": "Launch Configuration:",
 	"scrollLockLabel": "Scroll Lock:",
+	"scrollLockTooltip": "Lock log scrolling",
 	"clearLogs": "Clear",
 	"loginTo": "Login to ",
 	"loggingInTo${0}": "Logging in to ${0}",
@@ -215,7 +216,8 @@ define({//Default message bundle
 	"requiredToPreventRandomAccess": "Required to prevent random access to cf-launcher",
 	"uRLPrefix:": "URL Prefix: ",
 	"leaveBlankForDefault": "Leave blank for default ${0}",
-	"createNew": "Create New",
+	"createNew": "Create Cloud Foundry Configuration",
+	"createNewTooltip": "Create a new launch configuration",
 	"manifestOverride": "Yellow boxes indicate modified fields, which will override manifest file settings.",
 	"noManifest": "No manifest found at /manifest.yml",
 	"refreshLogsPage": "[ Refresh the page to get the latest logs... ]"

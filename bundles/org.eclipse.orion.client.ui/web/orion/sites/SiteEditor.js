@@ -233,6 +233,8 @@ objects.mixin(SiteEditor.prototype, {
 				_self.nameInvalid.classList.add("visible"); //$NON-NLS-0$
 			}
 		});
+		bidiUtils.initInputField(this.name);
+		
 		this.hostHint.addEventListener("change", function(event) { //$NON-NLS-0$
 			if (_self.hostHint.checkValidity()) {
 				_self.hostHint.classList.remove("invalid"); //$NON-NLS-0$
@@ -242,6 +244,7 @@ objects.mixin(SiteEditor.prototype, {
 				_self.hostInvalid.classList.add("visible"); //$NON-NLS-0$
 			}
 		});
+		bidiUtils.initInputField(this.hostHint);
 
 		// "Convert to self hosting" command
 		var self = this;
@@ -249,7 +252,6 @@ objects.mixin(SiteEditor.prototype, {
 			var convertCommand = new mCommands.Command({
 				name: messages["Convert to Self-Hosting"],
 				tooltip: messages["Enable the site configuration to launch an Orion server running your local client code"],
-				imageClass: "core-sprite-add", //$NON-NLS-0$
 				id: "orion.site.convert", //$NON-NLS-0$
 				visibleWhen: function(item) {
 					return !!item.Location && canSelfHost && !self._isSelfHostingSite;

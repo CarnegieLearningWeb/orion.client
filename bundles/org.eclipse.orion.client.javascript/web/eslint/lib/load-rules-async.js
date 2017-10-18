@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013, 2016 IBM Corporation and others.
+ * Copyright (c) 2013, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -105,23 +105,27 @@ define([
                 		var tern = context.getTern();
                 		if (tern){
        						envKeys.forEach(function(key) {
-   								var pluginName = tern.plugins[key] ? key : tern.optionalPlugins[key];
-   								if (pluginName && !tern.plugins[pluginName]) {
-   									var envnode = getEnvNode(key);
-   									if(envnode) {
-   										context.report(envnode, ProblemMessages['check-tern-plugin'], {0:key, 1:pluginName, data: pluginName});
-   									} else {
-       									context.report(node, ProblemMessages['check-tern-plugin'], {0:key, 1:pluginName, data: pluginName});
-   									}
-   								} else {
-   									var def = tern.getDef(key);
-   									if (!def && tern.optionalDefs[key]){
-   										envnode = getEnvNode(key);
-	   									if(envnode) {
-	   										context.report(envnode, ProblemMessages['check-tern-lib'], {0:key, 1:key, nls: 'check-tern-lib', data: key}); //$NON-NLS-1$
-	   									} else {
-	       									context.report(node, ProblemMessages['check-tern-lib'], {0:key, 1:key, nls: 'check-tern-lib', data: key}); //$NON-NLS-1$
-	   									}
+       							// CommonJS define statements have node env key, but are handled in requirejs plugin (see missing-requirejs)
+       							if (key === "node" && node.environments && node.environments['simplifiedCommonJS']) {
+       								return;
+   								}
+	   							var pluginName = tern.plugins[key] ? key : tern.optionalPlugins[key];
+	   							if (pluginName && !tern.plugins[pluginName]) {
+	   								var envnode = getEnvNode(key);
+	   								if(envnode) {
+	   									context.report(envnode, ProblemMessages['check-tern-plugin'], {0:key, 1:pluginName, data: pluginName});
+	   								} else {
+	       								context.report(node, ProblemMessages['check-tern-plugin'], {0:key, 1:pluginName, data: pluginName});
+	   								}
+	   							} else {
+	   								var def = tern.getDef(key);
+	   								if (!def && tern.optionalDefs[key]){
+	   									envnode = getEnvNode(key);
+		   								if(envnode) {
+		   									context.report(envnode, ProblemMessages['check-tern-lib'], {0:key, 1:key, nls: 'check-tern-lib', data: key}); //$NON-NLS-1$
+		   								} else {
+		       								context.report(node, ProblemMessages['check-tern-lib'], {0:key, 1:key, nls: 'check-tern-lib', data: key}); //$NON-NLS-1$
+		   								}
    									}
    								}
        						});
@@ -1282,6 +1286,11 @@ define([
                 function checkShadow(node) {
                     var env = context.env ? context.env : {};
                     env.builtin = true;
+                    var tern = context.getTern();
+                    var isSimplifiedCommonJS = false;
+                    if (tern.file.ast && tern.file.ast.environments && tern.file.ast.environments.simplifiedCommonJS){
+                    	isSimplifiedCommonJS = true;
+                	}
                     switch(node.type) {
                         case 'VariableDeclarator': {
                         	checkIdentifier(node.id, function(node) {
@@ -1296,6 +1305,9 @@ define([
                         case 'FunctionDeclaration':
                         case 'ArrowFunctionExpression': {
                             node.params.forEach(function(param) {
+                            	if (isSimplifiedCommonJS && (param.name === 'require' || param.name === 'exports' || param.name === 'module')){
+                            		return;
+                            	}
                                 if(param.type === 'Identifier' && env[Finder.findESLintEnvForMember(param.name)]) {
                                     context.report(param, ProblemMessages['no-shadow-global-param'], {0: param.name, nls:'no-shadow-global-param'}); //$NON-NLS-1$
                                 }
@@ -1409,7 +1421,7 @@ define([
 								}
 								var type = tern.findExprType(query, tern.file, expr);
 								// The origin could be a primitive in the same file (a=1;) which we still want to mark
-								if (type && type.origin && type.origin !== tern.file.name){
+								if (type && (type.originNode || Array.isArray(type.types) && type.types.length > 0) && type.origin && type.origin !== tern.file.name){
 									foundType = type;
 								}
             	                if (!foundType){
@@ -1710,148 +1722,449 @@ define([
         },
         /** @callback */
 		"no-unused-vars": function(context) {
-			var importsHandled = false;
-    		/**
-	         * @description If the reference is read-only
-	         * @param {{}}} ref 
-	         * @returns {Boolean} If the reference is read-only
+			//ORION - this is the rule soure from eslint - but kept in place
+	        var config = {
+	            vars: "all",
+	            args: "none",
+	            caughtErrors: "none"
+	        };
+	        var firstOption = context.options[0];
+	        if (firstOption) {
+	            if (typeof firstOption === "string") {
+	                config.vars = firstOption;
+	            } else {
+	                config.vars = firstOption.vars || config.vars;
+	                config.args = firstOption.args || config.args;
+	                config.caughtErrors = firstOption.caughtErrors || config.caughtErrors;
+	
+	                if (firstOption.varsIgnorePattern) {
+	                    config.varsIgnorePattern = new RegExp(firstOption.varsIgnorePattern);
+	                }
+	
+	                if (firstOption.argsIgnorePattern) {
+	                    config.argsIgnorePattern = new RegExp(firstOption.argsIgnorePattern);
+	                }
+	
+	                if (firstOption.caughtErrorsIgnorePattern) {
+	                    config.caughtErrorsIgnorePattern = new RegExp(firstOption.caughtErrorsIgnorePattern);
+	                }
+	            }
+	        }
+	        var STATEMENT_TYPE = /(?:Statement|Declaration)$/;
+	        /**
+	         * Determines if a given variable is being exported from a module.
+	         * @param {Variable} variable - EScope variable object.
+	         * @returns {boolean} True if the variable is exported, false if not.
+	         * @private
 	         */
-	        function isRead(ref) {
-    			return ref.isRead();
-    		}
-
-    		/**
-	         * @description Get all of the referenes to the givenvariable in the given scope
-	         * @param {Object} scope The scope to check
-	         * @param {Object} variable The variable to find refs to 
-	         * @returns {Array.<Object>} The array of references
+	        function isExported(variable) {
+	            var definition = variable.defs[0];
+	            if (definition) {
+	                var node = definition.node;
+	                if (node.type === "VariableDeclarator") {
+	                    node = node.parent;
+	                } else if (definition.type === "Parameter") {
+	                    return false;
+	                }
+	                return node.parent.type.indexOf("Export") === 0;
+	            }
+	            return false;
+	        }
+	        /**
+	         * Determine if an identifier is referencing an enclosing function name.
+	         * @param {Reference} ref - The reference to check.
+	         * @param {ASTNode[]} nodes - The candidate function nodes.
+	         * @returns {boolean} True if it's a self-reference, false if not.
+	         * @private
 	         */
-	        function getReferences(scope, variable) {
-    			var refs = variable.references;
-    			if (scope.type === "global") {
-    				// For whatever reason, a reference to some variable 'x' defined in global scope does not cause an entry
-    				// in x.references or globalScope.references. So we append any refs in globalScope.through that mention x.
-    				refs = refs.concat(scope.through.filter(function(ref) {
-    					return ref.identifier.name === variable.name;
-    				}));
-    			}
-    			return refs;
-    		}
-		    function checkIdentifier(node, func) {
-    			switch(node.type) {
-    				case 'Identifier' :
-    				    func(node);
-	                    break;
-	                case 'Property' :
-	                   checkIdentifier(node.value, func);
-	                   break;
-            		case 'ArrayPattern' :
-            			var elements = node.elements;
-            			elements.forEach(function(element) {
-            				if (element) checkIdentifier(element, func);
-            			});
-            			break;
-            		case 'ObjectPattern' :
-            			var properties = node.properties;
-            			properties.forEach(function(property) {
-            				if (property) checkIdentifier(property, func);
-            			});
-            			break;
-    			}
-    		}
-    		/**
-	         * @description Check the current scope for unused vars 
+	        function isSelfReference(ref, nodes) {
+	            var scope = ref.from;
+	            while (scope) {
+	                if (nodes.indexOf(scope.block) >= 0) {
+	                    return true;
+	                }
+	                scope = scope.upper;
+	            }
+	            return false;
+	        }
+	
+	        /**
+	         * Checks the position of given nodes.
+	         *
+	         * @param {ASTNode} inner - A node which is expected as inside.
+	         * @param {ASTNode} outer - A node which is expected as outside.
+	         * @returns {boolean} `true` if the `inner` node exists in the `outer` node.
 	         */
-	        function check(node) {
-				var scope = context.getScope();
-				var variables = null;
-				if (node.type === 'Program') {
-					var ecmaFeatures = context.parserOptions && context.parserOptions.ecmaFeatures || {};
-					if (ecmaFeatures.globalReturn || node.sourceType === "module") {
-						variables = scope.childScopes[0].variables;
-					} else {
-						variables = scope.variables;
-					}
-				} else {
-					variables = scope.variables;
-				}
-
-				if(importsHandled || node.type === 'ImportDeclaration') {
-					return;
-				}
-				variables.forEach(function(variable) {
-					if (!variable.defs.length || variable.defs[0].type === "Parameter") { // Don't care about parameters
-						return;
-					}
-					var defNode = variable.defs[0].node;
-					var references = getReferences(scope, variable), id = defNode.id, pb = 'no-unused-vars-unused'; //$NON-NLS-1$
-					//TODO this will have to be moved to the new no-useless-imports rule
-					if(variable.defs[0].type === "ImportBinding") {
-						id = defNode.local;
-						pb = 'no-unused-vars-import'; //$NON-NLS-1$
-						importsHandled = true;
-					}
-					if (id && id.range && id.range[0] === id.range[1] || !id) {
-						// recovered node - the range cannot be empty for a "real" node
-						return;
-					}
-					if (!references.length) {
-					    if(defNode.type === 'FunctionDeclaration') {
-				    	   var tern = context.getTern();
-				    	   var refQuery = {end: defNode.id.start};
-				    	   var filename = tern.file.name;
-				    	   var refs = tern.findRefs(refQuery, tern.file);
-				    	   var result = [];
-				    	   if (refs && Array.isArray(refs.refs)) {
-				    	   		// filtering the refs from the current file - remove the one that matches the current node
-				    	   		refs.refs.forEach(function(match) {
-				    	   			if (match.file !== filename) {
-				    	   				// any match in a different file is a good match
-				    	   				result.push(match);
-				    	   			}
-				    	   		});
-				    	   }
-				    	   if (result === null || result.length === 0) {
-					           context.report(id, ProblemMessages['no-unused-vars-unused-funcdecl'], {0:id.name, nls: 'no-unused-vars-unused-funcdecl'}); //$NON-NLS-1$
-					       }
-			        	} else if (defNode.type === 'VariableDeclarator'){
-			        		// Variables can be marked as 'exported' in a comment if they are used as global variables
-							var comments = variable.defs[0].parent.leadingComments;
-							var report = true;
-							if (comments && comments.length > 0){
-								for (var i = 0; i < comments.length; i++) {
-									if (comments[i].value.toLowerCase().indexOf('exported') >= 0){ //$NON-NLS-1$
-										report = false;
-										break;
+	        function isInside(inner, outer) {
+	            return (
+	                inner.range[0] >= outer.range[0] &&
+	                inner.range[1] <= outer.range[1]
+	            );
+	        }
+	        /**
+	         * If a given reference is left-hand side of an assignment, this gets
+	         * the right-hand side node of the assignment.
+	         *
+	         * @param {escope.Reference} ref - A reference to check.
+	         * @param {ASTNode} prevRhsNode - The previous RHS node.
+	         * @returns {ASTNode} The RHS node.
+	         */
+	        function getRhsNode(ref, prevRhsNode) {
+	            var id = ref.identifier;
+	            var prnt = id.parent;
+	            var granpa = prnt.parent;
+	            var refScope = ref.from.variableScope;
+	            var varScope = ref.resolved.scope.variableScope;
+	            var canBeUsedLater = refScope !== varScope;
+	            /*
+	             * Inherits the previous node if this reference is in the node.
+	             * This is for `a = a + a`-like code.
+	             */
+	            if (prevRhsNode && isInside(id, prevRhsNode)) {
+	                return prevRhsNode;
+	            }
+	
+	            if (prnt.type === "AssignmentExpression" &&
+	                granpa.type === "ExpressionStatement" &&
+	                id === prnt.left &&
+	                !canBeUsedLater
+	            ) {
+	                return prnt.right;
+	            }
+	            return null;
+	        }
+	
+	        /**
+	         * Checks whether a given function node is stored to somewhere or not.
+	         * If the function node is stored, the function can be used later.
+	         *
+	         * @param {ASTNode} funcNode - A function node to check.
+	         * @param {ASTNode} rhsNode - The RHS node of the previous assignment.
+	         * @returns {boolean} `true` if under the following conditions:
+	         *      - the funcNode is assigned to a variable.
+	         *      - the funcNode is bound as an argument of a function call.
+	         *      - the function is bound to a property and the object satisfies above conditions.
+	         */
+	        function isStorableFunction(funcNode, rhsNode) {
+	            var node = funcNode;
+	            var prnt = funcNode.parent;
+	            while (prnt && isInside(prnt, rhsNode)) {
+	                switch (prnt.type) {
+	                    case "SequenceExpression":
+	                        if (prnt.expressions[prnt.expressions.length - 1] !== node) {
+	                            return false;
+	                        }
+	                        break;
+	
+	                    case "CallExpression":
+	                    case "NewExpression":
+	                        return prnt.callee !== node;
+	
+	                    case "AssignmentExpression":
+	                    case "TaggedTemplateExpression":
+	                    case "YieldExpression":
+	                        return true;
+	
+	                    default:
+	                        if (STATEMENT_TYPE.test(prnt.type)) {
+	                            /*
+	                             * If it encountered statements, this is a complex pattern.
+	                             * Since analyzeing complex patterns is hard, this returns `true` to avoid false positive.
+	                             */
+	                            return true;
+	                        }
+	                }
+	                node = prnt;
+	                prnt = prnt.parent;
+	            }
+	            return false;
+	        }
+	
+			function getUpperFunction(node) {
+			    while (node) {
+			        if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression" || node.type === "ArrowFunctionExpression") {
+			            return node;
+			        }
+			        node = node.parent;
+			    }
+			    return null;
+			}
+	
+	        /**
+	         * Checks whether a given Identifier node exists inside of a function node which can be used later.
+	         *
+	         * "can be used later" means:
+	         * - the function is assigned to a variable.
+	         * - the function is bound to a property and the object can be used later.
+	         * - the function is bound as an argument of a function call.
+	         *
+	         * If a reference exists in a function which can be used later, the reference is read when the function is called.
+	         *
+	         * @param {ASTNode} id - An Identifier node to check.
+	         * @param {ASTNode} rhsNode - The RHS node of the previous assignment.
+	         * @returns {boolean} `true` if the `id` node exists inside of a function node which can be used later.
+	         */
+	        function isInsideOfStorableFunction(id, rhsNode) {
+	            var funcNode = getUpperFunction(id);
+	            return (
+	                funcNode &&
+	                isInside(funcNode, rhsNode) &&
+	                isStorableFunction(funcNode, rhsNode)
+	            );
+	        }
+	
+	        /**
+	         * Checks whether a given reference is a read to update itself or not.
+	         *
+	         * @param {escope.Reference} ref - A reference to check.
+	         * @param {ASTNode} rhsNode - The RHS node of the previous assignment.
+	         * @returns {boolean} The reference is a read to update itself.
+	         */
+	        function isReadForItself(ref, rhsNode) {
+	            var id = ref.identifier;
+	            var prnt = id.parent;
+	            var granpa = prnt.parent;
+	
+	            return ref.isRead() && (
+	                // self update. e.g. `a += 1`, `a++`
+	                (
+	                    prnt.type === "AssignmentExpression" &&
+	                    granpa.type === "ExpressionStatement" &&
+	                    prnt.left === id
+	                ) ||
+	                (
+	                    prnt.type === "UpdateExpression" &&
+	                    granpa.type === "ExpressionStatement"
+	                ) ||
+	                // in RHS of an assignment for itself. e.g. `a = a + 1`
+	                (
+	                    rhsNode &&
+	                    isInside(id, rhsNode) &&
+	                    !isInsideOfStorableFunction(id, rhsNode)
+	                )
+	            );
+	        }
+	
+	        /**
+	         * Determine if an identifier is used either in for-in loops.
+	         *
+	         * @param {Reference} ref - The reference to check.
+	         * @returns {boolean} whether reference is used in the for-in loops
+	         * @private
+	         */
+	        function isForInRef(ref) {
+	            var target = ref.identifier.parent;
+	            // "for (var ...) { return; }"
+	            if (target.type === "VariableDeclarator") {
+	                target = target.parent.parent;
+	            }
+	
+	            if (target.type !== "ForInStatement") {
+	                return false;
+	            }
+	
+	            // "for (...) { return; }"
+	            if (target.body.type === "BlockStatement") {
+	                target = target.body.body[0];
+	
+	            // "for (...) return;"
+	            } else {
+	                target = target.body;
+	            }
+	
+	            // For empty loop body
+	            if (!target) {
+	                return false;
+	            }
+	
+	            return target.type === "ReturnStatement";
+	        }
+	
+	        /**
+	         * Determines if the variable is used.
+	         * @param {Variable} variable - The variable to check.
+	         * @returns {boolean} True if the variable is used
+	         * @private
+	         */
+	        function isUsedVariable(variable) {
+	            var functionNodes = variable.defs.filter(function(def) {
+	                    return def.type === "FunctionName";
+	                }).map(function(def) {
+	                    return def.node;
+	                }),
+	                isFunctionDefinition = functionNodes.length > 0,
+	                rhsNode = null;
+	
+	            return variable.references.some(function(ref) {
+	                if (isForInRef(ref)) {
+	                    return true;
+	                }
+	
+	                var forItself = isReadForItself(ref, rhsNode);
+	
+	                rhsNode = getRhsNode(ref, rhsNode);
+					variable.isread = variable.isread || ref.isRead();
+	                return (
+	                    ref.isRead() &&
+	                    !forItself &&
+	                    !(isFunctionDefinition && isSelfReference(ref, functionNodes))
+	                ) || (ref.isRead() && forItself);
+	            });
+	        }
+	
+	        /**
+	         * Gets an array of variables without read references.
+	         * @param {Scope} scope - an escope Scope object.
+	         * @param {Variable[]} unusedVars - an array that saving result.
+	         * @returns {Variable[]} unused variables of the scope and descendant scopes.
+	         * @private
+	         */
+	        function collectUnusedVariables(scope, unusedVars) {
+	            var variables = scope.variables;
+	            var childScopes = scope.childScopes;
+	            var i, l;
+	            if (scope.type !== "TDZ" && (scope.type !== "global" || config.vars === "all")) {
+	                for (i = 0, l = variables.length; i < l; ++i) {
+	                    var variable = variables[i];
+	
+	                    // skip a variable of class itself name in the class scope
+	                    if (scope.type === "class" && scope.block.id === variable.identifiers[0]) {
+	                        continue;
+	                    }
+	
+	                    // skip function expression names and variables marked with markVariableAsUsed()
+	                    if (scope.functionExpressionScope || variable.eslintUsed) {
+	                        continue;
+	                    }
+	
+	                    // skip implicit "arguments" variable
+	                    if (scope.type === "function" && variable.name === "arguments" && variable.identifiers.length === 0) {
+	                        continue;
+	                    }
+	
+	                    // explicit global variables don't have definitions.
+	                    var def = variable.defs[0];
+	
+	                    if (def) {
+	                        var type = def.type;
+	                        // skip catch variables
+	                        if (type === "CatchClause") {
+	                            if (config.caughtErrors === "none") {
+	                                continue;
+	                            }
+	
+	                            // skip ignored parameters
+	                            if (config.caughtErrorsIgnorePattern && config.caughtErrorsIgnorePattern.test(def.name.name)) {
+	                                continue;
+	                            }
+	                        }
+	                        if (type === "Parameter") {
+	                            // skip any setter argument
+	                            if (def.node.parent.type === "Property" && def.node.parent.kind === "set") {
+	                                continue;
+	                            }
+	
+	                            // if "args" option is "none", skip any parameter
+	                            if (config.args === "none") {
+	                                continue;
+	                            }
+	
+	                            // skip ignored parameters
+	                            if (config.argsIgnorePattern && config.argsIgnorePattern.test(def.name.name)) {
+	                                continue;
+	                            }
+	
+	                            // if "args" option is "after-used", skip all but the last parameter
+	                            if (config.args === "after-used" && def.index < def.node.params.length - 1) {
+	                                continue;
+	                            }
+	                        } else {
+	                            // skip ignored variables
+	                            if (config.varsIgnorePattern && config.varsIgnorePattern.test(def.name.name)) {
+	                                continue;
+	                            }
+	                        }
+	                        if (def.node.type === 'VariableDeclarator') {
+				        		// Variables can be marked as 'exported' in a comment if they are used as global variables
+								var comments = def.parent.leadingComments;
+								var report = true;
+								if (Array.isArray(comments)) {
+									for (var k = 0, len = comments.length; k < len; k++) {
+										if (comments[k].type === "Block" && comments[k].value.toLowerCase().indexOf('exported') >= 0){ //$NON-NLS-1$
+											report = false;
+											break;
+										}
 									}
 								}
+								if (!report) {
+									continue;
+								}
 							}
-							if (report) {
-								context.report(id, ProblemMessages['no-unused-vars-unused'], {0:id.name, nls: 'no-unused-vars-unused', pid: pb}); //$NON-NLS-1$
-							}
-					    } else {
-						   context.report(id, ProblemMessages['no-unused-vars-unused'], {0:id.name, nls: 'no-unused-vars-unused', pid: pb}); //$NON-NLS-1$
-						}
-					} else if (!references.some(isRead)) {
-						// report error on the identifier that is matching the variable name
-						checkIdentifier(id, function(node) {
-							if (node.name === variable.name) {
-								context.report(node, ProblemMessages['no-unused-vars-unread'], {0:node.name, nls: 'no-unused-vars-unread'}); //$NON-NLS-1$
-							}
-						});
-					}
-				});
-    		}
-
-    		return {
-    			"Program": check,
-    			"Program:exit": function() {importsHandled = false;},
-    			"FunctionDeclaration": check,
-    			"FunctionExpression": check,
-    			"ArrowFunctionExpression": check,
-    			//TODO imports to be moved to no-useless-imports rule
-    			'ImportDeclaration': check,
-    		};
+	                    }
+	                    if (!isUsedVariable(variable) && !isExported(variable)) {
+	                    	if(def) {
+	                    		type = def.type;
+	                    		variable.data = {
+		                    		0: variable.identifiers[0].name,
+		                    		nls: 'no-unused-vars-unused',
+		                    		pid: 'no-unused-vars-unused'
+		                    	};
+		                    	if(type === "Parameter") {
+		                    		continue;
+		                    	}
+		                    	if(type === "ImportBinding") {
+		                    		variable.data.pid = 'no-unused-vars-import';
+		                    	} else if(def.node.type === "FunctionDeclaration") {
+		                    		var tern = context.getTern();
+		                    		var refQuery = {
+		                    			end: def.node.id.start
+		                    		};
+		                    		var filename = tern.file.name;
+		                    		var refs = tern.findRefs(refQuery, tern.file);
+		                    		var result = [];
+		                    		if (refs && Array.isArray(refs.refs)) {
+		                    			// filtering the refs from the current file - remove the one that matches the current node
+		                    			refs.refs.forEach(function(match) {
+		                    				if (match.file !== filename) {
+		                    					// any match in a different file is a good match
+		                    					result.push(match);
+		                    				}
+		                    			});
+		                    		}
+		                    		if (result.length > 0) {
+		                    			continue;
+		                    		}
+		                    		variable.data.pid = variable.data.nls = 'no-unused-vars-unused-funcdecl';
+		                    	} else if(typeof variable.isread === "boolean" && !variable.isread) {
+		                    		variable.data.pid = variable.data.nls = 'no-unused-vars-unread';
+		                    	}
+	                    	}
+	                        unusedVars.push(variable);
+	                    }
+	                }
+	            }
+	            for (i = 0, l = childScopes.length; i < l; ++i) {
+	                collectUnusedVariables(childScopes[i], unusedVars);
+	            }
+	            return unusedVars;
+	        }
+	
+	        return {
+	            "Program:exit": function() {
+	                var unusedVars = collectUnusedVariables(context.getScope(), []);
+	
+	                for (var i = 0, l = unusedVars.length; i < l; ++i) {
+	                    var unusedVar = unusedVars[i];
+						if (unusedVar.defs.length > 0) {
+	                        context.report({
+	                            node: unusedVar.identifiers[0],
+	                            message: ProblemMessages[unusedVar.data.nls],
+	                            data: unusedVar.data
+	                        });
+	                    }
+	                }
+	            }
+	        };
         },
         /** @callback */
 		"no-use-before-define": function(context) {
@@ -2090,10 +2403,10 @@ define([
 
 				if (!missing) {
 					message = ProblemMessages["semi-missing"];
-					data.kind = "missing";
+					data.kind = "missing"; //$NON-NLS-1$
 				} else {
 					message = ProblemMessages["semi-extra"];
-					data.kind = "extra";
+					data.kind = "extra"; //$NON-NLS-1$
 				}
 
 				context.report(node, message, {data: data}, lastToken);
@@ -2225,20 +2538,6 @@ define([
 		},
 		/** @callback */
         "unknown-require": function(context) {
-        	var directive;
-        	function checkDirective(node) {
-        		var _name = node.value;
-    			if(nodeModules[_name]) {
-    				_name = 'node'; //$NON-NLS-1$
-    			}
-        		if(directive) {
-        			if(directive.value.indexOf(_name) < 0) {
-						context.report(node, ProblemMessages['unknown-require-missing-env'], {0: _name, pid: 'unknown-require-missing-env', nls: 'unknown-require-missing-env', data: _name});        				 //$NON-NLS-1$ //$NON-NLS-2$
-        			}
-        		} else {
-        			context.report(node, ProblemMessages['unknown-require-missing-env'], {0: _name, pid: 'unknown-require-missing-env', nls: 'unknown-require-missing-env', data: _name}); //$NON-NLS-1$ //$NON-NLS-2$
-        		}
-        	}
 			function checkImportExport(node) {
 				var tern = context.getTern();
 				if(!tern.pluginRunning("es_modules")) { //$NON-NLS-1$
@@ -2248,9 +2547,6 @@ define([
 				}
 			}
         	return {
-        		"Program": function(node) {
-        			directive = Finder.findDirective(node, 'eslint-env'); //$NON-NLS-1$
-        		},
 				"ImportDeclaration" : checkImportExport,
 				"ExportAllDeclaration" : checkImportExport,
 				"ExportDefaultDeclaration" : checkImportExport,
@@ -2260,60 +2556,62 @@ define([
         				var args = node.arguments;
         				if(args.length === 1) {
         					var lib = args[0];
-        					if(lib.type === "Literal" && lib.value.charAt(0) !== '.') { //we don't check relative libs
-        						var tern = context.getTern();
-        						if(tern.file.ast && tern.file.ast.environments) {
-        							var envs = tern.file.ast.environments;
-        							if(envs.node) {
-        								if(!envs.amd && !tern.pluginRunning('node')) { //$NON-NLS-1$
-        									context.report(lib, ProblemMessages['unknown-require-not-running'], {0: 'node', pid: 'unknown-require-not-running', nls: 'unknown-require-not-running', data: 'node'}); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-        									return;
-        								}
-        								if(envs.amd && !tern.pluginRunning('commonjs')) { //$NON-NLS-1$
-        									context.report(lib, ProblemMessages['unknown-require-not-running'], {0: 'commonjs', pid: 'unknown-require-not-running', nls: 'unknown-require-not-running', data: 'commonjs'}); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-        									return;
-        								}
-        							}
-        						}
-        						if(tern.plugins[lib.value]) { //it has a named plugin
-        							checkDirective(lib);
+        					if(lib.type === "Literal") { //we don't check relative libs
+        						if(typeof lib.value !== 'string' || (typeof lib.value == 'string' && !lib.value.trim())) {
+        							//don't mark empty strings or non-strings
         							return;
         						}
-        						//check the defs
-    							if(tern.getDef(lib.value)) {
-    								checkDirective(lib);
-    								return;
-    							}
-								//it might be a node built-in, this also confirms its in the running node def
-								var nodejs = tern.getDef('node'); //$NON-NLS-1$
-								if(nodejs) {
-									if(nodejs[lib.value]) {
-										checkDirective(lib);
-										return;
-									} else if(nodejs['!define'] && nodejs['!define'][lib.value]) {
-										checkDirective(lib);
+        						if(lib.value.charAt(0) !== '.') {
+	        						var tern = context.getTern();
+	        						if(tern.file.ast && tern.file.ast.environments) {
+	        							var envs = tern.file.ast.environments;
+	        							if(envs.node && !envs.simplifiedCommonJS) {
+	        								if(!tern.pluginRunning('node') && !tern.pluginRunning('commonjs')) { //$NON-NLS-1$ //$NON-NLS-2$
+	        									context.report(lib, ProblemMessages['unknown-require-not-running'], {0: 'node', pid: 'unknown-require-not-running', nls: 'unknown-require-not-running', data: 'node'}); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+	        									return;
+	        								}
+	        								if(!tern.pluginRunning('commonjs')) { //$NON-NLS-1$
+	        									context.report(lib, ProblemMessages['unknown-require-not-running'], {0: 'commonjs', pid: 'unknown-require-not-running', nls: 'unknown-require-not-running', data: 'commonjs'}); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+	        									return;
+	        								}
+	        							}
+	        						}
+	        						if(tern.plugins[lib.value] || tern.getDef(lib.value) || tern.libKnown(lib.value)) {
+	        							return;
+	        						}
+									//it might be a node built-in, this also confirms its in the running node def
+									var nodejs = tern.getDef('node'); //$NON-NLS-1$
+									if(nodejs && (nodejs[lib.value] || (nodejs['!define'] && nodejs['!define'][lib.value]))) {
 										return;
 									}
-								}
-								if(tern.libKnown(lib.value)) {
-									checkDirective(lib);
-									return;
-								}
-								//TODO check for the module having been loaded via the graph
-								if(tern.optionalPlugins[lib.value]) {
-									//we known about it
-									context.report(lib, ProblemMessages['unknown-require-plugin'], {pid: 'unknown-require-plugin', nls: 'unknown-require-plugin', data: lib.value}); //$NON-NLS-2$ //$NON-NLS-1$
-								} else if(nodeModules[lib.value]) {
-									context.report(lib, ProblemMessages['unknown-require-plugin'], {pid: 'unknown-require-plugin', nls: 'unknown-require-plugin', data: 'node'}); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-								} else {
+									//TODO check for the module having been loaded via the graph
+									if(tern.optionalPlugins[lib.value]) {
+										//we known about it
+										context.report(lib, ProblemMessages['unknown-require-plugin'], {pid: 'unknown-require-plugin', nls: 'unknown-require-plugin', data: lib.value}); //$NON-NLS-2$ //$NON-NLS-1$
+										return;
+									}
+									if(nodeModules[lib.value]) {
+										context.report(lib, ProblemMessages['unknown-require-plugin'], {pid: 'unknown-require-plugin', nls: 'unknown-require-plugin', data: 'node'}); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+										return;
+									}
 									var env = tern.getEnvFromDep(lib.value);
+									if (env === 'commonjs' && envs.simplifiedCommonJS){
+										context.report(lib, ProblemMessages['unknown-require'], {data: lib.value});
+										return;
+									}
 									if(!tern.pluginRunning(env)) {
 										context.report(lib, ProblemMessages['unknown-require-not-running'], {0: env, pid: 'unknown-require-not-running', nls: 'unknown-require-not-running', data: env}); //$NON-NLS-1$ //$NON-NLS-2$
 									} else {
 										context.report(lib, ProblemMessages['unknown-require'], {data: lib.value});
 									}
-								}
-        					}
+	        					} else {
+	        						//relative path, if Tern has it in the fileMap its known, otherwise mark it
+	        						tern = context.getTern();
+	        						if(!tern.hasFile(lib.value, tern.file)) {
+	        							context.report(lib, ProblemMessages['unknown-require'], {data: lib.value});
+	        						}
+	        					}
+	    					}
         				}
         			}
         		}
@@ -2598,7 +2896,7 @@ define([
     		if (node.value.toLowerCase() === 'use strict'){
     			return;
     		}
-    		if(/^(?:[\.,-\/#!$%\^&\*;:{}=\-_`~()@\+\?><\[\]\+])$/.test(node.value)) {
+    		if(/^(?:[\.,-\/#!$%\^&\*;:{}=\-_`~()@\+\?><\[\]])$/.test(node.value)) {
     			return; //don't nag about punctuation
     		} else if(/^(?:==|!=|===|!==|=>)$/.test(node.value)) {
     			return; //don't nag about operators

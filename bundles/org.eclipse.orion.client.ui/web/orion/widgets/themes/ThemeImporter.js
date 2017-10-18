@@ -131,8 +131,21 @@ define([
             },
             appendThemeList: function() {
                 var docFragment = document.createDocumentFragment(),
+                    importInput = document.createElement("input"),
+                    importLabel = document.createElement("label"),
                     dropZone = document.createElement("div"), //$NON-NLS-0$
                     textBox = document.createElement("textarea"); //$NON-NLS-0$
+
+                importInput.id = "fileInput";
+                importInput.type = "file";
+                importInput.addEventListener("change", this.importOnSelect.bind(this));
+                docFragment.appendChild(importInput);
+
+                importLabel.id = "fileInputLabel";
+                importLabel.className = "orionButton commandButton";
+                importLabel.htmlFor = importInput.id;
+                importLabel.innerHTML = messages["importThemeButton"];
+                docFragment.appendChild(importLabel);
 
                 dropZone.className = "drop-zone"; //$NON-NLS-0$
                 dropZone.id = "dropZone"; //$NON-NLS-0$
@@ -193,6 +206,20 @@ define([
                 };
                 reader.readAsText(file);
             },
+            importOnSelect: function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                var file = e.target.files[0],
+                    reader = new FileReader(),
+                    self = this;
+
+                reader.onloadend = function(e) {
+                    if (e.target.readyState === FileReader.DONE) {
+                        self.importTheme(self, e.target.result);
+                    }
+                };
+                reader.readAsText(file);
+            },
             importFromTextarea: function() {
                 var styles = document.getElementById("themeText").value; //$NON-NLS-0$
                 if (styles.length) {
@@ -222,6 +249,10 @@ define([
         });
 
         function showImportThemeDialog(data) {
+        	//Remove focus so when the dialog is closed this element is no longer selected.
+        	if (data && data.domNode) {
+        		data.domNode.blur();
+        	}
             new ImportThemeDialog(data).show();
         }
         ThemeImporter.prototype.showImportThemeDialog = showImportThemeDialog;
@@ -233,7 +264,7 @@ define([
 
             var bgColor = getBackgroundColor(dictKey, dictString);
             var useDarkBase = calculateLuminance(bgColor) < luminanceDarkLimit;
-            var newStyle = themeData.getDefaultTheme({dark: useDarkBase});
+            var newStyle = themeData.getBaseTheme({dark: useDarkBase});
 
             //finds the general attributes
             for (var i = 0; i < dictKey.length; i++) {
@@ -572,7 +603,7 @@ define([
             var bgColor = getBackgroundColor(rules);
             /* use a dark base theme if luminance is low (the theme being imported is dark) */
             var useDarkBase = calculateLuminance(bgColor) < luminanceDarkLimit;
-            var newStyle = themeData.getDefaultTheme({dark: useDarkBase});
+            var newStyle = themeData.getBaseTheme({dark: useDarkBase});
 
             var activelineBgString = "-activeline-background",
                 atomString = "-atom",
@@ -723,7 +754,7 @@ define([
             }
 
             // Ask the user to name the theme since css files contain no theme name information
-            var themeName = prompt(messages["nameImportedTheme"], messages["defaultImportedThemeName"]);
+            var themeName = prompt && prompt(messages["nameImportedTheme"], messages["defaultImportedThemeName"]) || messages["defaultImportedThemeName"];
             newStyle.name = themeName;
             newStyle.className = themeName;
 
@@ -734,7 +765,7 @@ define([
         function importEclipseTheme(xml) {
             /* use a dark base theme if luminance is low (the theme being imported is dark) */
             var useDarkBase = calculateLuminance(getValuesFromXML(xml, "background")) < luminanceDarkLimit;
-            var newStyle = themeData.getDefaultTheme({dark: useDarkBase});
+            var newStyle = themeData.getBaseTheme({dark: useDarkBase});
 
             var styles = newStyle.styles;
 
@@ -744,6 +775,7 @@ define([
 
             styles.comment.color = getValuesFromXML(xml, "singleLineComment");
             styles.annotationLine.currentLine.backgroundColor = getValuesFromXML(xml, "currentLine");
+            styles.annotationLine.highlightedLine.backgroundImage = getValuesFromXML(xml, "highlightedLine");
 
             // Eclipse themes do not set the background color for matching brackets. Instead, they set a border for the matching bracket.
             styles.annotationRange.matchingBracket.backgroundColor = "transparent";
@@ -759,6 +791,7 @@ define([
 
 
             styles.annotationRange.writeOccurrence.backgroundColor = getValuesFromXML(xml, "writeOccurrenceIndication");
+            styles.annotationRange.searchRange.backgroundColor = getValuesFromXML(xml, "searchRangeIndication");
             styles.constant.color = getValuesFromXML(xml, "constant");
             styles.entity.name.color = getValuesFromXML(xml, "class");
             styles.entity.name.function.color = getValuesFromXML(xml, "class");

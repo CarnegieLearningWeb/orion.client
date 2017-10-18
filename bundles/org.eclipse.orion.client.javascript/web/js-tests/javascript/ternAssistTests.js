@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015, 2016 IBM Corporation, Inc. and others.
+ * Copyright (c) 2015, 2017 IBM Corporation, Inc. and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -23,7 +23,6 @@ define([
 
 	return function(worker) {
 		var ternAssist;
-		var envs = Object.create(null);
 		var astManager = new ASTManager.ASTManager();
 		var jsFile = 'tern_content_assist_test_script.js';
 		var htmlFile = 'tern_content_assist_test_script.html';
@@ -32,6 +31,9 @@ define([
 			getEcmaLevel: function getEcmaLevel() {},
 			getESlintOptions: function getESlintOptions() {
 				return new Deferred().resolve(null);
+			},
+			getComputedEnvironment: function getComputedEnvironment() {
+				return new Deferred().resolve({ecmaVersion: 5});
 			}
 		};
 		
@@ -67,7 +69,6 @@ define([
 			worker.postMessage({request: 'delFile', args:{file: jsFile}});
 			worker.postMessage({request: 'delFile', args:{file: htmlFile}});
 			
-			envs = typeof options.env === 'object' ? options.env : Object.create(null);
 			var editorContext = {
 				/*override*/
 				getText: function() {
@@ -180,9 +181,7 @@ define([
 			this.timeout(20000);
 			before('Message the server for warm up', function(done) {
 				CUProvider.setUseCache(false);
-				ternAssist = new TernAssist.TernContentAssist(astManager, worker, function() {
-					return new Deferred().resolve(envs);
-				}, CUProvider, jsProject);
+				ternAssist = new TernAssist.TernContentAssist(astManager, worker, CUProvider, jsProject);
 				worker.start(done, {options: {libs: ['ecma5', 'ecma6']}}); // Reset the tern server state to remove any prior files
 			});
 		
@@ -3531,9 +3530,9 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
+							["/**\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
 							['', 'Keywords'],
-							["function", "function - Keyword"]
+							["function", "function"]
 							]);
 				});
 				/**
@@ -3554,9 +3553,9 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
+							["/**\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
 							['', 'Keywords'],
-							["function", "function - Keyword"]
+							["function", "function"]
 							]);
 				});
 				/**
@@ -3579,7 +3578,7 @@ define([
 							["", "Templates"],
 							['function(parameter) {\n\t\n}', 'function expression (as property value)'],
 							['', 'Keywords'],
-							["function", "function - Keyword"]
+							["function", "function"]
 							]);
 				});
 				/**
@@ -3602,7 +3601,7 @@ define([
 							["", "Templates"],
 							['function(parameter) {\n\t\n}', 'function expression (as property value)'],
 							['', 'Keywords'],
-							["function", "function - Keyword"]
+							["function", "function"]
 							]);
 				});
 				/**
@@ -3623,9 +3622,9 @@ define([
 							['', 'ecma5'],
 							['Function(body)', 'Function(body) : fn()'],
 							["", "Templates"],
-							["/**\n * @name name\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
+							["/**\n * @param parameter\n */\nfunction name (parameter) {\n\t\n}", "function declaration"],
 							['', 'Keywords'],
-							["function", "function - Keyword"]
+							["function", "function"]
 							]);
 				});
 				/*
@@ -3648,10 +3647,10 @@ define([
 							["toLocaleString()", "toLocaleString() : string"],
 							["toString()", "toString() : string"],
 							['', 'Keywords'],
-							["this", "this - Keyword"],
-							['throw', 'throw - Keyword'],
-							['try', 'try - Keyword'],
-							["typeof", "typeof - Keyword"]
+							["this", "this"],
+							['throw', 'throw'],
+							['try', 'try'],
+							["typeof", "typeof"]
 							]);
 				});
 				/**
@@ -3692,7 +3691,7 @@ define([
 							['Number(value)', 'Number(value) : number'],
 							['NaN', 'NaN : number'],
 							['', 'Keywords'],
-							["new", "new - Keyword"]
+							["new", "new"]
 							]);
 				});
 			});
@@ -4553,7 +4552,24 @@ define([
 					     ['c', 'c - Function parameter']
 					]);
 				});
-	
+				/**
+				 * Tests function parameter name completion with the any type
+				 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=521320
+				 * @since 16.0
+				 */
+				it("test param name completion with any type", function(done) {
+					var options = {
+						buffer: "/**\n* @param {?} \n*/ function a(a, b, c){}",
+						line: '* @param {?} ',
+						prefix: "",
+						offset: 13,
+						callback: done};
+					testProposals(options, [
+					     ['a', 'a - Function parameter'],
+					     ['b', 'b - Function parameter'],
+					     ['c', 'c - Function parameter']
+					]);
+				});
 				/**
 				 * Tests func decl param name proposals no prefix, no type
 				 * @since 10.0
@@ -5531,6 +5547,56 @@ define([
 						contenttype: "text/html",
 						callback: done};
 					testProposals(options, []);
+				});
+			});
+			/**
+			 * Recognize $ in var name prefix
+			 * @see https://bugs.eclipse.org/bugs/show_bug.cgi?id=506890
+			 * @since 15.0
+			 */
+			describe('Var name with $ Tests', function() {
+				it('Var name with $ - test prefix', function(done) {
+					var options = {
+						buffer: "var $_test = 42;\ntest",
+						prefix: "test",
+						offset: 21,
+						callback: done
+					};
+					testProposals(options, [
+					]);
+				});
+				it('Var name with $ - $ prefix', function(done) {
+					var options = {
+						buffer: "var $_test = 42;\n$",
+						prefix: "$",
+						offset: 18,
+						callback: done
+					};
+					testProposals(options, [
+						['$_test', '$_test : number'],
+					]);
+				});
+				it('Var name with $ - $_ prefix', function(done) {
+					var options = {
+						buffer: "var $_test = 42;\n$_",
+						prefix: "$_",
+						offset: 19,
+						callback: done
+					};
+					testProposals(options, [
+						['$_test', '$_test : number'],
+					]);
+				});
+				it('Var name with $ - $_tes prefix', function(done) {
+					var options = {
+						buffer: "var $_test = 42;\n$_tes",
+						prefix: "$_tes",
+						offset: 22,
+						callback: done
+					};
+					testProposals(options, [
+						['$_test', '$_test : number'],
+					]);
 				});
 			});
 		});

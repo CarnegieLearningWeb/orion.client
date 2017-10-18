@@ -316,19 +316,37 @@ define("orion/editor/rulers", [
 				}
 			}
 			
+			var evt = {
+				type: "AnnotationClicked",
+				target: self,
+				targetType: "Ruler",
+				annotation: annotation,
+				selection: {
+					start: start,
+					end: end,
+					viewportOffset: 1 / 3
+				},
+				showTooltip: true
+			};
+			this._view.dispatchEvent(evt);
 			// Set the selection before opening the tooltip otherwise the tooltip will be closed immediately
-			this._view.setSelection(end, start, 1/3, function(){});
-			
+			if(evt.selection) {
+				this._view.setSelection(evt.selection.start, evt.selection.end, evt.selection.viewportOffset, function(){});
+	 		}
+
+
 			// Open the tooltip for the selected annotation in the same location as the multi-annotation ruler tooltip.
-			var tooltip = mTooltip.Tooltip.getTooltip(this._view);
-			if (tooltip) {
-				if (annotation && this.getLocation() === "left"){ //$NON-NLS-0$
-					tooltip.show({getTooltipInfo: function() {
-							return self._getTooltipInfo([annotation]);
-						}
-					}, false, false);
-				} else {
-					tooltip.hide();
+			if(evt.showTooltip) {
+				var tooltip = mTooltip.Tooltip.getTooltip(this._view);
+				if (tooltip) {
+					if (annotation && this.getLocation() === "left"){ //$NON-NLS-0$
+						tooltip.show({getTooltipInfo: function() {
+								return self._getTooltipInfo([annotation]);
+							}
+						}, false, false);
+					} else {
+						tooltip.hide();
+					}
 				}
 			}
 		},
@@ -1184,7 +1202,7 @@ define("orion/editor/rulers", [
 				windowDiv.addEventListener("touchend", function(event) { //$NON-NLS-0$
 					var touches = event.touches;
 					if (touches.length === 0) {
-						up(event);
+						up();
 					}
 				});
 				windowDiv.addEventListener("touchmove", function(event) { //$NON-NLS-0$
@@ -1220,7 +1238,7 @@ define("orion/editor/rulers", [
 					stop(event);
 				});
 				zoomView.addEventListener("MouseUp", function(event) { //$NON-NLS-0$
-					up(event);
+					up();
 					stop(event);
 				});
 				zoomView.addEventListener("MouseMove", function(event) { //$NON-NLS-0$

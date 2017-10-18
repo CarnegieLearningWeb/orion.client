@@ -126,11 +126,21 @@
     this.mod = {}
 
     this.defs = options.defs.slice(0)
-    this.plugins = Object.create(null)
-    for (var plugin in options.plugins) if (options.plugins.hasOwnProperty(plugin))
-      this.loadPlugin(plugin, options.plugins[plugin])
+    this.plugins = Object.create(null);
+    //ORION forward exceptions loading plugins
+    try {
+	    for (var plugin in options.plugins) if (options.plugins.hasOwnProperty(plugin))
+	      this.loadPlugin(plugin, options.plugins[plugin])
+	} catch(err) {
+		throw ternError("Plugin failed to load: "+err.message);
+	}
+	//ORION forward exceptions during restart
+	try {
+	    this.reset();
+	} catch(err) {
+		throw ternError("Tern failed to reset: "+err.message);
+	}
 
-    this.reset();
   };
   Server.prototype = signal.mixin({
     addFile: function(name, /*optional*/ text, parent) {
@@ -167,7 +177,7 @@
       var self = this;
       doRequest(this, doc, function(err, data) {
         c(err, data);
-        if (self.uses > 40) {
+        if (self.uses > 4000) { //ORION - the default is too low
           self.reset();
           analyzeAll(self, null, function(){});
         }
@@ -792,7 +802,7 @@
       if (objType) infer.forAllPropertiesOf(objType, gather);
 
       if (!completions.length && query.guess !== false && objType && objType.guessProperties)
-        objType.guessProperties(function(p, o, d) {if (p != prop && p != "✖") gather(p, o, d);});
+        objType.guessProperties(function(p, o, d) {if (p != prop && p != "✖" && p != "<i>") gather(p, o, d);});
       if (!completions.length && word.length >= 2 && query.guess !== false) {
       	Object.keys(srv.cx.props).forEach(function(prop) {
       		srv.cx.props[prop].forEach(function(type) {
@@ -1011,6 +1021,18 @@
 	      result.results = temp;
 	   }
    	}
+   	if(typeof result.start !== "number" && typeof result.end !== "number") {
+   		//ORION, try the type of the found type
+   		var inner = type.getType();
+   		if(inner && inner.originNode) {
+   			result = getResult(inner, srv, query);
+   		} else if(expr && expr.node && expr.node.type === 'ThisExpression') {
+   			inner = inner.proto;
+   			if(inner && inner.hasCtor) {
+   				result = getResult(inner.hasCtor, srv, query);
+   			}
+   		}
+   	}
    	return result;
   }
   
@@ -1038,7 +1060,6 @@
       result.file = span.origin;
       storeSpan(srv, query, span, result);
     }
-    
     return clean(result);
   }
 

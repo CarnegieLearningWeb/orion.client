@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016 IBM Corporation and others.
+ * Copyright (c) 2016, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -14,12 +14,15 @@ var express = require('express'),
 	electron = require('electron'),
 	autoUpdater = require('./autoUpdater.js'),
 	bodyParser = require('body-parser'),
-	prefs = require('./controllers/prefs'),
+	prefs = require('./prefs'),
 	os = require('os'),
 	platform = os.platform(),
 	arch = os.arch(),
 	version = electron.app.getVersion(),
-	allPrefs = prefs.readPrefs();
+	log4js = require('log4js'),
+	tasks = require('./tasks'),
+	logger = log4js.getLogger("update"),
+	responseTime = require('response-time');
 
 module.exports = {};
 module.exports.router = function(options) {
@@ -28,34 +31,83 @@ module.exports.router = function(options) {
 	var feedURL = configParams["orion.autoUpdater.url"];
 	return express.Router()
 	.use(bodyParser.json())
+	.use(responseTime({digits: 2, header: "X-Update-Response-Time", suffix: true}))
 	.post('/downloadUpdates', function (req, res) {
+		var allPrefs = prefs.readElectronPrefs();
+		var updateChannel = allPrefs.user && allPrefs.user.updateChannel && allPrefs.user.updateChannel.name ? allPrefs.user.updateChannel.name : configParams["orion.autoUpdater.defaultChannel"];
+		var task = new tasks.Task(res, false, true, 0, true);
 		if (platform === "linux") {
-			electron.shell.openExternal(feedURL + '/download/channel/' + allPrefs.user.updateChannel + '/linux');
-			res.status(200).end();
+			electron.shell.openExternal(feedURL + '/download/channel/' + updateChannel + '/linux');
 		} else {
-			autoUpdater.setFeedURL(feedURL + '/update/channel/' + allPrefs.user.updateChannel + '/' + platform + '_' + arch + '/' + version);
+			logger.debug("setFeedURL = ",feedURL + '/update/channel/' + updateChannel + '/' + platform + '_' + arch + '/' + version);
+			autoUpdater.setFeedURL(feedURL + '/update/channel/' + updateChannel + '/' + platform + '_' + arch + '/' + version);
 			autoUpdater.checkForUpdates();
-			res.status(200).end();
 		}
+		autoUpdater.on("update-downloaded", /* @callback */ function(event, releaseNotes, releaseName, releaseDate, updateURL) {
+			task.done({
+				HttpCode: 200,
+				Code: 0,
+				DetailedMessage: "OK",
+				JsonData: {
+					"note": releaseNotes
+				},
+				Message: "OK",
+				Severity: "Ok"
+			});
+		});
+		autoUpdater.on("update-error", function(error) {
+			logger.error(error);
+			task.done({
+				HttpCode: 204,
+				Code: 0,
+				DetailedMessage: "update-error",
+				Message: "OK",
+				Severity: "Ok"
+			});
+		});
 	})
 	.get("/resolveNewVersion", function (req, res) {
+		var task = new tasks.Task(res, false, true, 0, true);
 		if (!feedURL) {
-			return res.status(400).end();
+			 task.done({
+			 	HttpCode: 200,
+			 	Code: 0,
+			 	DetailedMessage: "OK",
+			 	Message: "OK",
+			 	Severity: "Ok"
+			 });
 		}
-		allPrefs.user.updateChannel = req.query.updateChannel;
-		prefs.writePrefs(allPrefs);
-		var resolveURL = feedURL + '/api/resolve?platform=' + platform + '&channel=' + allPrefs.user.updateChannel;
+		var resolveURL = feedURL + '/api/resolve?platform=' + platform + '&channel=' + req.query.updateChannel;
 		autoUpdater.setResolveURL(resolveURL);
 		autoUpdater.resolveNewVersion(true);
 		autoUpdater.on("update-available-manual", function(newVersion) {
-			res.status(200).end(newVersion); // OK
+			task.done({
+				HttpCode: 200,
+				Code: 0,
+				JsonData: {"newVersion":newVersion},
+				DetailedMessage: "update-available-manual",
+				Message: "OK",
+				Severity: "Ok"
+			});
 		});
 		autoUpdater.on("update-not-available", function() {
-			res.status(204).end(); // no content
+			task.done({
+				HttpCode: 204,
+				Code: 0,
+				DetailedMessage: "update-not-available",
+				Message: "OK",
+				Severity: "Ok"
+			});
 		});
 		autoUpdater.on("update-error", function(error) {
-			console.log(error);
-			res.status(400).end(); // client error
-		})
+			logger.error(error);
+			task.done({
+				HttpCode: 204,
+				Code: 0,
+				DetailedMessage: "update-error",
+				Message: "OK",
+				Severity: "Ok"
+			});
+		});
 	});	
 };

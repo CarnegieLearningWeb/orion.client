@@ -1,3 +1,4 @@
+/* eslint-disable */
 (function(mod) {
   if (typeof exports == "object" && typeof module == "object") // CommonJS
     return mod(require("../lib/infer"), require("../lib/tern"));
@@ -273,8 +274,11 @@
       this.mod.requireJS.interfaces = Object.create(null);
       this.mod.requireJS.shortNames = Object.create(null); // ORION Collect the short names rather than full Orion path for module completion
       this.mod.requireJS.require = null;
+      resolver.doReset();
     });
-
+	server.on("preParse", function preParseHandler(text, options) {
+		resolver.doPreParse(text, options);
+	});
     server.on("preCondenseReach", preCondenseReach)
     server.on("postLoadDef", postLoadDef)
     server.on("typeAt", findTypeAt)

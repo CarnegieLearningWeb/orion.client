@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2014 IBM Corporation and others.
+ * Copyright (c) 2010, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -86,7 +86,7 @@ exports.DefaultDiffProvider = (function() {
 		_resolveComplexFileURL: function(complexURL) {
 			var that = this;
 			return this._diffProvider.getDiffFileURI(complexURL).then(function(jsonData, secondArg) {
-				return that._resolveTwoFiles(jsonData.Old, jsonData.New);
+				return that._resolveTwoFiles(jsonData.Old || jsonData.OldLocation, jsonData.New || jsonData.NewLocation);
 			}, function(){});
 		},
 		
@@ -364,7 +364,7 @@ exports.ResourceComparer = (function() {
 					if (metadata) {
 						name = metadata.Name;
 					}
-					mGlobalCommands.setPageTarget({task: messages["compareTreeTitle"], name: name, target: metadata,
+					mGlobalCommands.setPageTarget({task: messages["compareFileTitle"], name: name, target: metadata,
 								serviceRegistry: that._registry, commandService: that._commandService,
 								searchService: that._searchService, fileService: that._fileClient});
 					if (title.charAt(0) === '*') { //$NON-NLS-0$
@@ -446,7 +446,7 @@ exports.ResourceComparer = (function() {
 					id: "orion.compare.generateLink", //$NON-NLS-0$
 					groupId: "orion.compareGroup", //$NON-NLS-0$
 					visibleWhen: function(item) {
-						return item.options.extCmdHolder.options.resource && item.options.extCmdHolder.options.generateLink;
+						return !util.isElectron && item.options.extCmdHolder.options.resource && item.options.extCmdHolder.options.generateLink;
 					},
 					callback : function(data) {
 						data.items.options.extCmdHolder.generateLink(data.items);
@@ -479,14 +479,14 @@ exports.ResourceComparer = (function() {
 			return Deferred.all(promises, function(error) { return {_error: error}; });
 	    },
 	    _loadSingleFile: function(file) {
-	        return this._progressFunc(this._fileClient.read(file.URL), //$NON-NLS-0$
+	        return this._progressFunc(this._fileClient.read(file.URL, false, { readIfExists: true }), //$NON-NLS-0$
 	                   i18nUtil.formatMessage(messages["readingFile"], file.URL)).then( //$NON-NLS-0$
 		        function(contents) {
 					file.Content = contents;
 					return file;
 		        }.bind(this),
 		        function(error, ioArgs) {
-					if (error.status === 404) {
+					if (error.status === 404 || error.status === 410) {
 						file.Content = "";
 					} else {
 						//TODO: show file loading error in the appropriate editor(error, ioArgs);

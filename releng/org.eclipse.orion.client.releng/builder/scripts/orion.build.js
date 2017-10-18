@@ -35,6 +35,7 @@
     // Bundles whose ./web/ folders will be copied into the staging directory by the builder.
     // ** For Nashorn compatibility, use single quotes here **
     bundles: [
+        '${orionClient}/bundles/org.eclipse.orion.client.collab',
         '${orionClient}/bundles/org.eclipse.orion.client.core',
         '${orionClient}/bundles/org.eclipse.orion.client.cf',
         '${orionClient}/bundles/org.eclipse.orion.client.ui',
@@ -43,10 +44,12 @@
         '${orionClient}/bundles/org.eclipse.orion.client.help',
         '${orionClient}/bundles/org.eclipse.orion.client.javascript',
         '${orionClient}/bundles/org.eclipse.orion.client.webtools',
-        '${orionClient}/bundles/org.eclipse.orion.client.users'
+        '${orionClient}/bundles/org.eclipse.orion.client.users',
+        '${orionClient}/bundles/org.eclipse.orion.client.debug'
     ],
     // Folders that should be searched for JSDoc
     jsdocs: [
+        '${orionClient}/bundles/org.eclipse.orion.client.collab/web/orion/',
         '${orionClient}/bundles/org.eclipse.orion.client.core/web/orion/',
         '${orionClient}/bundles/org.eclipse.orion.client.cf/web/orion/',
         '${orionClient}/bundles/org.eclipse.orion.client.ui/web/orion/',
@@ -63,10 +66,10 @@
             { name: "cfui/apps" },
             { name: "cfui/logs" },
             { name: "cfui/plugins/cFDeployPlugin" },
-            { name: "cfui/plugins/cFDeployService" },
             { name: "cfui/plugins/cFPlugin" },
             { name: "cfui/plugins/wizards/generic/genericDeploymentWizard" },
             { name: "compare/compare" },
+            { name: "compare-tree/compare-tree" },
             { name: "edit/content/imageViewerPlugin" },
             { name: "edit/content/jsonEditorPlugin" },
             { name: "edit/edit" },
@@ -95,23 +98,31 @@
             { name: "plugins/languages/c/cPlugin" },
             { name: "plugins/languages/coffeescript/coffeescriptPlugin" },
             { name: "plugins/languages/cpp/cppPlugin" },
+            { name: "plugins/languages/csharp/csharpPlugin" },
             { name: "plugins/languages/docker/dockerPlugin" },
             { name: "plugins/languages/erlang/erlangPlugin" },
             { name: "plugins/languages/go/goPlugin" },
+            { name: "plugins/languages/git/gitFilePlugin" },
             { name: "plugins/languages/haml/hamlPlugin" },
+            { name: "plugins/languages/jade/jadePlugin" },
             { name: "plugins/languages/java/javaPlugin" },
+            { name: "plugins/languages/jsx/jsxPlugin" },
             { name: "plugins/languages/json/jsonPlugin" },
+            { name: "plugins/languages/launch/launchPlugin" },
             { name: "plugins/languages/less/lessPlugin" },
             { name: "plugins/languages/lua/luaPlugin" },
             { name: "plugins/languages/markdown/markdownPlugin" },
             { name: "plugins/languages/objectiveC/objectiveCPlugin" },
             { name: "plugins/languages/php/phpPlugin" },
             { name: "plugins/languages/python/pythonPlugin" },
+            { name: "plugins/languages/properties/propertiesPlugin" },
             { name: "plugins/languages/ruby/rubyPlugin" },
             { name: "plugins/languages/scss/scssPlugin" },
+            { name: "plugins/languages/smarty/smartyPlugin" },
             { name: "plugins/languages/sql/sqlPlugin" },
             { name: "plugins/languages/swift/swiftPlugin" },
             { name: "plugins/languages/typescript/typescriptPlugin" },
+            { name: "plugins/languages/vb/vbPlugin" },
             { name: "plugins/languages/xml/xmlPlugin" },
             { name: "plugins/languages/xquery/xqueryPlugin" },
             { name: "plugins/languages/yaml/yamlPlugin" },
@@ -121,6 +132,7 @@
             { name: "plugins/site/sitePlugin" },
             { name: "plugins/taskPlugin" },
             { name: "plugins/webEditingPlugin" },
+            { name: "profile/user-profile" },
             { name: "profile/user-list" },
             { name: "profile/userservicePlugin" },
             { name: "settings/settings" },
@@ -130,7 +142,7 @@
             { name: "sites/sites" },
             { name: "sites/view" },
             { name: "webtools/plugins/webToolsPlugin" },
-            { name: "orion/splash" },
+            { name: "orion/splash" }
         ];
         modules.forEach(function(module) {
             module.excludeShallow = ["chai/chai"];

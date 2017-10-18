@@ -5,6 +5,7 @@
 # Ignore npm artifacts
 node_modules/
 npm-debug.log
+server/
 
 # Ignore any Maven artifacts that creep into the repo
 target/
@@ -12,6 +13,13 @@ target/
 # Ignore inlined orion client code copied by Grunt build
 lib/orion.client/
 
+# ignore electron artifacts
+dist/
+
 # Ignore per-user Orionode data
 .workspace*/
-test/.test_workspace/
+.test_workspace
+.test_metadata
+.nyc_output/
+coverage/
+orion_client_coverage/

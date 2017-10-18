@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2013 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -15,14 +15,14 @@ var auth = require('./lib/middleware/auth'),
 	https = require('https'),
 	fs = require('fs'),
 	os = require('os'),
+	log4js = require('log4js'),
 	compression = require('compression'),
 	path = require('path'),
-	socketio = require('socket.io'),
 	util = require('util'),
 	argslib = require('./lib/args'),
-	ttyShell = require('./lib/tty_shell'),
-	orion = require('./index.js'),
-	prefs = require('./lib/controllers/prefs');
+	api = require('./lib/api');
+
+var logger = log4js.getLogger('server');
 
 // Get the arguments, the workspace directory, and the password file (if configured), then launch the server
 var args = argslib.parseArgs(process.argv);
@@ -33,11 +33,18 @@ var port = args.port || args.p || process.env.PORT || 8081;
 var configFile = args.config || args.c || path.join(__dirname, 'orion.conf');
 
 var configParams = argslib.readConfigFileSync(configFile) || {};
+var log4jsOptions = configParams["orion.logs.location"] ? {"cwd" : configParams["orion.logs.location"]} : null;
+
+// Patches the fs module to use graceful-fs instead
+require('graceful-fs').gracefulify(fs);
 
 function startServer(cb) {
 	
 	var workspaceArg = args.workspace || args.w;
 	var workspaceConfigParam = configParams.workspace;
+	var contextPath = configParams["orion.context.path"] || "";
+	var listenContextPath = configParams["orion.context.listenPath"] || false;
+	var homeDir = os.homedir();
 	var workspaceDir;
 	if (workspaceArg) {
 		// -workspace passed in command line is relative to cwd
@@ -46,22 +53,41 @@ function startServer(cb) {
 		 // workspace param in orion.conf is relative to the server install dir.
 		workspaceDir = path.resolve(__dirname, workspaceConfigParam);
 	} else if (configParams.isElectron) {
-		workspaceDir =  path.join(os.homedir(), '.orion', '.workspace');
+		workspaceDir =  path.join(homeDir, '.orion', '.workspace');
 	} else {
 		workspaceDir = path.join(__dirname, '.workspace');
 	}
+	configParams.workspace = workspaceDir;
 	argslib.createDirs([workspaceDir], function() {
-	var passwordFile = args.password || args.pwd;
-	argslib.readPasswordFile(passwordFile, function(password) {
+		var passwordFile = args.password || args.pwd;
+		var password = argslib.readPasswordFile(passwordFile);
 		var dev = Object.prototype.hasOwnProperty.call(args, 'dev');
 		var log = Object.prototype.hasOwnProperty.call(args, 'log');
+		// init logging
+		if (!configParams["orion.cluster"]) {
+			// Use this configuration only in none-clustered server.
+			log4js.configure(path.join(__dirname, 'config/log4js.json'), log4jsOptions);
+		}
+		if(configParams.isElectron){
+			log4js.loadAppender('file');
+			var logPath = path.join(homeDir, '.orion', 'orion.log');
+			if(process.platform === 'darwin'){
+				logPath = path.join(homeDir, '/Library/Logs/Orion', 'orion.log');
+			}else if(process.platform === 'linux'){
+				logPath = path.join(homeDir, '/.config', 'orion.log');
+			}else if(process.platform === 'win32'){
+				logPath = path.join(homeDir, '\AppData\Roaming\Orion', 'orion.log');
+			}
+			log4js.addAppender(log4js.appenders.file(logPath, null, 5000000));
+		}
 		if (dev) {
-			console.log('Development mode: client code will not be cached.');
+			process.env.OrionDevMode = true;
+			logger.info('Development mode: client code will not be cached.');
 		}
 		if (passwordFile) {
-			console.log(util.format('Using password from file: %s', passwordFile));
+			logger.info(util.format('Using password from file: %s', passwordFile));
 		}
-		console.log(util.format('Using workspace: %s', workspaceDir));
+		logger.info(util.format('Using workspace: %s', workspaceDir));
 		
 		var server;
 		try {
@@ -81,20 +107,59 @@ function startServer(cb) {
 				app.use(express.logger('tiny'));
 			}
 			if (password || configParams.pwd) {
-				app.use(auth(password || configParams.pwd));
+				app.use(listenContextPath ? contextPath : "/", auth(password || configParams.pwd));
 			}
-			
+			server = require('http-shutdown')(server);
 			app.use(compression());
-			app.use(orion({
+			var orion = require('./index.js')({
 				workspaceDir: workspaceDir,
 				configParams: configParams,
 				maxAge: dev ? 0 : undefined,
-			}));
-			var io = socketio.listen(server, { 'log level': 1 });
-			ttyShell.install({ io: io, fileRoot: '/file', workspaceDir: workspaceDir });
+				server: server
+			});
+			app.use(listenContextPath ? contextPath : "/", function(req, res, next){
+				req.contextPath = contextPath;
+				next();
+			}, orion);
+			
+			if(configParams["orion.proxy.port"] && listenContextPath){
+				var httpProxy;
+				try {
+					httpProxy = require('http-proxy');
+					var proxy = httpProxy.createProxyServer({});
+					app.use('/', function(req, res, next) {
+						proxy.web(req, res, { target: 'http://127.0.0.1:' + configParams["orion.proxy.port"], changeOrigin: true }, function(ex) { next(); } );
+					});
+				} catch (e) {
+					logger.info("WARNING: http-proxy is not installed. Some features will be unavailable. Reason: " + e.message);
+				}
+			}
+
+			//error handling
+			app.use(function(err, req, res, next) { // 'next' has to be here, so that this callback works as a final error handler instead of a normal middleware
+				logger.error(req.originalUrl, err);
+				if (res.finished) {
+					return;
+				}
+				if (err) {
+					res.status(err.status || 500);
+				} else {
+					res.status(404);
+				}
+	
+				// respond with json
+				if (req.accepts('json')) {
+					api.writeResponse(null, res, null, { error: err ? err.message : 'Not found' });
+					return;
+				}
+				
+				// default to plain-text. send()
+				api.writeResponse(null, res, {"Content-Type":'text/plain'}, err ? err.message : 'Not found');
+			});
 
 			server.on('listening', function() {
-				console.log(util.format('Listening on port %d...', port));
+				configParams.port = port;
+				logger.info(util.format('Listening on port %d...', port));
 				if (cb) {
 					cb();
 				}
@@ -106,225 +171,66 @@ function startServer(cb) {
 				}
 			});
 			server.listen(port);
+			
+			// this function is called when you want the server to die gracefully
+			// i.e. wait for existing connections
+			var gracefulShutdown = function() {
+				logger.info("Received kill signal, shutting down gracefully.");
+				api.getOrionEE().emit("close-socket");
+				server.shutdown(function() {
+					api.getOrionEE().emit("close-server");// Disconnect Mongoose // Close Search Workers
+					logger.info("Closed out remaining connections.");
+					log4js.shutdown(function(){
+						process.exit();
+					});
+				});
+				setTimeout(function() {
+					api.getOrionEE().emit("close-server");
+					logger.error("Could not close connections in time, forcefully shutting down");
+					log4js.shutdown(function(){
+						process.exit();
+					});
+				}, configParams["shutdown.timeout"]);
+			};
+			// listen for TERM signal .e.g. kill 
+			process.on('SIGTERM', gracefulShutdown);
+			var stdin = process.openStdin();
+			stdin.addListener("data", function(d) {
+				if(d.toString().trim() === "shutdown"){
+					gracefulShutdown();
+				}
+			});
 		} catch (e) {
-			console.error(e && e.stack);
+			logger.error(e && e.stack);
 		}
-	});
 	});
 }
 
-if (process.versions.electron) {
-	var electron = require('electron'),
-		autoUpdater = require('./lib/autoUpdater'),
-		spawn = require('child_process').spawn,
-		allPrefs = prefs.readPrefs(),
-		feedURL = configParams["orion.autoUpdater.url"],
-		version = electron.app.getVersion(),
-		name = electron.app.getName(),
-		platform = os.platform(),
-		arch = os.arch();
-
-	configParams.isElectron = true;
-	electron.app.buildId = configParams["orion.buildId"];
-
-	if (feedURL) {
-		var updateChannel = allPrefs.user.updateChannel ? allPrefs.user.updateChannel : configParams["orion.autoUpdater.defaultChannel"],
-			latestUpdateURL;
-		if (platform === "linux") {
-			latestUpdateURL = feedURL + '/download/channel/' + updateChannel + '/linux';
-		} else {
-			latestUpdateURL = feedURL + '/update/channel/' + updateChannel + '/' + platform + "_" + arch + '/' + version;
-		}
-		var resolveURL = feedURL + '/api/resolve?platform=' + platform + '&channel=' + updateChannel;
-		
-		autoUpdater.setResolveURL(resolveURL);
-		autoUpdater.setFeedURL(latestUpdateURL);
+function start(electron) {
+	if (electron) {
+		require("./electron").start(startServer, configParams);
+	} else {
+		startServer();
 	}
+}
 
-	var handleSquirrelEvent = function() {
-		if (process.argv.length === 1 || os.platform() !== 'win32') { // No squirrel events to handle
-			return false;
+if (configParams["orion.cluster"]) {
+	var cluster = require('cluster');
+	if (cluster.isMaster) {		
+		log4js.configure(path.join(__dirname, 'config/clustered-log4js.json'), log4jsOptions);
+		var numCPUs = typeof configParams["orion.cluster"] === "boolean" ? os.cpus().length : configParams["orion.cluster"] >> 0;
+		for (var i = 0; i < numCPUs; i++) {
+			cluster.fork();
 		}
-
-		var	target = path.basename(process.execPath);
-
-		function executeSquirrelCommand(args, done) {
-			var updateDotExe = path.resolve(path.dirname(process.execPath), '..', 'Update.exe');
-			var child = spawn(updateDotExe, args, { detached: true });
-			child.on('close', function() {
-				done();
-			});
-		}
-
-		var squirrelEvent = process.argv[1];
-		switch (squirrelEvent) {
-			case '--squirrel-install':
-			case '--squirrel-updated':
-				// Install desktop and start menu shortcuts
-				executeSquirrelCommand(["--createShortcut", target], electron.app.quit);
-				setTimeout(electron.app.quit, 1000);
-				return true;
-			case '--squirrel-obsolete':
-				// This is called on the outgoing version of the app before
-				// we update to the new version - it's the opposite of
-				// --squirrel-updated
-				electron.app.quit();
-				return true;
-			case '--squirrel-uninstall':
-				// Remove desktop and start menu shortcuts
-				executeSquirrelCommand(["--removeShortcut", target], electron.app.quit);
-				setTimeout(electron.app.quit, 1000);
-				return true;
-		}
-		return false;
-	};
-
-	if (handleSquirrelEvent()) {
-		// Squirrel event handled and app will exit in 1000ms
-		return;
+		cluster.on('exit', /** @callback */ function(worker, code, signal) {
+			logger.info("Worker " + worker.process.pid + " exited");
+		});
+		logger.info("Master " + process.pid + " started");
+	} else {
+		log4js.configure({appenders: [{type: "clustered"}]});
+		logger.info("Worker " + process.pid + " started");
+		start(false); //TODO electron with cluster?
 	}
-
-	electron.app.on('ready', function() {
-		var updateDownloaded  = false,
-			updateDialog = false,
-			linuxDialog = false,
-			prefsWorkspace = allPrefs.user && allPrefs.user.workspace && allPrefs.user.workspace.currentWorkspace;
-			
-		if (prefsWorkspace) {
-			configParams.workspace = prefsWorkspace;
-		}
-		if (process.platform === 'darwin') {
-			var Menu = electron.Menu;
-			if (!Menu.getApplicationMenu()) {
-				var template = [{
-					label: "Application",
-					submenu: [
-						{ label: "About Application", selector: "orderFrontStandardAboutPanel:" },
-						{ type: "separator" },
-						{ label: "Quit", accelerator: "Command+Q", click: function() { electron.app.quit(); }}
-					]}, {
-					label: "Edit",
-					submenu: [
-						{ label: "Undo", accelerator: "CmdOrCtrl+Z", selector: "undo:" },
-						{ label: "Redo", accelerator: "Shift+CmdOrCtrl+Z", selector: "redo:" },
-						{ type: "separator" },
-						{ label: "Cut", accelerator: "CmdOrCtrl+X", selector: "cut:" },
-						{ label: "Copy", accelerator: "CmdOrCtrl+C", selector: "copy:" },
-						{ label: "Paste", accelerator: "CmdOrCtrl+V", selector: "paste:" },
-						{ label: "Select All", accelerator: "CmdOrCtrl+A", selector: "selectAll:" }
-					]}
-				];
-				Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-			}
-		}
-		electron.globalShortcut.register('F12', function() {
-			var win = electron.BrowserWindow.getFocusedWindow();
-			if (win) {
-				win.webContents.toggleDevTools();
-			}
-		});
-		autoUpdater.on("error", function(error) {
-			console.log(error);
-		});
-		autoUpdater.on("update-available-automatic", function(newVersion) {
-			if (platform === "linux" && !linuxDialog) {
-				electron.dialog.showMessageBox({
-					type: 'question',
-					message: 'Update version ' + newVersion + ' is available.',
-					detail: 'Use your package manager to update, or click Download to get the new package.',
-					buttons: ['Download', 'OK']
-				}, function (response) {
-					if (response === 0) {
-						electron.shell.openExternal(latestUpdateURL);
-					} else {
-						linuxDialog = false;
-					}
-				});
-				linuxDialog = true;
-			} else {
-				autoUpdater.checkForUpdates();
-			}
-			
-		});
-		autoUpdater.on("update-downloaded", /* @callback */ function(event, releaseNotes, releaseName, releaseDate, updateURL) {
-			updateDownloaded = true;
-			if (!updateDialog) {
-				electron.dialog.showMessageBox({
-					type: 'question',
-					message: 'Update version ' + releaseName + ' of ' + name + ' has been downloaded.',
-					detail: 'Would you like to restart the app and install the update? The update will be applied automatically upon closing.',
-					buttons: ['Update', 'Later']
-				}, function (response) {
-					if (response === 0) {
-						autoUpdater.quitAndInstall();
-					}
-				});
-				updateDialog = true;
-			}
-
-		});
-
-		function scheduleUpdateChecks () {
-			var checkInterval = (parseInt(configParams["orion.autoUpdater.checkInterval"], 10) || 30) * 1000 * 60;
-			var resolveNewVersion = function() {
-				autoUpdater.resolveNewVersion(false);
-			}.bind(this);
-			setInterval(resolveNewVersion, checkInterval);
-		}
-		function createWindow(url){
-			var Url = require("url");
-			var windowOptions = allPrefs.windowBounds || {width: 1024, height: 800};
-			windowOptions.title = "Orion";
-			windowOptions.icon = "icon/256x256/orion.png";
-			var nextWindow = new electron.BrowserWindow(windowOptions);
-			nextWindow.loadURL("file:///" + __dirname + "/lib/main.html#" + encodeURI(url));
-			nextWindow.webContents.on("new-window", /* @callback */ function(event, url, frameName, disposition, options){
-				event.preventDefault();
-				if (false === undefined) {// Always open new tabs for now
-					createWindow(url);
-				} 
-				else if (Url.parse(url).hostname !== "localhost") {
-					electron.shell.openExternal(url);
-				}
-				else {
-					nextWindow.webContents.executeJavaScript('createTab("' + url + '");');
-				}
-			});
-			nextWindow.on("close", function(event) {
-				function exit() {
-					allPrefs = prefs.readPrefs();
-					allPrefs.windowBounds = nextWindow.getBounds();
-					prefs.writePrefs(allPrefs);
-					nextWindow.destroy();
-				}
-				event.preventDefault();
-				if (updateDownloaded) {
-					nextWindow.webContents.session.clearCache(function() {
-						exit();
-					});
-				} else {
-					exit();
-				}
-			});
-			nextWindow.webContents.once("did-frame-finish-load", function () {
-				if (feedURL) {
-					autoUpdater.resolveNewVersion(false);
-					scheduleUpdateChecks();
-				}
-			});
-			return nextWindow;
-		}
-		startServer(function() {
-			var mainWindow = createWindow("http://localhost:" + port);
-			mainWindow.on('closed', function() {
-				mainWindow = null;
-			});
-		});
-	});
-	electron.app.on('window-all-closed', function() {
-		electron.app.quit();	
-	});
-	
 } else {
-	startServer();
+	start(process.versions.electron);
 }

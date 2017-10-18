@@ -16,6 +16,7 @@ define([
 	'i18n!orion/edit/nls/messages',
 	'orion/i18nUtil',
 	'orion/webui/littlelib',
+	'orion/fileUtils',
 	'orion/widgets/input/DropDownMenu',
 	'orion/Deferred',
 	'orion/URITemplate',
@@ -33,7 +34,7 @@ define([
 	'orion/PageUtil',
 	'orion/uiUtils',
 	'orion/util'
-], function(messages, i18nUtil, lib, DropDownMenu, Deferred, URITemplate, mCommands, mKeyBinding, mCommandRegistry, mExtensionCommands, mContentTypes, mSearchUtils, objects, mPageUtil, PageLinks, mAnnotations, regex, PageUtil, mUIUtils, util) {
+], function(messages, i18nUtil, lib, fileUtil, DropDownMenu, Deferred, URITemplate, mCommands, mKeyBinding, mCommandRegistry, mExtensionCommands, mContentTypes, mSearchUtils, objects, mPageUtil, PageLinks, mAnnotations, regex, PageUtil, mUIUtils, util) {
 
 	var exports = {};
 
@@ -173,7 +174,6 @@ define([
 			this._createFindCommnand();
 			this._createBlameCommand();
 			this._createDiffCommand();
-			this._createShowTooltipCommand();
 			this._createUndoStackCommands();
 			this._createClipboardCommands();
 			this._createDelimiterCommands();
@@ -182,26 +182,8 @@ define([
 			this._createSaveCommand();
 			this._createOpenFolderCommand();
 			this._createOpenRecentCommand();
+			this._createSwitchWorkspaceCommand();
 			return this._createEditCommands();
-		},
-		updateWorkspacePrefs:function(workspaceAddress){
-			var that = this;
-			return this.preferences.get("/workspace").then(function(prefs) {
-				return prefs.recentWorkspaces ? prefs.recentWorkspaces : [];
-			}).then(function(recentworkspaces){
-				var RECENT_ARRAY_LENGTH = 10;
-				var oldIndex = recentworkspaces.indexOf(workspaceAddress);
-				if(oldIndex !== -1){
-					recentworkspaces.splice(oldIndex,1);
-				}
-				if(recentworkspaces.length < RECENT_ARRAY_LENGTH){
-					recentworkspaces.unshift(workspaceAddress);
-				}else if(recentworkspaces.length === RECENT_ARRAY_LENGTH){
-					recentworkspaces.pop();
-					recentworkspaces.unshift(workspaceAddress);
-				}
-				return that.preferences.put("/workspace",{recentWorkspaces: recentworkspaces, currentWorkspace: workspaceAddress});
-			})
 		},
 		//TODO: We need a better way invoke side bar action 
 		setSideBar: function(sideBar) {
@@ -221,7 +203,7 @@ define([
 		updateCommands: function(target) {
 			target = target || {};
 			this.editor = target.editor;
-			this.inputManager = target.inputManager;
+			this.inputManager = target.inputManager || target.editorInputManager;
 			this.localSettings = target.localSettings;
 			this.differ = target.differ;
 			this.blamer = target.blamer;
@@ -262,14 +244,15 @@ define([
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.toolbarId, "orion.edit.undo", 400, this.editToolbarId ? "orion.menuBarEditGroup/orion.edit.undoGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('z', true), null, this); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.toolbarId, "orion.edit.redo", 401, this.editToolbarId ? "orion.menuBarEditGroup/orion.edit.undoGroup" : null, !this.editToolbarId, util.isMac ? new mKeyBinding.KeyBinding('z', true, true) : new mKeyBinding.KeyBinding('y', true), null, this); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-4$
 			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.openFolder", 1, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('o', true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.openRecent", 3, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('r', true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.openRecent", 3, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, null); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.switchWorkspace", 0, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.workspaceGroup" : null, false, null); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.openResource", 1, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('f', true, true)); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(this.saveToolbarId || this.toolbarId, "orion.edit.save", 2, this.saveToolbarId ? "orion.menuBarFileGroup/orion.edit.saveGroup" : null, false, new mKeyBinding.KeyBinding('s', true), null, this); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.pageNavId, "orion.edit.gotoLine", 3, this.editToolbarId ? "orion.menuBarEditGroup/orion.findGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('l', !util.isMac, false, false, util.isMac), new mCommandRegistry.URLBinding("gotoLine", "line"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.pageNavId, "orion.edit.find", 0, this.editToolbarId ? "orion.menuBarEditGroup/orion.findGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('f', true), new mCommandRegistry.URLBinding("find", "find"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 			commandRegistry.registerCommandContribution(this.editToolbarId || this.pageNavId , "orion.edit.format", 2, this.editToolbarId ? "orion.menuBarEditGroup/orion.edit.formatGroup" : null, !this.editToolbarId, new mKeyBinding.KeyBinding('f', false, true, true), new mCommandRegistry.URLBinding("format", "format"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
-			commandRegistry.registerCommandContribution(this.toolbarId, "orion.keyAssist", 0, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding(191, false, true, true)); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
-			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.showTooltip", 1, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding(113), null, this);//$NON-NLS-1$ //$NON-NLS-2$ 
+			commandRegistry.registerCommandContribution(this.toolbarId, "orion.keyAssist", 0, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding(191, false, true, !util.isMac, util.isMac)); //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-2$
+			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.showTooltip", 1, "orion.menuBarToolsGroup", false, null, null, this);//$NON-NLS-1$ //$NON-NLS-2$ 
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.blame", 2, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding('b', true, true), new mCommandRegistry.URLBinding("blame", "blame"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 			commandRegistry.registerCommandContribution(this.toolbarId , "orion.edit.diff", 3, "orion.menuBarToolsGroup", false, new mKeyBinding.KeyBinding('d', true, true), new mCommandRegistry.URLBinding("diff", "diff"), this); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
 
@@ -382,12 +365,6 @@ define([
 					}, that.commandService.findCommand("orion.edit.find")); //$NON-NLS-0$
 				}
 				
-				var keyAssistCommand = that.commandService.findCommand("orion.keyAssist"); //$NON-NLS-0$
-				if (keyAssistCommand) {
-					textView.setKeyBinding(new mKeyBinding.KeyStroke(191, false, true, !util.isMac, util.isMac), keyAssistCommand.id);
-					textView.setAction(keyAssistCommand.id, keyAssistCommand.callback, keyAssistCommand);
-				}
-				
 				// Support future key binding changes
 				this.bindingChangeListener = function(args) {
 					this._handleBindingChanges(textView, args);
@@ -461,6 +438,7 @@ define([
 			var that = this;
 			var settingsCommand = new mCommands.Command({
 				imageClass: "core-sprite-wrench", //$NON-NLS-0$
+				name: messages.EditorSettings,
 				tooltip: messages.LocalEditorSettings,
 				id: "orion.edit.settings", //$NON-NLS-0$
 				visibleWhen: /** @callback */ function(items, data) {
@@ -484,7 +462,7 @@ define([
 						dropDown.updateContent = localSettings.show.bind(localSettings);
 						var menu = dropDown.getContentNode();
 						menu.tabIndex = menu.style.marginTop = 0;
-					}
+					}					
 					dropDown.click();
 				}
 			});
@@ -648,6 +626,54 @@ define([
 			});
 			this.commandService.addCommand(saveCommand);
 		},
+		_createSwitchWorkspaceCommand: function() {
+			var that = this;
+			var fileSystem = this.fileClient.fileServiceRootURL(window.location.hash.substring(1));
+			this.fileClient.loadWorkspaces(fileSystem).then(function(workspaces) {
+				if (this.sideBar) {
+					this.sideBar.sidebarNavInputManager.addEventListener("filesystemChanged", function(evt) {
+						fileSystem = evt.newInput;
+						this.fileClient.loadWorkspaces(fileSystem).then(function(newWorkspaces) {
+							workspaces = newWorkspaces;
+						});
+					}.bind(this));
+				}
+				this.fileClient.addEventListener("Changed", function(evt) {
+					if (evt.deleted) {
+						if (evt.deleted.some(function(item) {
+							return fileUtil.isAtRoot(item.deleteLocation);
+						})) {
+							this.fileClient.loadWorkspaces(fileSystem).then(function(newWorkspaces) {
+								workspaces = newWorkspaces;
+							});
+						}
+					}
+				}.bind(this));
+				var uriTemplate = new URITemplate("#{,resource,params*}"); //$NON-NLS-0$
+				var command = new mCommands.Command({
+					name: messages.SwitchWorkspace,
+					tooltip: messages.SwitchWorkspaceTip,
+					id: "orion.edit.switchWorkspace", //$NON-NLS-0$
+					visibleWhen: /** @callback */ function(items, data) {
+						return workspaces && workspaces.length > 1;
+					},
+					choiceCallback: function() {
+						var inputManager = this.inputManager || that.inputManager;
+						var metadata = inputManager && inputManager.getFileMetadata();
+						return workspaces.map(function(w) {
+							return {
+								name: w.Name,
+								checked: metadata && (metadata.WorkspaceLocation || metadata.Location) === w.Location,
+								callback: function() {
+									window.location = uriTemplate.expand({resource: w.Location});
+								}
+							};
+						});
+					}
+				});
+				that.commandService.addCommand(command);
+			}.bind(this));
+		},
 		_createOpenFolderCommand: function() {
 			var that = this;
 			var openFolderCommand = new mCommands.Command({
@@ -661,12 +687,8 @@ define([
 					window.__electron.remote.dialog.showOpenDialog({properties: ['openDirectory']}, function(result) {
 						if (!result) return;
 						that.fileClient.changeWorkspace(result[0]).then(function() {
-							return that.updateWorkspacePrefs(result[0]);
-						}).then(function(){
 							delete sessionStorage.lastFile;
-							window.location.hash = "";
-							window.location.reload();
-						})				
+						});			
 					});
 				}
 			});
@@ -675,7 +697,7 @@ define([
 		_createOpenRecentCommand: function() {
 			var that = this;		
 			if(this.preferences){
-				this.preferences.get("/workspace").then(function(prefs) {
+				this.preferences.get("/workspace",undefined, {noCache:true}).then(function(prefs) {
 					return prefs.recentWorkspaces;
 				}).then(function(recentworkspaces){
 					var openRecentCommand = new mCommands.Command({
@@ -691,12 +713,8 @@ define([
 									name: folderLocation,
 									callback: function() {
 										that.fileClient.changeWorkspace(folderLocation).then(function() {
-											return that.updateWorkspacePrefs(folderLocation);
-										}).then(function(){
 											delete sessionStorage.lastFile;
-											window.location.hash = "";
-											window.location.reload();
-										})	
+										});
 									}
 								};
 							});
@@ -782,7 +800,7 @@ define([
 					var model = editor.getModel();
 					if (data.parameters && data.parameters.valueFor('line')) { //$NON-NLS-0$
 						line = data.parameters.valueFor('line'); //$NON-NLS-0$
-					} else {
+					} else if(!util.isElectron){
 						line = model.getLineAtOffset(editor.getCaretOffset());
 						line = prompt(messages.gotoLinePrompt, line + 1);
 						if (line) {
@@ -966,34 +984,6 @@ define([
 			});
 			this.commandService.addCommand(diffCommand);
 		},
-
-		_createShowTooltipCommand: function(){
-			var that = this;
-			var showTooltipCommand = new mCommands.Command({
-				name: messages.showTooltip,
-				tooltip: messages.showTooltipTooltip,
-				id: "orion.edit.showTooltip", //$NON-NLS-0$
-				visibleWhen: /** @callback */ function(items, data) {
-					var editor = data.handler.editor || that.editor;
-					return editor && editor.installed;
-				},
-				callback: function() {
-					var editor = this.editor || that.editor;
-					var tooltip = editor.getTooltip();
-					var tv = editor.getTextView();
-					var offset = tv.getCaretOffset();
-					var pos = tv.getLocationAtOffset(offset);
-					tooltip.show({
-						x: pos.x,
-						y: pos.y,
-						getTooltipInfo: function() {
-							return editor._getTooltipInfo(this.x, this.y);
-						}
-					}, false, true);
-				}
-			});
-			this.commandService.addCommand(showTooltipCommand);
-		},
 		_onServiceRemoved: function(serviceReference) {
 			if (serviceReference.getProperty("objectClass").indexOf("orion.edit.command") !== -1) { //$NON-NLS-1$ //$NON-NLS-2$
 				this._recreateEditCommands = true;
@@ -1054,11 +1044,17 @@ define([
 					if (that.inputManager.getReadOnly()) {
 						return false;
 					}
-					return !commandVisibleWhen || commandVisibleWhen(items);
+					return !commandVisibleWhen || commandVisibleWhen(inputManager.getFileMetadata());
 				};
 				options.callback = function(data) {
 					var editor = this.editor || that.editor;
 					var inputManager = this.inputManager || that.inputManager;
+					
+					// When in the split editor quickfixes should be applied to the editor the annotation is in, not the editor with focus
+					if (info.scopeId === "orion.edit.quickfix" && data.userData.annotation.creatorID){
+						editor = data.userData.annotation.creatorID;
+					}
+					
 					//TODO should all text editors have selection?
 					var selection = editor.getSelection ? editor.getSelection() : {start: 0, end: 0};
 					var model = editor.getModel();
@@ -1099,21 +1095,21 @@ define([
 						// Provide the quick fix command with the selected annotation
 						if (info.scopeId === "orion.edit.quickfix") {
 							context.annotation = {
-								start: data.userData.start,
-								end: data.userData.end,
-								title: data.userData.title,
-								id: data.userData.id,
-								data: data.userData.data
+								start: data.userData.annotation.start,
+								end: data.userData.annotation.end,
+								title: data.userData.annotation.title,
+								id: data.userData.annotation.id,
+								data: data.userData.annotation.data
 							};
 							// Also include other annotations with the same id
 							// TODO: We are using the internals of the annotation model here
 							// TODO We also check the model existence in commands.js
-							if (data.userData.doFixAll && data.userData._annotationModel){
+							if (data.userData.annotation.doFixAll && data.userData.annotation._annotationModel){
 								context.doFixAll = true;
 								context.annotations = [];
-								var allAnnotations = data.userData._annotationModel._annotations;
+								var allAnnotations = data.userData.annotation._annotationModel._annotations;
 								for (var i=0; i<allAnnotations.length; i++) {
-									if (allAnnotations[i].id === data.userData.id){
+									if (allAnnotations[i].id === data.userData.annotation.id){
 										context.annotations.push(
 											{
 												start: allAnnotations[i].start,
@@ -1188,6 +1184,10 @@ define([
 					info.forceSingleItem = true;  // for compatibility with mExtensionCommands._createCommandOptions
 
 					var deferred = mExtensionCommands._createCommandOptions(info, serviceReference, that.serviceRegistry, contentTypesCache, false, /* @callback */ function(items) {
+						if (info.scopeId === "orion.edit.quickfix" && items.annotation !== undefined && items.readonly !== undefined){
+							// Quick fixes validate based on annotation and readonly, if in split editor mode, validate the annotation's editor, not the active editor (Bug 496208)
+							return items;
+						}
 						// items is the editor and we care about the file metadata for validation
 						return that.inputManager.getFileMetadata();
 					}).then(function(commandOptions){

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2013 IBM Corporation and others.
+ * Copyright (c) 2013, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -467,14 +467,44 @@ define("orion/editor/actions", [ //$NON-NLS-0$
 			if (!annotationModel) { return true; }
 			var list = editor.getOverviewRuler() || editor.getAnnotationStyler();
 			if (!list) { return true; }
-			function ignore(annotation) {
-				return !!annotation.lineStyle ||
-					annotation.type === AT.ANNOTATION_MATCHING_BRACKET ||
-					annotation.type === AT.ANNOTATION_CURRENT_BRACKET ||
-					!list.isAnnotationTypeVisible(annotation.type);
+
+			function ignore(annotation, iterationMode) {
+				switch (iterationMode) {
+					case AT.ANNOTATION_ERROR:
+						return annotation.type !== AT.ANNOTATION_ERROR && annotation.type !== AT.ANNOTATION_WARNING && annotation.type !== AT.ANNOTATION_INFO;
+					case AT.ANNOTATION_READ_OCCURRENCE:
+						return annotation.type !== AT.ANNOTATION_READ_OCCURRENCE && annotation.type !== AT.ANNOTATION_WRITE_OCCURRENCE;
+					case AT.ANNOTATION_CURRENT_SEARCH:
+						return annotation.type !== AT.ANNOTATION_CURRENT_SEARCH && annotation.type !== AT.ANNOTATION_MATCHING_SEARCH;
+					case AT.ANNOTATION_TASK:
+						return annotation.type !== AT.ANNOTATION_TASK && annotation.type !== AT.ANNOTATION_BOOKMARK;
+				}
+				return true;
 			}
+			
 			var model = editor.getModel();
 			var currentOffset = editor.getCaretOffset();
+
+			// reset the iteration mode if the cursor moves between invocations			
+			if (!this._lastPosition || this._lastPosition !== currentOffset) {
+				var curAnnotations = annotationModel.getAnnotations(currentOffset, currentOffset);
+				var theMode = null;
+				while (curAnnotations.hasNext()) {
+					var annotation = curAnnotations.next();
+					if (annotation.type === AT.ANNOTATION_ERROR || annotation.type === AT.ANNOTATION_WARNING || annotation.type === AT.ANNOTATION_INFO) {
+						theMode = AT.ANNOTATION_ERROR;
+						break;
+					} else if (annotation.type === AT.ANNOTATION_READ_OCCURRENCE || annotation.type === AT.ANNOTATION_WRITE_OCCURRENCE) {
+						theMode = AT.ANNOTATION_READ_OCCURRENCE;
+					} else if (annotation.type === AT.ANNOTATION_TASK || annotation.type === AT.ANNOTATION_BOOKMARK && theMode !== AT.ANNOTATION_READ_OCCURRENCE) {
+						theMode = AT.ANNOTATION_TASK;
+					} else if (annotation.type === AT.ANNOTATION_CURRENT_SEARCH || annotation.type === AT.ANNOTATION_MATCHING_SEARCH && !theMode) {
+						theMode = AT.ANNOTATION_CURRENT_SEARCH;
+					}
+				}
+				this._iterationMode = theMode ?  theMode : AT.ANNOTATION_ERROR; // Iterate Errors / Warnings by default;
+			}
+
 			var annotations = annotationModel.getAnnotations(forward ? currentOffset : 0, forward ? model.getCharCount() : currentOffset);
 			var foundAnnotation = null;
 			while (annotations.hasNext()) {
@@ -484,7 +514,7 @@ define("orion/editor/actions", [ //$NON-NLS-0$
 				} else {
 					if (annotation.start >= currentOffset) { continue; }
 				}
-				if (ignore(annotation)) {
+				if (ignore(annotation, this._iterationMode)) {
 					continue;
 				}
 				foundAnnotation = annotation;
@@ -497,12 +527,13 @@ define("orion/editor/actions", [ //$NON-NLS-0$
 				annotations = annotationModel.getAnnotations(foundAnnotation.start, foundAnnotation.start);
 				while (annotations.hasNext()) {
 					annotation = annotations.next();
-					if (annotation !== foundAnnotation && !ignore(annotation)) {
+					if (annotation !== foundAnnotation && !ignore(annotation, this._iterationMode)) {
 						foundAnnotations.push(annotation);
 					}
 				}
 				var view = editor.getTextView();
 				var tooltip = mTooltip.Tooltip.getTooltip(view, editor);
+				this._lastPosition = foundAnnotation.start;
 				if (!tooltip) {
 					editor.moveSelection(foundAnnotation.start);
 					return true;
@@ -971,20 +1002,23 @@ define("orion/editor/actions", [ //$NON-NLS-0$
 			}
 
 			//if the proposal specifies linked positions, build the model and enter linked mode
-			if (proposal.positions && proposal.positions.length > 0 && this.linkedMode) {
+			if (Array.isArray(proposal.positions) && this.linkedMode) {
 				var positionGroups = [];
-				for (var i = 0; i < proposal.positions.length; ++i) {
-					positionGroups[i] = {
-						positions: [{
-							offset: proposal.positions[i].offset,
-							length: proposal.positions[i].length
-						}]
-					};
-				}
-				this.linkedMode.enterLinkedMode({
-					groups: positionGroups,
-					escapePosition: escapePosition()
+				proposal.positions.forEach(function(pos) {
+					//ignore bad proposal values
+					//@see https://bugs.eclipse.org/bugs/show_bug.cgi?id=513146
+					if(typeof pos.offset === "number" && typeof pos.length === "number") {
+						positionGroups.push({positions: [{offset: pos.offset, length: pos.length}]});
+					}
 				});
+				if(positionGroups.length > 0) {
+					this.linkedMode.enterLinkedMode({
+						groups: positionGroups,
+						escapePosition: escapePosition()
+					});
+				} else {
+					this.editor.getTextView().setCaretOffset(escapePosition());
+				}
 			} else if (proposal.groups && proposal.groups.length > 0 && this.linkedMode) {
 				this.linkedMode.enterLinkedMode({
 					groups: proposal.groups,
@@ -992,8 +1026,7 @@ define("orion/editor/actions", [ //$NON-NLS-0$
 				});
 			} else if (typeof proposal.escapePosition === "number") { //$NON-NLS-0$
 				//we don't want linked mode, but there is an escape position, so just set cursor position
-				var textView = this.editor.getTextView();
-				textView.setCaretOffset(proposal.escapePosition);
+				this.editor.getTextView().setCaretOffset(proposal.escapePosition);
 			}
 			return true;
 		},

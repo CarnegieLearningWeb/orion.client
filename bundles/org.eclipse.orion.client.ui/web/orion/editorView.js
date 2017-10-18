@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2016 IBM Corporation and others.
+ * Copyright (c) 2010, 2016, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -14,6 +14,7 @@
 define([
 	'i18n!orion/edit/nls/messages',
 	'orion/editor/editor',
+	'orion/editor/annotations',
 	'orion/editor/eventTarget',
 	'orion/editor/textView',
 	'orion/editor/textModelFactory',
@@ -46,10 +47,10 @@ define([
 	'orion/commonPreferences',
 	'embeddedEditor/helper/memoryFileSysConst',
 	'orion/objects',
-	'orion/formatter'	
+	'orion/formatter'
 ], function(
 	messages,
-	mEditor, mEventTarget, mTextView, mTextModelFactory, mEditorFeatures, mHoverFactory, mContentAssist,
+	mEditor, mAnnotations, mEventTarget, mTextView, mTextModelFactory, mEditorFeatures, mHoverFactory, mContentAssist,
 	mEmacs, mVI, mEditorPreferences, mThemePreferences, mThemeData, EditorSettings,
 	mSearcher, mEditorCommands, mGlobalCommands,
 	mDispatcher, EditorContext, Highlight,
@@ -59,6 +60,7 @@ define([
 ) {
 	var inMemoryFilePattern = memoryFileSysConst.MEMORY_FILE_PATTERN;
 	var Dispatcher = mDispatcher.Dispatcher;
+	var AT = mAnnotations.AnnotationType;
 
 	function parseNumericParams(input, params) {
 		for (var i = 0; i < params.length; i++) {
@@ -220,6 +222,7 @@ define([
 			var inputManager = this.inputManager;
 			inputManager.setAutoLoadEnabled(prefs.autoLoad);
 			inputManager.setAutoSaveTimeout(prefs.autoSave ? prefs.autoSaveTimeout : -1);
+			inputManager.setAutoSyntaxCheck(this.refreshSyntaxCheck, prefs.autoSave ? -1 : 250); // Only auto check syntax when autosave is off
 			inputManager.setFormatOnSave(prefs.formatOnSave ? prefs.formatOnSave : false);
 			if(this.differ) {
 				inputManager.setSaveDiffsEnabled(prefs.saveDiffs);
@@ -237,6 +240,25 @@ define([
 			editor.setFoldingRulerVisible(prefs.foldingRuler);
 			editor.setOverviewRulerVisible(prefs.overviewRuler);
 			editor.setZoomRulerVisible(prefs.zoomRuler);
+			function getTypesVisible(str) {
+				var typesVisible = {};
+				typesVisible[AT.ANNOTATION_CURRENT_SEARCH] = prefs["show" + str + "CurrentSearchAnnotation"];
+				typesVisible[AT.ANNOTATION_MATCHING_SEARCH] = prefs["show" + str + "MatchingSearchAnnotation"];
+				typesVisible[AT.ANNOTATION_READ_OCCURRENCE] = prefs["show" + str + "ReadOccurrenceAnnotation"];
+				typesVisible[AT.ANNOTATION_WRITE_OCCURRENCE] = prefs["show" + str + "WriteOcurrenceAnnotation"];
+				typesVisible[AT.ANNOTATION_ERROR] = prefs["show" + str + "ErrorAnnotation"];
+				typesVisible[AT.ANNOTATION_WARNING] = prefs["show" + str + "WarningAnnotation"];
+				typesVisible[AT.ANNOTATION_INFO] = prefs["show" + str + "InfoAnnotation"];
+				typesVisible[AT.ANNOTATION_TASK] = prefs["show" + str + "TaskAnnotation"];
+				typesVisible[AT.ANNOTATION_BOOKMARK] = prefs["show" + str + "BookmarkAnnotation"];
+				typesVisible[AT.ANNOTATION_MATCHING_BRACKET] = prefs["show" + str + "MatchingBracketAnnotation"];
+				typesVisible[AT.ANNOTATION_CURRENT_BRACKET] = prefs["show" + str + "CurrentBracketAnnotation"];
+				typesVisible[AT.ANNOTATION_CURRENT_LINE] = prefs["show" + str + "CurrentLineAnnotation"];
+				return typesVisible;
+			}
+			editor.setAnnotationTypesVisible(getTypesVisible(""));
+			editor.setOverviewAnnotationTypesVisible(getTypesVisible("Overview"));
+			editor.setTextAnnotationTypesVisible(getTypesVisible("Text"));
 			if (this.renderToolbars) {
 				this.renderToolbars(inputManager.getFileMetadata());
 			}
@@ -264,10 +286,11 @@ define([
 			var inputManager = this.inputManager;
 			if (textView && inputManager) {
 				var metadata = inputManager.getFileMetadata();
+				var storage = util.isElectron ? localStorage : sessionStorage;
 				if (metadata) {
 					evt.session = {
 						get: function() {
-							return sessionStorage.editorViewSection ? JSON.parse(sessionStorage.editorViewSection) : {}; 
+							return storage.editorViewSection ? JSON.parse(storage.editorViewSection) : {}; 
 						},
 						apply: function(animate) {
 							if (!metadata.Location) return;
@@ -276,6 +299,9 @@ define([
 							if (locationSession && locationSession.ETag === metadata.ETag) {
 								editor.setSelections(locationSession.selections);
 								textView.setTopIndex(locationSession.topIndex, animate ? function() {} : undefined);
+							}else if(util.isElectron){
+								delete session[metadata.Location];
+								storage.editorViewSection = JSON.stringify(session);
 							}
 						},
 						save: function() {
@@ -286,7 +312,7 @@ define([
 								topIndex: textView.getTopIndex(),
 								selections: editor.getSelections().map(function(s) { return s.getOrientedSelection(); })
 							};
-							sessionStorage.editorViewSection = JSON.stringify(session);
+							storage.editorViewSection = JSON.stringify(session);
 						}
 					};
 				}
@@ -458,6 +484,17 @@ define([
 				domNode: this._parent,
 				syntaxHighlighter: this.syntaxHighlighter
 			});
+			if(this.preferences) {
+				this.preferences.get("/plugins").then(function(plugins) {
+					if (plugins["collab/plugins/collabPlugin.html"]) {
+						require(['orion/collab/collabClient'], function(mCollabClient){
+							mCollabClient.init(function() {
+								var collab = new mCollabClient.CollabClient(editor, that.inputManager, that.fileClient, that.serviceRegistry, that.commandRegistry, that.preferences);
+							})
+						});
+					}
+				});
+			}
 			editor.id = "orion.editor"; //$NON-NLS-0$
 			editor.processParameters = function(params) {
 				parseNumericParams(params, ["start", "end", "line", "offset", "length"]); //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-5$
@@ -544,7 +581,7 @@ define([
 			}
 			this.refreshSyntaxCheck = function() {
 				syntaxCheck(inputManager.getInput());
-			}
+			};
 			editor.addEventListener("InputChanged", function(evt) {
 				syntaxCheck(evt.title, evt.message, evt.contents);
 			});
@@ -588,7 +625,7 @@ define([
 			 * @since 9.0
 			 */
 			contextImpl.openEditor = function(fileurl, options) {
-				activateContext.openEditor(fileurl, options);
+				return activateContext.openEditor(fileurl, options);
 			};
 			
 			/**

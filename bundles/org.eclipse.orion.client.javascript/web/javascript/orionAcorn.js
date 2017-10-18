@@ -190,7 +190,12 @@ define([
 			if(_a.type === "ArrayExpression") {
 				envs.amd = true;
 				addArrayDeps(_a.elements, deps, "amd"); //$NON-NLS-1$
-			} else if(_a.type === "FunctionExpression" || _a.type === 'ObjectExpression') {
+			} else if(_a.type === "FunctionExpression"){
+				envs.amd = true;
+				if (_a.params && _a.params.length > 0 && _a.params[0].name === 'require'){
+					envs.simplifiedCommonJS = true;
+				}
+			} else if (_a.type === 'ObjectExpression') {
 				envs.amd = true;
 			}
 		}
@@ -311,6 +316,10 @@ define([
 					that.environments.es_modules = true;
 				} else if (type === 'ExportNamedDeclaration' || type === 'ExportDefaultDeclaration' || type === 'ExportAllDeclaration'){
 					that.environments.es_modules = true;
+				} else if(type === "MemberExpression") {
+					if(node.property.name === "exports" && node.object.name === "module") {
+						that.environments.node = true;
+					}
 				}
 				var result = nextMethod.call(this, node, type);
 				// attach trailing comments
@@ -415,7 +424,7 @@ define([
 			options.sourceType = "script"; //$NON-NLS-1$
 		}
 		options.allowHashBang = true;
-		if(typeof options.ecmaVersion !== 'number' || (options.ecmaVersion < 3 || options.ecmaVersion > 7)) {
+		if(typeof options.ecmaVersion !== 'number' || (options.ecmaVersion < 3 || options.ecmaVersion > 9)) {
 			options.ecmaVersion = 7; //don't stomp on the value set in Tern
 		}
 		if (!options.directSourceFile && file) {

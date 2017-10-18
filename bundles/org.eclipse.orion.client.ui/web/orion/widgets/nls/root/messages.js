@@ -98,12 +98,16 @@ define({//Default message bundle
 	"appInfoUnknown": "unknown",
 	"appInfoError": "error",
 	"displayNameSeparator": " on ",
+	"openApp": "Open App",
 	"openAppTooltip": "Open the Deployed App",
-	"openLogsTooltip": "Open the Logs",
+	"openLogs": "Logs",
+	"openLogsTooltip": "Open the Deploy Log",
 	"redeployConfirmationDialogTitle": "Stop and Redeploy?",
 	"redeployConfirmationDialogMessage": "Your application ${0} will be re-deployed.",
 	"redeployConfirmationDialogCheckboxMessage": "Don't ask me again.",
 	"createNewTooltip": "Create a new launch configuration",
 	"back": "< Back",
 	"next": "Next >",
+	"Downloading": "Downloading new version",
+	"Checking for Update": "Checking for Update"
 });

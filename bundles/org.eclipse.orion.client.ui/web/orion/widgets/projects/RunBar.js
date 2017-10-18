@@ -20,8 +20,9 @@ define([
 	'orion/metrics',
 	'orion/webui/dialogs/ConfirmDialog',
 	'orion/URITemplate',
-	'orion/PageLinks'
-], function(objects, messages, RunBarTemplate, lib, i18nUtil, mRichDropdown, mTooltip, mMetrics, mConfirmDialog, URITemplate, PageLinks) {
+	'orion/PageLinks',
+	'orion/Deferred'
+], function(objects, messages, RunBarTemplate, lib, i18nUtil, mRichDropdown, mTooltip, mMetrics, mConfirmDialog, URITemplate, PageLinks, Deferred) {
 	
 	var METRICS_LABEL_PREFIX = "RunBar"; //$NON-NLS-0$
 	var REDEPLOY_RUNNING_APP_WITHOUT_CONFIRMING = "doNotConfirmRedeployRunningApp"; //$NON-NLS-0$
@@ -40,6 +41,7 @@ define([
 	 * @param options.preferencesService
 	 * @param options.statusService
 	 * @param options.actionScopeId
+	 * @param options.generalPreferences
 	 */
 	function RunBar(options) {
 		this._project = null;
@@ -55,8 +57,10 @@ define([
 		this._projectClient = options.projectClient;
 		this._preferences = options.preferences;
 		this._editorInputManager = options.editorInputManager;
+		this._generalPreferences = options.generalPreferences;
 		
 		this._initialize();
+		this._setLaunchConfigurationsLabel(null);
 		this._disableAllControls(); // start with controls disabled until a launch configuration is selected
 	}
 	
@@ -76,12 +80,17 @@ define([
 				this._boundStopButtonListener = this._runBarButtonListener.bind(this, "orion.launchConfiguration.stopApp"); //$NON-NLS-0$
 				this._stopButton.addEventListener("click", this._boundStopButtonListener); //$NON-NLS-0$
 				
-				// set button tooltips
 				var playCommand = this._commandRegistry.findCommand("orion.launchConfiguration.deploy"); //$NON-NLS-0$
+				if (playCommand.name) {
+					this._setNodeName(this._playButton, playCommand.name);
+				}
 				if (playCommand.tooltip) {
 					this._setNodeTooltip(this._playButton, playCommand.tooltip);
 				}
 				var stopCommand = this._commandRegistry.findCommand("orion.launchConfiguration.stopApp"); //$NON-NLS-0$
+				if (stopCommand.name) {
+					this._setNodeName(this._stopButton, stopCommand.name);
+				}
 				if (stopCommand.tooltip) {
 					this._setNodeTooltip(this._stopButton, stopCommand.tooltip);
 				}
@@ -100,11 +109,13 @@ define([
 
 				this._appLink = lib.$(".appLink", this._domNode); //$NON-NLS-0$
 				this._appLink.addEventListener("click", this._boundLinkClickListener); //$NON-NLS-0$
+				this._setNodeName(this._appLink, messages["openApp"]); //$NON-NLS-0$
 				this._setNodeTooltip(this._appLink, messages["openAppTooltip"]); //$NON-NLS-0$
 				this._disableLink(this._appLink);
 				
 				this._logsLink = lib.$(".logsLink", this._domNode); //$NON-NLS-0$
 				this._logsLink.addEventListener("click", this._boundLinkClickListener); //$NON-NLS-0$
+				this._setNodeName(this._logsLink, messages["openLogs"]); //$NON-NLS-0$
 				this._setNodeTooltip(this._logsLink, messages["openLogsTooltip"]); //$NON-NLS-0$
 				this._disableLink(this._logsLink);
 
@@ -112,6 +123,12 @@ define([
 					this._projectClient.getProject(e.metadata).then(function(project) {
 						this.setProject (project);
 					}.bind(this));
+				}.bind(this));
+				
+				window.addEventListener("focus", function() {
+					if (this._authenticationFailed) {
+						this._checkStatus();
+					}
 				}.bind(this));
 			} else {
 				throw new Error("this._domNode is null"); //$NON-NLS-0$
@@ -208,13 +225,24 @@ define([
 					var dropdownMenuItemSpan = lib.$(".dropdownMenuItem", createNewItem); //$NON-NLS-0$
 					dropdownMenuItemSpan.classList.add("addNewMenuItem"); //$NON-NLS-0$
 					
-					var defaultDeployCommand = this._projectCommands.getDeployProjectCommands(this._commandRegistry)[0];
-					if (defaultDeployCommand) {
-						this._commandRegistry.registerCommandContribution(createNewItem.id, defaultDeployCommand.id, 1); //$NON-NLS-0$
+					var defaultDeployCommands = this._projectCommands.getDeployProjectCommands(this._commandRegistry);
+					if (defaultDeployCommands) {
 						domNodeWrapperList = [];
-						this._commandRegistry.renderCommands(createNewItem.id, dropdownMenuItemSpan, this._project, this, "button", null, domNodeWrapperList); //$NON-NLS-0$
-						domNodeWrapperList[0].domNode.textContent = "+"; //$NON-NLS-0$
-						this._setNodeTooltip(domNodeWrapperList[0].domNode, messages["createNewTooltip"]); //$NON-NLS-0$
+						if (defaultDeployCommands.length === 1) {
+							this._commandRegistry.registerCommandContribution(createNewItem.id, defaultDeployCommands[0].id, 1);
+							this._commandRegistry.renderCommands(createNewItem.id, dropdownMenuItemSpan, this._project, this, "button", null, domNodeWrapperList);
+							domNodeWrapperList[0].domNode.textContent = "+";
+							this._setNodeTooltip(domNodeWrapperList[0].domNode, defaultDeployCommands[0].tooltip);
+						} else {
+							this._commandRegistry.addCommandGroup(createNewItem.id, "orion.deployServiceGroup", 1000, "+", null, null, null, "+", null, true);
+							for (var i = 0; i < defaultDeployCommands.length; i++) {
+								this._commandRegistry.registerCommandContribution(createNewItem.id, defaultDeployCommands[i].id, 1100 + i * 100, "orion.deployServiceGroup");
+							}
+							var menuWrapper = document.createElement('div');
+							menuWrapper.classList.add('dropdownSubMenu'); // Prevent auto dismiss
+							dropdownMenuItemSpan.appendChild(menuWrapper);
+							this._commandRegistry.renderCommands(createNewItem.id, menuWrapper, this._project, this, "tool", null, domNodeWrapperList);
+						}
 					}
 				}
 			}.bind(this);
@@ -302,6 +330,12 @@ define([
 			var newConfig = evnt.newValue;
 			
 			if((evnt.type === "changeState") && newConfig){ //$NON-NLS-0$
+				this._logsLink.classList.remove('logStatusProgress');
+				if (newConfig && newConfig.status){
+					if (newConfig.status.State === "PROGRESS"){
+						this._logsLink.classList.add('logStatusProgress');
+					}
+				}
 				this._updateLaunchConfiguration(newConfig);
 			} else {
 				this._menuItemsCache = []; // clear launch configurations menu items cache
@@ -432,7 +466,7 @@ define([
 									this._commandRegistry.runCommand("orion.launchConfiguration.checkStatus", launchConfiguration, this, null, null, this._statusLight); //$NON-NLS-0$
 								} else {
 									if(error.Alert && error.Alert === true)
-										this._progressService.setProgressResult(error.Message);
+										this._progressService.setProgressResult(error);
 									this._launchConfigurationDispatcher.dispatchEvent({type: "changeState", newValue: launchConfiguration}); //$NON-NLS-0$
 								}
 							}.bind(this)
@@ -443,6 +477,7 @@ define([
 		},
 		
 		setStatus: function(_status) {
+			this._authenticationFailed = false;
 			var longStatusText = null;
 			var tooltipText = "";
 			var uriTemplate = null;
@@ -476,7 +511,7 @@ define([
 					
 					if (!_status.error.Retry) {
 						// this is a real error
-						if (_status.error.Message) {
+						if (_status.error.Message && !_status.error.HTML) {
 							longStatusText = _status.error.Message;
 						}
 					}
@@ -495,6 +530,11 @@ define([
 							this._enableControl(this._playButton);
 							this._statusLight.classList.add("statusLightRed"); //$NON-NLS-0$
 							break;
+						case "PAUSED": //$NON-NLS-0$
+							this._enableControl(this._playButton);
+							this._enableControl(this._stopButton);
+							this._statusLight.classList.add("statusLightAmber"); //$NON-NLS-0$
+							break;
 						default:
 							break;
 					}
@@ -503,6 +543,9 @@ define([
 				
 				if (!_status.error && ("PROGRESS" !== _status.State)) {
 					this._startStatusPolling();
+				} else if (_status.error && _status.error.HttpCode === 401) {
+					this._authenticationFailed = true;
+					this._stopStatusPolling();
 				}
 			}
 			
@@ -568,7 +611,8 @@ define([
 					if (_status.error.Retry) {
 						appInfoText = _status.ShortMessage || messages["appInfoUnknown"]; //$NON-NLS-0$
 					} else {
-						appInfoText = _status.ShortMessage || _status.error.Message || messages["appInfoError"]; //$NON-NLS-0$
+						appInfoText = _status.ShortMessage || _status.error.ShortMessage ||
+							(!_status.error.HTML && _status.error.Message) || messages["appInfoError"]; //$NON-NLS-0$
 					}
 				} else {
 					switch (_status.State) {
@@ -703,14 +747,36 @@ define([
 		
 		_enableControl: function(domNode) {
 			domNode.classList.remove("disabled"); //$NON-NLS-0$
+			domNode.removeAttribute("disabled"); //$NON-NLS-0$
+			domNode.removeAttribute("aria-disabled"); //$NON-NLS-0$
 		},
 		
 		_disableControl: function(domNode) {
 			domNode.classList.add("disabled"); //$NON-NLS-0$
+			domNode.setAttribute("disabled", "true"); //$NON-NLS-0$ //$NON-NLS-1$
+			domNode.setAttribute("aria-disabled", "true"); //$NON-NLS-0$ //$NON-NLS-1$
 		},
 		
 		_isEnabled: function(domNode) {
 			return !domNode.classList.contains("disabled"); //$NON-NLS-0$
+		},
+		
+		_disableSwitch: function(wrapperNode){
+			this._disableControl(wrapperNode);
+			
+			var switchNode = lib.$("div.orionSwitch", wrapperNode); //$NON-NLS-0$
+			if (switchNode) {
+				switchNode.removeAttribute("tabindex"); //$NON-NLS-0$
+			}
+		},
+		
+		_enableSwitch: function(wrapperNode){
+			this._enableControl(wrapperNode);
+			
+			var switchNode = lib.$("div.orionSwitch", wrapperNode); //$NON-NLS-0$
+			if (switchNode) {
+				switchNode.setAttribute("tabindex", "0"); //$NON-NLS-0$ //$NON-NLS-1$
+			}
 		},
 		
 		_enableLink: function(linkNode, href) {
@@ -733,6 +799,10 @@ define([
 			var disabled = this._isLinkDisabled(domNode) ? ".disabled" : ""; //$NON-NLS-1$ //$NON-NLS-0$
 			
 			mMetrics.logEvent("ui", "invoke", METRICS_LABEL_PREFIX + "." + id +".clicked" + disabled, evnt.which); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+		},
+		
+		_setNodeName: function(domNode, text) {
+			domNode.setAttribute("aria-label", text);  //$NON-NLS-0$
 		},
 		
 		_setNodeTooltip: function(domNode, text) {
@@ -797,7 +867,7 @@ define([
 				this._launchConfigurationsLabel.appendChild(this._appName);
 				this._launchConfigurationsLabel.appendChild(this._appInfoSpan);
 			} else {
-				this._setText(this._launchConfigurationsLabel, this._project ? messages["selectLaunchConfig"] : null); //$NON-NLS-0$
+				this._setText(this._launchConfigurationsLabel, messages["selectLaunchConfig"]); //$NON-NLS-0$
 			}
 		},
 		
@@ -883,23 +953,27 @@ define([
 			this._launchConfigurationsDropdownTriggerButton.disabled = true;
 		},
 		
+		_checkStatus: function() {
+			var launchConfiguration = this._selectedLaunchConfiguration;
+			if (!launchConfiguration) {
+				this._stopStatusPolling();
+				return;
+			}
+			var startTime = Date.now();
+			this._checkLaunchConfigurationStatus(launchConfiguration).then(function(_status) {
+				var interval = Date.now() - startTime;
+				mMetrics.logTiming("deployment", "check status (poll)", interval, launchConfiguration.Type); //$NON-NLS-1$ //$NON-NLS-2$
+
+				if (_status) {
+					launchConfiguration.status = _status;
+				}
+				this._updateLaunchConfiguration(launchConfiguration);
+			}.bind(this));
+		},
+		
 		_startStatusPolling: function() {
 			if (!this._statusPollingIntervalID) {
-				this._statusPollingIntervalID = window.setInterval(function(){
-					var launchConfiguration = this._selectedLaunchConfiguration;
-					if (!launchConfiguration) {
-						this._stopStatusPolling();
-						return;
-					}
-					var startTime = Date.now();
-					this._checkLaunchConfigurationStatus(launchConfiguration).then(function(_status) {
-						var interval = Date.now() - startTime;
-						mMetrics.logTiming("deployment", "check status (poll)", interval, launchConfiguration.Type); //$NON-NLS-1$ //$NON-NLS-2$
-
-						launchConfiguration.status = _status;
-						this._updateLaunchConfiguration(launchConfiguration);
-					}.bind(this));
-				}.bind(this), STATUS_POLL_INTERVAL_MS);
+				this._statusPollingIntervalID = window.setInterval(this._checkStatus.bind(this), STATUS_POLL_INTERVAL_MS);
 			}
 		},
 		
@@ -910,7 +984,7 @@ define([
 			}
 		}
 	});
-	
+
 	return {
 		RunBar: RunBar,
 		METRICS_LABEL_PREFIX: METRICS_LABEL_PREFIX

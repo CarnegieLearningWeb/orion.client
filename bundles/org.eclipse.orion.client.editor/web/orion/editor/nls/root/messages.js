@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2012 IBM Corporation and others.
+ * Copyright (c) 2010, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -19,6 +19,7 @@ define({//Default message bundle
 	"task": "Task", //$NON-NLS-1$ //$NON-NLS-0$
 	"error": "Error", //$NON-NLS-1$ //$NON-NLS-0$
 	"warning": "Warning", //$NON-NLS-1$ //$NON-NLS-0$
+	"info": "Info", //$NON-NLS-1$ //$NON-NLS-0$
 	"currentSearch": "Current Search", //$NON-NLS-1$ //$NON-NLS-0$
 	"currentLine": "Current Line", //$NON-NLS-1$ //$NON-NLS-0$
 	"matchingBracket": "Matching Bracket", //$NON-NLS-1$ //$NON-NLS-0$
@@ -26,7 +27,7 @@ define({//Default message bundle
 	"diffAdded": "Diff Added Lines", //$NON-NLS-1$ //$NON-NLS-0$
 	"diffDeleted": "Diff Deleted Lines", //$NON-NLS-1$ //$NON-NLS-0$
 	"diffModified": "Diff Modified Lines", //$NON-NLS-1$ //$NON-NLS-0$
-	
+	"collabLineChanged": "Collab Line Changed", //$NON-NLS-1$ //$NON-NLS-0$
 	"lineUp": "Line Up", //$NON-NLS-1$ //$NON-NLS-0$
 	"lineDown": "Line Down", //$NON-NLS-1$ //$NON-NLS-0$
 	"lineStart": "Line Start", //$NON-NLS-1$ //$NON-NLS-0$
@@ -153,10 +154,10 @@ define({//Default message bundle
 	"viDown": "${0} Down", //$NON-NLS-1$ //$NON-NLS-0$
 	"viw": "${0} Next Word", //$NON-NLS-1$ //$NON-NLS-0$
 	"vib": "${0} Beginning of Word", //$NON-NLS-1$ //$NON-NLS-0$
-	"viW": "${0} Next Word (ws stop)", //$NON-NLS-1$ //$NON-NLS-0$
-	"viB": "${0} Beginning of Word (ws stop)", //$NON-NLS-1$ //$NON-NLS-0$
+	"viW": "${0} Next Word (ws stop)", //$NON-NLS-1$ //$NON-NLS-0$ // ws stop refers to word space (next blank space delimited word)
+	"viB": "${0} Beginning of Word (ws stop)", //$NON-NLS-1$ //$NON-NLS-0$ // ws stop refers to word space (next blank space delimited word)
 	"vie": "${0} End of Word", //$NON-NLS-1$ //$NON-NLS-0$
-	"viE": "${0} End of Word (ws stop)", //$NON-NLS-1$ //$NON-NLS-0$
+	"viE": "${0} End of Word (ws stop)", //$NON-NLS-1$ //$NON-NLS-0$ // ws stop refers to word space (next blank space delimited word)
 	"vi$": "${0} End of the line", //$NON-NLS-1$ //$NON-NLS-0$
 	"vi^_": "${0} First non-blank Char Current Line", //$NON-NLS-1$ //$NON-NLS-0$
 	"vi+": "${0} First Char Next Line", //$NON-NLS-1$ //$NON-NLS-0$
@@ -198,9 +199,11 @@ define({//Default message bundle
 	"findWith": "Find With", //$NON-NLS-1$ //$NON-NLS-0$
 	"replaceWith": "Replace With", //$NON-NLS-1$ //$NON-NLS-0$
 	"caseInsensitive": "Aa", //$NON-NLS-1$ //$NON-NLS-0$
+	"selectedLines": "Sel", //$NON-NLS-1$ //$NON-NLS-0$
 	"regex": "/.*/", //$NON-NLS-1$ //$NON-NLS-0$
 	"wholeWord": "\\b", //$NON-NLS-1$ //$NON-NLS-0$
 	"caseInsensitiveTooltip": "Toggle Case Insensitive", //$NON-NLS-1$ //$NON-NLS-0$
+	"selectedLinesTooltip": "Toggle Search Scope On Selected Lines", //$NON-NLS-1$ //$NON-NLS-0$
 	"regexTooltip": "Toggle Regular Expression", //$NON-NLS-1$ //$NON-NLS-0$
 	"wholeWordTooltip": "Toggle Whole Word", //$NON-NLS-1$ //$NON-NLS-0$
 	"closeTooltip": "Close", //$NON-NLS-1$ //$NON-NLS-0$

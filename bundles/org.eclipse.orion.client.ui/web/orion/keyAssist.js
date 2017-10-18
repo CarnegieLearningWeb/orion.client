@@ -14,10 +14,11 @@ define([
 	'i18n!orion/nls/messages',
 	'orion/webui/littlelib',
 	'orion/keyBinding',
+	'orion/commands',
 	'orion/metrics',
 	'orion/uiUtils',
 	'orion/util'
-], function (messages, lib, keyBinding, metrics, UIUtil, util) {
+], function (messages, lib, keyBinding, mCommands, metrics, UIUtil, util) {
 
 	function KeyAssistPanel(options) {
 		this.commandRegistry = options.commandRegistry;
@@ -179,11 +180,11 @@ define([
 			var formatKBEdit = function(e) {
 				this._keyCode = e.keyCode;
 				this._altDown = e.altKey;
-				this._ctrlDown = e.ctrlKey;
+				this._ctrlDown = util.isMac ? e.metaKey : e.ctrlKey;
 				this._shiftDown = e.shiftKey;
-				this._commandDown = e.metaKey;
+				this._commandDown = util.isMac ? e.ctrlKey : e.metaKey;
 				
-				var testBinding = new keyBinding.KeyStroke(this._keyCode, e.ctrlKey, e.shiftKey, e.altKey, e.metaKey);
+				var testBinding = new keyBinding.KeyStroke(this._keyCode, this._ctrlDown, this._shiftDown, this._altDown, this._commandDown);
 				var bindingString = UIUtil.getUserKeyString(testBinding);
 				this.keyAssistKBEdit.value = bindingString;
 			}.bind(this);
@@ -232,8 +233,8 @@ define([
 				}
 				else if (e.keyCode === lib.KEY.ENTER) {
 					if (this._keyCode) {
-						// First see if this is a valid binding...at least one modifier and a keyCode
-						if (this._keyCode && (this._altDown || this._ctrlDown || this._shiftDown || this._commandDown)) {
+						// Ensure there's a keyCode
+						if (this._keyCode) {
 							// remember the override
 							var newBinding = new keyBinding.KeyStroke(this._keyCode, this._ctrlDown, this._shiftDown, this._altDown, this._commandDown);
 							this.commandRegistry.createBindingOverride(row.cmdID, newBinding, row.curBinding);
@@ -425,7 +426,27 @@ define([
 		}
 	};
 
+	function createCommand(keyAssist, scopeId, commandRegistry) {
+		var keyAssistCommand = new mCommands.Command({
+			name: messages["Show Keys"],
+			tooltip: messages["ShowAllKeyBindings"],
+			id: "orion.keyAssist", //$NON-NLS-0$
+			callback: function () {
+				if (keyAssist.isVisible()) {
+					keyAssist.hide();
+				} else {
+					keyAssist.show();
+				}
+				return true;
+			}
+		});
+		commandRegistry.addCommand(keyAssistCommand);
+		commandRegistry.registerCommandContribution(scopeId, "orion.keyAssist", 100, null, true, new keyBinding.KeyBinding(191, false, true, !util.isMac, util.isMac)); //$NON-NLS-1$ //$NON-NLS-0$
+		
+		return keyAssistCommand;
+	}
 	return {
-		KeyAssistPanel: KeyAssistPanel
+		KeyAssistPanel: KeyAssistPanel,
+		createCommand: createCommand
 	};
 });

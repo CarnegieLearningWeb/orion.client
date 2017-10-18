@@ -1,5 +1,8 @@
 /*eslint-env amd */
-define(function(module) {
+define([
+	'i18n!javascript/nls/problems',
+	'module'
+], function(ProblemMessages, module) {
 	/**
 	 * @fileoverview Rule to flag use of an object property of the global object (Math and JSON) as a function
 	 * @author James Allardice
@@ -11,17 +14,20 @@ define(function(module) {
 		double: {
 			quote: "\"",
 			alternateQuote: "'",
-			description: "doublequote"
+			description: "doublequote",
+			nlsDescription: ProblemMessages.doublequote
 		},
 		single: {
 			quote: "'",
 			alternateQuote: "\"",
-			description: "singlequote"
+			description: "singlequote",
+			nlsDescription: ProblemMessages.singlequote
 		},
 		backtick: {
 			quote: "`",
 			alternateQuote: "\"",
-			description: "backtick"
+			description: "backtick",
+			nlsDescription: ProblemMessages.backtick
 		}
 	};
 
@@ -158,7 +164,7 @@ define(function(module) {
 					if (!isValid) {
 						var data = Object.create(null);
 						data.quote = QUOTE_SETTINGS[quoteOption].quote;
-						context.report(node,"Strings must use " + settings.description + ".", {data: data});
+						context.report(node, settings.nlsDescription, {data: data});
 					}
 				}
 			},
@@ -176,7 +182,7 @@ define(function(module) {
 					var data = Object.create(null);
 					data.quote = QUOTE_SETTINGS[quoteOption].quote;
 					data.oldQuote = '`';
-					context.report(node,"Strings must use " + settings.description + ".", {data: data});
+					context.report(node, settings.nlsDescription, {data: data});
 				}
 			}
 		};

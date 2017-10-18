@@ -56,10 +56,10 @@ mBootstrap.startup().then(function(core) {
 	var serviceRegistry = core.serviceRegistry;
 	var preferences = core.preferences;
 	
-	new mDialogs.DialogService(serviceRegistry);
 	var selection = new mSelection.Selection(serviceRegistry);
-	new mSshTools.SshService(serviceRegistry);
 	var commandRegistry = new mCommandRegistry.CommandRegistry({selection: selection});
+	new mDialogs.DialogService(serviceRegistry, commandRegistry);
+	new mSshTools.SshService(serviceRegistry);
 	var operationsClient = new mOperationsClient.OperationsClient(serviceRegistry);
 	var progress = new mProgress.ProgressService(serviceRegistry, operationsClient, commandRegistry);
 	var statusService = new mStatus.StatusReportingService(serviceRegistry, operationsClient, "statusPane", "notifications", "notificationArea"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
@@ -95,12 +95,12 @@ mBootstrap.startup().then(function(core) {
 		commandRegistry.processURL(window.location.href);
 	}
 	
-	function loadWorspace() {
-		return progress.progress(fileClient.loadWorkspace(), messages["Loading default workspace"]); //$NON-NLS-0$
+	function loadWorkspace(resource) {
+		return progress.progress(fileClient.getWorkspace(resource), messages["Loading default workspace"]); //$NON-NLS-0$
 	}
 	
-	loadWorspace().then(function(workspace){
-		explorer.setDefaultPath(workspace.Location);
+	loadWorkspace(params.resource || params.workspace).then(function(workspace){
+		explorer.setWorkspace(workspace);
 		
 		var projectDescription = {};
 		for(var k in params){
@@ -134,8 +134,8 @@ mBootstrap.startup().then(function(core) {
 		if(previousResourceValue !== resource){
 			previousResourceValue = resource;
 		
-			loadWorspace().then(function(workspace){
-				explorer.setDefaultPath(workspace.Location);
+			loadWorkspace(resource || params.workspace).then(function(workspace){
+				explorer.setWorkspace(workspace);
 				explorer.redisplay();
 			});
 		}

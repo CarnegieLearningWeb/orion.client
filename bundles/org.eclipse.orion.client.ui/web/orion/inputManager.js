@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2016 IBM Corporation and others.
+ * Copyright (c) 2010, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -20,8 +20,9 @@ define([
 	'orion/objects',
 	'orion/PageUtil',
 	'orion/editor/textModelFactory',
+	'orion/formatter',
 	'orion/metrics'
-], function(messages, mNavigatorRenderer, i18nUtil, Deferred, EventTarget, objects, PageUtil, mTextModelFactory, mMetrics) {
+], function(messages, mNavigatorRenderer, i18nUtil, Deferred, EventTarget, objects, PageUtil, mTextModelFactory, mFormatter, mMetrics) {
 
 	function Idle(options){
 		this._document = options.document || document;
@@ -140,6 +141,11 @@ define([
 		this.progressService = options.progressService;
 		this.contentTypeRegistry = options.contentTypeRegistry;
 		this.selection = options.selection;
+		this.reveal = options.reveal;
+		this.isUnsavedWarningNeeed = options.isUnsavedWarningNeeed;
+		this.confirm = options.confirm;
+		this.generalPreferences = options.generalPreferences || {};
+		this.isEditorTabsEnabled = options.isEditorTabsEnabled || false;
 		this._input = this._title = "";
 		if (this.fileClient) {
 			this.fileClient.addEventListener("Changed", function(evt) { //$NON-NLS-0$
@@ -160,6 +166,7 @@ define([
 				}
 			}.bind(this));
 		}
+		this.syncEnabled = true;
 	}
 	objects.mixin(InputManager.prototype, /** @lends orion.editor.InputManager.prototype */ {
 		/**
@@ -219,11 +226,21 @@ define([
 					progress(fileClient.read(resource, true), messages.ReadingMetadata, fileURI).then(function(data) {
 						if (this._fileMetadata && !this._fileMetadata._saving && this._fileMetadata.Location === data.Location && this._fileMetadata.ETag !== data.ETag) {
 							this._fileMetadata = objects.mixin(this._fileMetadata, data);
-							if (!editor.isDirty() || window.confirm(messages.loadOutOfSync)) {
+							var doSync = function(){
 								progress(fileClient.read(resource), messages.Reading, fileURI).then(function(contents) {
 									editor.setInput(fileURI, null, contents, null, nofocus);
 									this._clearUnsavedChanges();
 								}.bind(this));
+							};
+							if (this.syncEnabled && !editor.isDirty()){
+								doSync();
+							}else{
+								var dialog = this.serviceRegistry.getService("orion.page.dialog");
+								dialog.confirm(messages.loadOutOfSync,function(result){
+									if(this.syncEnabled && result){
+										doSync();
+									}
+								});
 							}
 						}
 					}.bind(this));
@@ -239,6 +256,8 @@ define([
 						window.clearTimeout(progressTimeout);
 					}
 				}.bind(this);
+				// Read metadata
+				var metadataURI = resource;
 				var errorHandler = function(error) {
 					clearProgressTimeout();
 					var statusService = null;
@@ -248,11 +267,9 @@ define([
 						statusService = this.statusService;
 					}
 					handleError(statusService, error);
-					this._setNoInput(true);
+					this._setNoInput(metadataURI);
 				}.bind(this);
 				this._acceptPatch = null;
-				// Read metadata
-				var metadataURI = resource;
 				if (!this._isSameParent(metadataURI)) {
 					var uri = new URL(metadataURI);
 					uri.query.set("tree", localStorage.useCompressedTree ? "compressed" : "decorated"); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
@@ -351,11 +368,11 @@ define([
 		onFocus: function() {
 			// If there was an error while auto saving, auto save is temporarily disabled and
 			// we retry saving every time the editor gets focus
-			if (this._autoSaveEnabled && this._errorSaving) {
+			if (this._autoSaveEnabled && this._errorSaving && this.syncEnabled) {
 				this.save();
 				return;
 			}
-			if (this._autoLoadEnabled && this._fileMetadata) {
+			if (this._autoLoadEnabled && this._fileMetadata && this.syncEnabled) {
 				this.load();
 			}
 		},
@@ -370,7 +387,6 @@ define([
 			var metadata = this.getFileMetadata();
 			if (!metadata) return new Deferred().reject();
 			if (metadata._saving) { return metadata._savingDeferred; }
-			var that = this;
 			metadata._savingDeferred = new Deferred();
 			metadata._saving = true;
 			function done(result) {
@@ -381,7 +397,7 @@ define([
 				return deferred;
 			}
 			var editor = this.getEditor();
-			if (!editor || !editor.isDirty() || this.getReadOnly()) { return done(); }
+			if (!this.syncEnabled || !editor || !editor.isDirty() || this.getReadOnly()) { return done(); }
 			var failedSaving = this._errorSaving;
 			var input = this.getInput();
 			this.reportStatus(messages['Saving...']);
@@ -451,17 +467,18 @@ define([
 					// expected error - HTTP 412 Precondition Failed
 					// occurs when file is out of sync with the server
 					if (error.status === 412) {
-						var forceSave = window.confirm(messages.saveOutOfSync);
-						if (forceSave) {
-							// repeat save operation, but without ETag
-							var redef = that.fileClient.write(resource, contents);
-							if (progress) {
-								redef = progress.progress(redef, i18nUtil.formatMessage(messages.savingFile, input));
+						var dialog = that.serviceRegistry.getService("orion.page.dialog");	
+						dialog.confirm(messages.saveOutOfSync,function(result){
+							if(result){
+								var redef = that.fileClient.write(resource, contents);
+								if (progress) {
+									redef = progress.progress(redef, i18nUtil.formatMessage(messages.savingFile, input));
+								}
+								redef.then(successHandler, errorHandler);
+							}else{
+								return done();
 							}
-							redef.then(successHandler, errorHandler);
-						} else {
-							return done();
-						}
+						});
 					} else {
 						// unknown error
 						errorHandler(error);
@@ -471,7 +488,9 @@ define([
 			}
 
 			if (this.getFormatOnSaveEnabled()) {
-				return new mFormatter.Formatter(this.serviceRegistry, this, editor).doFormat().then(function() {return _save(this);}.bind(this));
+				return this._formatter.doFormat().then(function() {
+					return _save(this);
+				}.bind(this));
 			}
 			return _save(this);
 		},
@@ -493,7 +512,7 @@ define([
 				};
 				this._idle = new Idle(options);
 				this._idle.addEventListener("Idle", function () { //$NON-NLS-0$
-					if (!this._errorSaving) {
+					if (!this._errorSaving && this.syncEnabled) {
 						this._autoSaveActive = true;
 						this.save().then(function() {
 							this._autoSaveActive = false;
@@ -502,6 +521,40 @@ define([
 				}.bind(this));
 			} else {
 				this._idle.setTimeout(timeout);
+			}
+		},
+		/**
+		 * Set the auto syntax check timeout. Recommended this is only set when autosave is turned off
+		 * because save operations will already run the syntax checker.
+		 * 
+		 * @param syntaxChecker {Function} Function that will execute the syntax check
+		 * @param timeout {Number} How long to idle before syntax checking in milliseconds, -1 to disable
+		 */
+		setAutoSyntaxCheck: function(syntaxChecker, timeout) {
+			var time = timeout;
+			if (!syntaxChecker){
+				time = -1;
+			}
+			this._autoSyntaxEnabled = time !== -1;
+			this._autoSyntaxActive = false;
+			if (!this._idle2) {
+				var options = {
+					document: document,
+					timeout: time
+				};
+				this._idle2 = new Idle(options);
+				this._idle2.addEventListener("Idle", function () { //$NON-NLS-0$
+					if (this.editor){
+						this._autoSyntaxActive = true;
+						if (this.editor._isSyntaxCheckRequired()){
+							syntaxChecker();
+							this.editor._setSyntaxCheckRequired(false);
+							this._autoSyntaxActive = false;
+						}
+					}
+				}.bind(this));
+			} else {
+				this._idle2.setTimeout(time);
 			}
 		},
 		setFormatOnSave: function(enabled) {
@@ -530,70 +583,103 @@ define([
 			}
 			var input = PageUtil.matchResourceParameters(loc), oldInput = this._parsedLocation || {};
 			var encodingChanged = oldInput.encoding !== input.encoding;
-			if (editor && editor.isDirty()) {
+			var afterConfirm = function(){
+				var editorChanged = editor && oldInput.editor !== input.editor;
+				this._location = loc;
+				this._parsedLocation = input;
+				this._ignoreInput = true;
+				if(this.selection) {
+					this.selection.setSelections(loc);
+				}
+				this._ignoreInput = false;
+				var evt = {
+					type: "InputChanging", //$NON-NLS-0$
+					input: input
+				};
+				this.dispatchEvent(evt);
+				function saveSession() {
+					if (evt.session) {
+						evt.session.save();
+					}
+				}
+				var fileURI = input.resource;
+				if (evt.metadata) {
+					saveSession();
+					this.reportStatus("");
+					this._input = fileURI;
+					var metadata = evt.metadata;
+					this._setInputContents(input, fileURI, null, metadata, false, true);
+					return;
+				}
+				if (fileURI) {
+					if (fileURI === this._input && !encodingChanged) {
+						if (editorChanged) {
+							this.reportStatus("");
+							this._setInputContents(input, fileURI, null, this._fileMetadata, this._isText(this._fileMetadata));
+						} else {
+							if (!this.processParameters(input)) {
+								if (evt.session) {
+									evt.session.apply(true);
+								}
+							}
+						}
+					} else {
+						saveSession();
+						this._input = fileURI;
+						this._readonly = false;
+						this._lastMetadata = this._fileMetadata;
+						this._fileMetadata = null;
+						this.load(input.encoding);
+					}
+				} else {
+					saveSession();
+					this._setNoInput("");
+				}
+			}.bind(this);
+			if (editor && editor.isDirty() && !this.isEditorTabsEnabled) {
 				var oldLocation = this._location;
 				var oldResource = oldInput.resource;
 				var newResource = input.resource;
 				if (oldResource !== newResource || encodingChanged) {
 					if (this._autoSaveEnabled) {
 						this.save();
-					} else if (!window.confirm(messages.confirmUnsavedChanges)) {
-						window.location.hash = oldLocation;
-						return;
+						afterConfirm();
+					} else if(this.syncEnabled && this.isUnsavedWarningNeeed()) {
+						var cancelCallback = function() {
+							window.location.hash = oldLocation;
+							this.reveal(this.getFileMetadata());
+							return;
+						}.bind(this);
+						this.confirmUnsavedChanges(afterConfirm, cancelCallback);
+					}else{
+						afterConfirm();
 					}
 				}
+			}else{
+				afterConfirm();
 			}
-			var editorChanged = editor && oldInput.editor !== input.editor;
-			this._location = loc;
-			this._parsedLocation = input;
-			this._ignoreInput = true;
-			if(this.selection) {
-				this.selection.setSelections(loc);
-			}
-			this._ignoreInput = false;
-			var evt = {
-				type: "InputChanging", //$NON-NLS-0$
-				input: input
-			};
-			this.dispatchEvent(evt);
-			function saveSession() {
-				if (evt.session) {
-					evt.session.save();
-				}
-			}
-			var fileURI = input.resource;
-			if (evt.metadata) {
-				saveSession();
-				this.reportStatus("");
-				this._input = fileURI;
-				var metadata = evt.metadata;
-				this._setInputContents(input, fileURI, null, metadata);
-				return;
-			}
-			if (fileURI) {
-				if (fileURI === this._input && !encodingChanged) {
-					if (editorChanged) {
-						this.reportStatus("");
-						this._setInputContents(input, fileURI, null, this._fileMetadata, this._isText(this._fileMetadata));
-					} else {
-						if (!this.processParameters(input)) {
-							if (evt.session) {
-								evt.session.apply(true);
-							}
-						}
-					}
-				} else {
-					saveSession();
-					this._input = fileURI;
-					this._readonly = false;
-					this._lastMetadata = this._fileMetadata;
-					this._fileMetadata = null;
-					this.load(input.encoding);
-				}
-			} else {
-				saveSession();
-				this._setNoInput(true);
-			}
+		},
+		confirmUnsavedChanges: function(afterConfirm, cancelCallback, targetNode) {
+			this.confirm(messages.confirmUnsavedChanges,
+				[{
+					label:messages["Yes"],
+					callback:function(){
+						this.save();
+						afterConfirm();
+					}.bind(this),
+					type:"ok"
+				},{
+					label:messages["No"],
+					callback:function(){
+						afterConfirm();
+					},
+					type:"ok"
+				},{
+					label:messages["Cancel"],
+					callback: cancelCallback,
+					type:"cancel"
+				}],
+				targetNode);
 		},
 		setTitle: function(title) {
 			var indexOfSlash = title.lastIndexOf("/"); //$NON-NLS-0$
@@ -649,20 +735,13 @@ define([
 			var textPlain = this.contentTypeRegistry.getContentType("text/plain"); //$NON-NLS-0$
 			return this.contentTypeRegistry.isExtensionOf(contentType, textPlain);
 		},
-		_setNoInput: function(loadRoot) {
-			if (loadRoot) {
-				this.fileClient.loadWorkspace("").then(function(root) {
-					this._input = root.ChildrenLocation;
-					this._setInputContents(root.ChildrenLocation, null, root, root);
-				}.bind(this));
-				return;
-			}
-			// No input, no editor.
-			this._input = this._title = this._fileMetadata = null;
-			this.setContentType(null);
-			this.dispatchEvent({ type: "InputChanged", input: null }); //$NON-NLS-0$
+		_setNoInput: function(resource) {
+			this.fileClient.getWorkspace(resource).then(function(workspace) {
+				this._input = workspace.ChildrenLocation;
+				this._setInputContents(workspace.ChildrenLocation, null, workspace, workspace);
+			}.bind(this));
 		},
-		_setInputContents: function(input, title, contents, metadata, noSetInput) {
+		_setInputContents: function(input, title, contents, metadata, noSetInput, isCachedContent) {
 			var _name, isDir = false;
 			if (metadata) {
 				this._fileMetadata = metadata;
@@ -691,15 +770,21 @@ define([
 				title: title,
 				contentType: this.getContentType(),
 				metadata: metadata,
-				location: window.location,
+				location: this._location,
 				contents: contents
 			};
 			this._logMetrics("open"); //$NON-NLS-0$
 			this.dispatchEvent(evt);
 			this.editor = editor = evt.editor;
+			this._formatter = new mFormatter.Formatter(this.serviceRegistry, this, editor);
 			if (!isDir) {
 				if (!noSetInput) {
 					editor.setInput(title, null, contents);
+					if (isCachedContent) {
+						// Check server for updated content.
+						this.load();
+					}
+
 				}
 				if (editor && editor.getTextView && editor.getTextView()) {
 					var textView = editor.getTextView();
@@ -708,12 +793,17 @@ define([
 						editor.getModel().setModelData({	 metadata: metadata});
 					}
 				}
-				this._clearUnsavedChanges();
+				if (!this.isEditorTabsEnabled) {
+					this._clearUnsavedChanges();
+				}
 				if (!this.processParameters(input)) {
 					if (evt.session) {
 						evt.session.apply();
 					}
 				}
+				evt = {};
+				evt.type = 'InputContentsSet';
+				this.editor.dispatchEvent(evt);
 			}
 
 			this._saveEventLogged = false;

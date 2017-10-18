@@ -49,10 +49,14 @@ define([
 			}
 			return null;
 		},
+		/**
+		 * Used to update "selectd" and "project" search scope based on the file or folder selected.
+		 */
 		setLocationByMetaData: function(meta, useParentLocation){
 			var locationName = "";
 			var noneRootMeta = null;
-			this._searchRootLocation = this._fileClient.fileServiceRootURL(meta.Location);
+			this._setLocationbyURL(meta);
+			this._searchRootLocation = meta.WorkspaceLocation || this._fileClient.fileServiceRootURL(meta.Location);
 			if(useParentLocation && meta && meta.Parents && meta.Parents.length > 0){
 				if(useParentLocation.index === "last"){
 					noneRootMeta = meta.Parents[meta.Parents.length-1];
@@ -91,15 +95,62 @@ define([
 			}
 		},
 		setLocationbyURL: function(locationURL){
-			this._searchLocation = locationURL;
+			this._searchLocation = locationURL;			
 		},
-		setRootLocationbyURL: function(locationURL){
-			this._searchRootLocation = locationURL;
+		_calculateProjectScope : function (data) {
+		  //Similar mechanism to the setLocationByMetaData method in searchClient.js with meta = data.items[0]
+		  //and useParentLocation = {index: "last"} to retrieve project scope info.
+		  var searchLoc = null;
+		  if(data.items[0] && data.items[0].Parents && data.items[0].Parents.length){
+		    searchLoc = data.items[0].Parents[data.items[0].Parents.length - 1];
+		  } else if(data.items[0]) {
+		    searchLoc = data.items[0];
+		  } else {
+		  	searchLoc = data.items;
+		  }
+		  return searchLoc;
 		},
-		setChildrenLocationbyURL: function(locationURL){
-			this._childrenLocation = locationURL;
+		/**
+		 * Used to update "other" search scope, this location info comes directly from InlineSearchPane.js
+		 */
+		setLocationOther: function(otherLocation){
+			this._searchLocation_other = otherLocation;
 		},
-		getSearchLocation: function(){
+		_handleSearchscopeLocation: function(searchTarget){
+			// If the search target's Location is /workspace/orionode, change it to fileSearviceRootUrl(), which in most cases will give you /file
+			return searchTarget.Location !== "/workspace/orionode" ? searchTarget.Location : this._fileClient.fileServiceRootURL();
+		},
+		_setLocationbyURL: function(meta){
+			this._searchLocation_selected = typeof meta ==="string" ? meta : meta.Directory ? meta : meta.Parents[0];
+			this._searchLocation_project = this._calculateProjectScope({items: [meta]});
+			if(this._displaycallBack){
+				if(this._searchScopeOption === "selected"){
+					this._displaycallBack([this._handleSearchscopeLocation(this._searchLocation_selected)]);
+				}else if(this._searchScopeOption === "project"){
+					this._displaycallBack([this._handleSearchscopeLocation(this._searchLocation_project)]);
+				}
+			}
+		},
+		getSearchLocation: function(searchScope){
+			switch(searchScope){
+				case "selected":
+					if(this._searchLocation_selected){
+						return this._handleSearchscopeLocation(this._searchLocation_selected);
+					}
+					break;
+				case "project":
+					if(this._searchLocation_project){
+						return this._handleSearchscopeLocation(this._searchLocation_project);
+					}
+					break;
+				case "workspace":
+					return this.getSearchRootLocation();
+				case "other":
+					if(this._searchLocation_other){
+						return this._searchLocation_other;
+					}
+					break;
+			}
 			if(this._searchLocation){
 				return this._searchLocation;
 			}
@@ -109,16 +160,14 @@ define([
 			return this._searchLocationName;
 		},
 		getSearchRootLocation: function(){
-			if(this._searchRootLocation){
-				return this._searchRootLocation;
-			}
-			return this._fileClient.fileServiceRootURL();
+			return this._searchRootLocation || this._fileClient.fileServiceRootURL();
 		},
 		getChildrenLocation: function(){
-			if(this._childrenLocation){
-				return this._childrenLocation;
-			}
-			return this._fileClient.fileServiceRootURL();
+			return this._childrenLocation || this.getSearchRootLocation();
+		},
+		addDisplaycallback: function(displayCallback, searchScopeOption){
+			this._displaycallBack = displayCallback;
+			this._searchScopeOption = searchScopeOption;
 		},
 		
 		/**
@@ -137,20 +186,14 @@ define([
 		 * @param {Function(JSONObject)} Callback function that receives the results of the query.
 		 */
 		search: function(searchParams, generateMatches, generateMeta) {
-			var result = new Deferred();
 			try {
-				this._searchDeferred = this.getFileClient().search(searchParams);
-				this._searchDeferred.then(function(jsonData) {
-					this._searchDeferred = null;
+				return this.getFileClient().search(searchParams).then(function(jsonData) {
 					var searchResult = this.convert(jsonData, searchParams);
-					this._generateMatches(searchParams, searchResult, generateMatches).then(function() {
-						this._generateMeta(searchResult, generateMeta).then(function() {
-							result.resolve(searchResult);
+					return this._generateMatches(searchParams, searchResult, generateMatches).then(function() {
+						return this._generateMeta(searchResult, generateMeta).then(function() {
+							return searchResult;
 						});
 					}.bind(this));
-				}.bind(this), function(error) {
-					this._searchDeferred = null;
-					result.reject(error);
 				}.bind(this));
 			}
 			catch(err){
@@ -160,23 +203,19 @@ define([
 						this._crawler = this._createCrawler(searchParams);
 					}
 					if(searchParams.nameSearch) {
-						this._crawler.searchName(searchParams).then(function(jsonData) {
-							this._searchDeferred = null;
-							result.resolve(this.convert(jsonData, searchParams));
-						}.bind(this));
-					} else {
-						this._crawler.search(function() {
-							result.progress(arguments[0], arguments[1]);
-						}).then(function(jsonData) {
-							this._searchDeferred = null;
-							result.resolve(this.convert(jsonData, searchParams));
+						return this._crawler.searchName(searchParams).then(function(jsonData) {
+							return this.convert(jsonData, searchParams);
 						}.bind(this));
 					}
-				} else {
-					throw error;
+					var result;
+					return result = this._crawler.search(function() {
+						result.progress(arguments[0], arguments[1]);
+					}).then(function(jsonData) {
+						return this.convert(jsonData, searchParams);
+					}.bind(this));
 				}
+				throw error;
 			}
-			return result;
 		},
 		_generateSingle: function(sResult, searchHelper) {
 			return this.getFileClient().read(sResult.location).then(function(jsonData) {
@@ -234,17 +273,11 @@ define([
 						if (!path) {
 							path = loc.substring(rootURL ? rootURL.length : 0); //remove file service root from path
 						}
-						converted.push({location: loc, path: path, name: hit.Name});
+						converted.push({location: loc, path: path, name: hit.Name, workspace: this._searchRootLocation});
 					}
 				}
 			}
 			return converted;
-		},
-		cancel: function() {
-			if(this._searchDeferred) {
-				return this._searchDeferred.cancel();
-			}
-			return new Deferred().resolve();
 		},
 		_createCrawler: function(searchParams, options) {
 			this._crawler = new mSearchCrawler.SearchCrawler(this._registry, this.getFileClient(), searchParams, options);
@@ -257,8 +290,8 @@ define([
 		 * @param {Boolean} [nameSearch] The name of a file to search for
 		 * @param {Boolean} [useRoot] If true, do not use the location property of the searcher. Use the root url of the file system instead.
 		 */
-		createSearchParams: function(keyword, nameSearch, useRoot, advancedOptions)  {
-			var searchOn = useRoot ? this.getSearchRootLocation(): this.getSearchLocation();
+		createSearchParams: function(keyword, nameSearch, useRoot, advancedOptions, searchScope)  {
+			var searchOn = useRoot ? this.getSearchRootLocation(): this.getSearchLocation(searchScope);
 			if (nameSearch) {
 				//assume implicit trailing wildcard if there isn't one already
 				//var wildcard= (/\*$/.test(keyword) ? "" : "*"); //$NON-NLS-0$
@@ -268,7 +301,8 @@ define([
 					rows: 100,
 					start: 0,
 					nameSearch: true,
-					keyword: keyword
+					keyword: keyword,
+					exclude: (advancedOptions && advancedOptions.exclude) ? advancedOptions.exclude : undefined,
 				};
 			}
 			return {
@@ -281,8 +315,10 @@ define([
 				regEx: advancedOptions ? advancedOptions.regEx : undefined,
 				fileType: advancedOptions ? advancedOptions.fileType : undefined,
 				fileNamePatterns: (advancedOptions && advancedOptions.fileNamePatterns) ? advancedOptions.fileNamePatterns : undefined,
+				exclude: (advancedOptions && advancedOptions.exclude) ? advancedOptions.exclude : undefined,
 				keyword: keyword,
-				replace: advancedOptions ? advancedOptions.replace : undefined
+				replace: advancedOptions ? advancedOptions.replace : undefined,
+				searchScope: searchScope
 			};
 		}
 	};

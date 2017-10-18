@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,160 +9,193 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node*/
-var express = require('express');
-var bodyParser = require('body-parser');
-var fs = require('fs');
-var path = require('path');
-var util = require('util');
-var api = require('./api');
-var fileUtil = require('./fileUtil');
-var writeError = api.writeError;
+var express = require('express'),
+	bodyParser = require('body-parser'),
+	log4js = require('log4js'),
+	logger = log4js.getLogger('workspace'),
+	api = require('./api'),
+	fileUtil = require('./fileUtil'),
+	metaUtil = require('./metastore/util/metaUtil'),
+	responseTime = require('response-time');
+
+var writeError = api.writeError, 
+	writeResponse = api.writeResponse;
 
 module.exports = function(options) {
-	var workspaceRoot = options.root;
 	var fileRoot = options.fileRoot;
-	if (!workspaceRoot) {
-		throw new Error('options.root path required');
-	}
-
-	var workspaceId = 'orionode';
-
-	/**
-	 * @returns {String} The URL of the workspace middleware, with context path.
-	 */
-	function originalWorkspaceRoot(req) {
-		return workspaceRoot;
-	}
-	function originalFileRoot(req) {
-		return fileRoot;
-	}
-	function makeProjectContentLocation(req, projectName) {
-		return api.join(originalFileRoot(req), projectName);
-	}
-	function makeProjectLocation(req, projectName) {
-		return api.join(fileRoot, projectName);
-	}
-
+	var workspaceRoot = options.workspaceRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!workspaceRoot) { throw new Error('options.workspaceRoot is required'); }
+	
+	var singleUser = options.configParams["orion.single.user"];
+	
 	var router = express.Router({mergeParams: true});
 	router.use(bodyParser.json());
+	router.use(responseTime({digits: 2, header: "X-Workspace-Response-Time", suffix: true}))
+	router.get('*', getWorkspace);
+	router.post('*', postWorkspace);
+	router.put('*', putWorkspace);
+	router.delete('*', deleteWorkspace);
+	return router;
 
-	router.get('*', function(req, res) {
-		var rest = req.params["0"].substring(1);
-		var workspaceRootUrl = originalWorkspaceRoot(req);
-		var workspaceName = path.basename(req.user.workspaceDir);
-		if (rest === '') {
-			// http://wiki.eclipse.org/Orion/Server_API/Workspace_API#Getting_the_list_of_available_workspaces
-			fileUtil.withStats(req.user.workspaceDir, function(err, stats) {
-				if (err) {
-					api.writeError(500, res, "Could not open the workspace directory");
-					return;
-				}
-				api.write(null, res, null, {
-					Id: 'anonymous',
-					Name: 'anonymous',
-					UserName: 'anonymous',
-					Workspaces: [{
-						Id: workspaceId,
-						LastModified: stats.mtime.getTime(),
-						Location: api.join(workspaceRootUrl, workspaceId),
-						Name: workspaceName
-					}]
+	function getWorkspaceJson(req, workspace) {
+		var workspaceJson;
+		var workspaceLocation = api.join(workspaceRoot, workspace.id);
+		var parentFileLocation = api.join(fileRoot, workspace.id);
+		var workspaceDir = fileUtil.getMetastore(req).getWorkspaceDir(workspace.id);
+		return fileUtil.getChildren(parentFileLocation, workspaceLocation, workspaceDir, workspaceDir, 1)
+		.then(function(children) {
+			children.forEach(function(child) {
+				child.Id = child.Name;
+			});
+			var projects = [];
+			children.forEach(function(c) {
+				if (!c.Directory) return;
+				projects.push({
+					Id: c.Name,
+					Location:  c.Location,
 				});
 			});
-		} else if (rest === workspaceId) {
-			var parentFileLocation = originalFileRoot(req);
-			var workspaceJson;
-			fileUtil.getChildren(fileRoot, req.user.workspaceDir, req.user.workspaceDir, 1)
-			.then(function(children) {
-				// TODO this is basically a File object with 1 more field. Should unify the JSON between workspace.js and file.js
-				var location = api.join(workspaceRootUrl, workspaceId);
-				children.forEach(function(child) {
-					child.Id = child.Name;
-				});
-				workspaceJson = {
-					Directory: true,
-					Id: workspaceId,
-					Name: workspaceName,
-					Location: location,
-					ChildrenLocation: location,
-					Children: children,
-					Projects: children.map(function(c) {
-						return {
-							Id: c.Name,
-							Location:  api.join(parentFileLocation, c.Name),
-						};
-					})
-				};
-				return Promise.all(fileUtil.getDecorators().map(function(decorator){
-					return decorator(workspaceRoot, req, "", workspaceJson);			
-					})
-				);
-			})
-			.then(function(){
-				api.write(null, res, null, workspaceJson);
-			})
-			.catch(api.writeError.bind(null, 500, res));
-		} else {
-			res.statusCode = 400;
-			res.end(util.format('workspace not found: %s', rest));
-		}
-	});
+			workspaceJson = {
+				Directory: true,
+				Id: workspace.id,
+				Name: workspace.name,
+				Location: workspaceLocation,
+				ChildrenLocation: workspaceLocation,
+				ContentLocation: parentFileLocation,
+				Children: children,
+				Projects: projects
+			};
+			return Promise.all(fileUtil.getDecorators().map(function(decorator) {
+				return decorator.decorate(req, {workspaceDir: workspaceDir, workspaceId: workspace.id, path: ""}, workspaceJson);
+			}));
+		}).then(function() {
+			return workspaceJson;
+		});
+	}
 
-	router.post('*', function(req, res) {
+	function getWorkspace(req, res) {
 		var rest = req.params["0"].substring(1);
-		var err;
+		var store = fileUtil.getMetastore(req);
 		if (rest === '') {
-			// Create workspace. unsupported
-			err = {Message: 'Unsupported operation: create workspace'};
-			res.status(403).json(err);
-		} else if (rest === workspaceId) {
+			var userId = req.user.username;
+			api.logAccess(logger, userId);
+			var workspaceJson = {
+				Id: userId,
+				Name: userId,
+				UserName: req.user.fullname || userId
+			};
+			return metaUtil.getWorkspaceMeta(req.user.workspaces, store, workspaceRoot)
+				.then(function(workspaceInfos) {
+					workspaceJson.Workspaces = Array.isArray(workspaceInfos) ? workspaceInfos : [];
+					return api.writeResponse(null, res, null, workspaceJson, true);
+				}, function reject(err) {
+					return api.writeError(err.code || 500, res, err.message);
+				});
+		}
+		var workspaceId = rest;
+		store.getWorkspace(workspaceId, function(err, workspace) {
+			if (err) {
+				return writeError(err.code || 400, res, err);
+			}
+			if (!workspace) {
+				return writeError(404, res, "Workspace not found: " + rest);
+			}
+			getWorkspaceJson(req, workspace).then(function(workspaceJson){
+				api.writeResponse(null, res, null, workspaceJson, true);
+			});
+		});
+		
+	}
+
+	function postWorkspace(req, res) {
+		var rest = req.params["0"].substring(1);
+		var store = fileUtil.getMetastore(req), workspaceId;
+		if (rest === '') {
+			var userId = req.user.username;
+			api.logAccess(logger, userId);
+			var workspaceName = req.body && req.body.Name || fileUtil.decodeSlug(req.headers.slug);
+			if(typeof workspaceName !== 'string') {
+				return writeError(400, res, "No Name or Slug provided");
+			}
+			workspaceId = req.body && req.body.Id;
+			store.createWorkspace(userId, {name: workspaceName, id: workspaceId}, function(err, workspace) {
+				if (err) {
+					return writeError(singleUser ? 403 : 400, res, err);
+				}
+				getWorkspaceJson(req, workspace).then(function(workspaceJson) {
+					return api.writeResponse(201, res, null, workspaceJson, true);
+				}).catch(function(err) {
+					api.writeResponse(400, res, null, err);
+				});
+			});
+		} else {
 			var projectName = fileUtil.decodeSlug(req.headers.slug) || req.body && req.body.Name;
 			if (!projectName) {
-				err = {Message: 'Missing "Slug" header or "Name" parameter'};
-				res.status(400).json(err);
+				var err = {Message: 'Missing "Slug" header or "Name" parameter'};
+				api.writeResponse(400, res, null, err);
 				return;
+			} else if (!api.isValidProjectName(projectName)) {
+				return api.writeError(400, res, null, {Message: "'"+projectName+"' is not a valid name for a project"});
 			}
-			// Move/Rename a project
-			var location = req.body && req.body.Location;
-			if (location) {
-				var filepath = fileUtil.safeFilePath(req.user.workspaceDir, projectName);
-				// Call the File POST helper to handle the filesystem operation. We inject the Project-specific metadata
-				// into the resulting File object.
-				fileUtil.handleFilePOST(fileRoot, req, res, filepath, {
-					Id: projectName,
-					ContentLocation: makeProjectContentLocation(req, projectName),
-					Location: makeProjectLocation(req, projectName)
-				}, /*renaming a project is always 200 status*/ 200);
-				return;
-			}
-			// Create a project
-			fs.mkdir(fileUtil.safeFilePath(req.user.workspaceDir, projectName), parseInt('0755', 8), function(error) {
-				if (error) {
-					err = {Message: error};
-					res.status(400).json(err);
-				} else {
-					api.write(201, res, null, {
-						Id: projectName,
-						ContentLocation: makeProjectContentLocation(req, projectName), // Important
-						Location: makeProjectLocation(req, projectName) // not important
-					});
+			workspaceId = rest;
+			store.getWorkspace(workspaceId, function(err, workspace) {
+				if (err) {
+					return writeError(400, res, err);
 				}
+				if (!workspace) {
+					return writeError(404, res, "Workspace not found: " + rest);
+				}
+				// Create/Move/Rename a project
+				var projectLocation = api.join(fileRoot, workspace.id, projectName);
+				var file = fileUtil.getFile(req, api.join(workspace.id, projectName));
+				req.body.Directory = true;
+				
+				if(store.createRenameDeleteProject) {
+					return store.createRenameDeleteProject(workspace.id, {projectName:projectName, contentLocation:file.path, originalPath: req.body.Location})
+						.then(function(){
+							return fileUtil.handleFilePOST(workspaceRoot, fileRoot, req, res, file, {
+								Id: projectName,
+								ContentLocation: projectLocation,
+								Location: projectLocation
+							});
+						}).catch(function(err){
+							writeError(err.code || 500, res, err);
+						});
+				}
+				return fileUtil.handleFilePOST(workspaceRoot, fileRoot, req, res, file, {
+					Id: projectName,
+					ContentLocation: projectLocation,
+					Location: projectLocation
+				});
 			});
 		}
-	});
+	}
 
-	router.put('*', function(req, res) {
-		if (req.body.Location && options.options.configParams["orion.single.user"]) {
-			options.options.workspaceDir = req.body.Location;
-			return res.status(200).end();
+	function putWorkspace(req, res) {
+		if (req.body.Location && singleUser) {
+			var originalLocation = options.workspaceDir;
+			options.workspaceDir = req.body.Location;
+			api.getOrionEE().emit("workspace-changed",[req.body.Location,originalLocation]);
+			return writeResponse(200, res);
 		}
-		writeError(403, res);
-	});
+		return writeError(403, res);
+	}
 
-	router.delete('*', /* @callback */ function(req, res) {
-		// Would 501 be more appropriate?
-		writeError(403, res);
-	});
-
-	return router;
+	function deleteWorkspace(req, res) {
+		var rest = req.params["0"].substring(1);
+		var file = fileUtil.getFile(req, rest);
+		var store = fileUtil.getMetastore(req);
+		store.deleteWorkspace(file.workspaceId, function(err) {
+			if (err) {
+				return writeError(singleUser ? 403 : 400, res, err);
+			}
+			fileUtil.rumRuff(file.workspaceDir, function(err) {
+				if (err) {
+					return writeError(400, res, err);
+				}
+				return writeResponse(204, res);
+			});
+		});
+	}
 };

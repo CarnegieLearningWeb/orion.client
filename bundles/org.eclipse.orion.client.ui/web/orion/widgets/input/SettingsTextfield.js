@@ -52,6 +52,15 @@ define(['orion/objects', 'orion/webui/littlelib', 'orion/widgets/input/TextField
 			postCreate: function(){
 				TextField.prototype.postCreate.call(this);
 				this.mylabel.textContent = this.fieldlabel;
+				if(this.fieldTitle) {
+					this.mylabel.parentNode.title = this.fieldTitle;
+				}
+				if(this.fieldType) {
+					this.textfield.type = this.fieldType;
+				}
+				if(this.fieldMin !== undefined) {
+					this.textfield.min = this.fieldMin;
+				}
 			}
 		}
 	}

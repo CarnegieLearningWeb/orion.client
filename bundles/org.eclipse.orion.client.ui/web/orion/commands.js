@@ -12,6 +12,7 @@
  
 define([
 	'i18n!orion/nls/messages',
+	'orion/i18nUtil',
 	'orion/webui/littlelib',
 	'orion/commandsProxy',
 	'orion/webui/dropdown',
@@ -19,8 +20,9 @@ define([
 	'text!orion/webui/dropdowntriggerbuttonwitharrow.html',
 	'text!orion/webui/checkedmenuitem.html',
 	'orion/webui/tooltip',
-	'orion/metrics'
-], function(messages, lib, mCommandsProxy, Dropdown, DropdownButtonFragment, DropdownButtonWithArrowFragment, CheckedMenuItemFragment, Tooltip, mMetrics) {
+	'orion/metrics',
+	'orion/urlModifier'
+], function(messages, i18nUtil, lib, mCommandsProxy, Dropdown, DropdownButtonFragment, DropdownButtonWithArrowFragment, CheckedMenuItemFragment, Tooltip, mMetrics, urlModifier) {
 		/**
 		 * @name orion.commands.NO_IMAGE
 		 * @description Image data for 16x16 transparent png.
@@ -62,11 +64,11 @@ define([
 					var href = command.hrefCallback.call(invocation.handler || window, invocation);
 					if (href.then){
 						href.then(function(l){
-							window.open(l);
+							window.open(urlModifier(l));
 						});
 					} else {
 						// We assume window open since there's no link gesture to tell us what to do.
-						window.open(href);
+						window.open(urlModifier(href));
 					}
 					return true;
 				} else if (invocation.commandRegistry) {
@@ -243,7 +245,12 @@ define([
 			button.classList.add(command.extraClass);
 		}
 		button.classList.add("commandButton"); //$NON-NLS-1$
-		var text = document.createTextNode(command.name);
+		
+		var buttonText = command.name;
+		if (commandInvocation.userData.annotation.data && commandInvocation.userData.annotation.data.ruleId){
+			buttonText = i18nUtil.formatMessage(command.name, commandInvocation.userData.annotation.data.ruleId);
+		}
+		var text = document.createTextNode(buttonText);
 		button.appendChild(text);
 		
 		var onClick = callback || command.callback;
@@ -251,7 +258,7 @@ define([
 			var done = function() {
 				if (fixAllCheckbox){
 					if (fixAllCheckbox.checked){
-						commandInvocation.userData.doFixAll = true;
+						commandInvocation.userData.annotation.doFixAll = true;
 					}
 					if (prefService){
 						prefService.get(quickfixSettings).then(function(prefs) {
@@ -261,6 +268,9 @@ define([
 					}
 				}
 				onClick.call(commandInvocation.handler, commandInvocation);
+				if (typeof commandInvocation.userData.postCallback === 'function'){
+					commandInvocation.userData.postCallback();
+				}
 			};
 			command.onClick = onClick;
 			clickTarget.addEventListener("click", function(e) {
@@ -281,6 +291,7 @@ define([
 		}
 		if (parentElement.nodeName.toLowerCase() === "ul") {
 			var li = document.createElement("li");
+			li.setAttribute("role", "none");
 			parentElement.appendChild(li);
 			parentElement = li;
 		} else {
@@ -289,7 +300,7 @@ define([
 		element.appendChild(button);
 		
 		// We check that the internal access to annotation model exists so if it breaks we don't show the checkbox at all rather than throw an error later
-		if (command.fixAllEnabled && commandInvocation.userData._annotationModel){
+		if (command.fixAllEnabled && commandInvocation.userData.annotation._annotationModel){
 			var id = command.id + 'fixAll'; //$NON-NLS-1$
 			fixAllCheckbox = document.createElement('input');
 			fixAllCheckbox.type = 'checkbox'; //$NON-NLS-1$
@@ -321,11 +332,11 @@ define([
 	function createCommandItem(parent, command, commandInvocation, id, keyBinding, useImage, callback) {
 		var element;
 		var clickTarget;
-		useImage = useImage || (!command.name && command.hasImage());
+		useImage = useImage || command.hasImage && command.hasImage();
 		
 		var renderButton = function() {
 				if (useImage) {
-					if (command.hasImage()) {
+					if (command.hasImage && command.hasImage()) {
 						_addImageToElement(command, element, id);
 						// ensure there is accessible text describing this image
 						if (command.name) {
@@ -362,37 +373,34 @@ define([
 			} else {  // no href
 				element.href = "#"; //$NON-NLS-0$
 			}
+			if(command.hrefTarget){
+				element.target = command.hrefTarget;
+			}
 		} else {
 			if (command.type === "switch") { //$NON-NLS-0$
-				element = document.createElement("div"); //$NON-NLS-0$
+				element = clickTarget = document.createElement("div"); //$NON-NLS-0$
+				element.setAttribute("role", "button"); //$NON-NLS-0$ //$NON-NLS-1$
 				element.tabIndex = 0;
 				element.className = "orionSwitch"; //$NON-NLS-0$
-				var input = clickTarget = document.createElement("input"); //$NON-NLS-0$
-				input.type = "checkbox"; //$NON-NLS-0$
-				input.className = "orionSwitchCheck"; //$NON-NLS-0$
-				input.id = "orionSwitchCheck" + command.id; //$NON-NLS-0$
-				if(parent.id) {
-					input.id = input.id + parent.id;
+				if (command.name) {
+					element.setAttribute("aria-label", command.name); //$NON-NLS-0$
 				}
-				element.appendChild(input);
-				var label = document.createElement("label"); //$NON-NLS-0$
-				label.className = "orionSwitchLabel"; //$NON-NLS-0$
-				label.setAttribute("for", input.id); //$NON-NLS-0$  
+				element.setAttribute("aria-pressed", command.checked ? "true" : "false"); //$NON-NLS-0$ //$NON-NLS-1$ //$NON-NLS-2$
 				var span1 = document.createElement("span"); //$NON-NLS-0$
 				span1.className = "orionSwitchInner"; //$NON-NLS-0$
+				span1.classList.add(command.imageClass);
 				var span2 = document.createElement("span"); //$NON-NLS-0$
 				span2.className = "orionSwitchSwitch"; //$NON-NLS-0$
-				label.appendChild(span1);
-				label.appendChild(span2);
-				element.appendChild(label);
+				element.appendChild(span1);
+				element.appendChild(span2);
 				element.addEventListener("keydown", function(e) { //$NON-NLS-0$
 					if (e.keyCode === lib.KEY.ENTER || e.keyCode === lib.KEY.SPACE) {
-						input.click();
+						element.click();
 					}
 				}, false);
-
-				input.checked = command.checked;
-				span1.classList.add(command.imageClass);
+				element.addEventListener("click", function(e) { //$NON-NLS-0$
+					toggleSwitch(element);
+				}, false);
 			} else if (command.type === "toggle") {  //$NON-NLS-0$
 				element = clickTarget = document.createElement("button"); //$NON-NLS-0$
 				element.className = "orionButton"; //$NON-NLS-0$
@@ -434,11 +442,11 @@ define([
 									element.classList.add("orionToggleOff"); //$NON-NLS-0$
 									element.classList.add("orionToggleAnimate"); //$NON-NLS-0$
 								}
-							}else {
+							} else { // "switch"
 								if(doIt) {
-									command.checked = input.checked;
+									command.checked = element.getAttribute("aria-pressed") === "true"; //$NON-NLS-0$ //$NON-NLS-1$
 								} else {
-									input.checked = !input.checked;
+									toggleSwitch(element); // don't do it, i.e. put it back
 								}
 							}
 							if(doIt) {
@@ -464,6 +472,7 @@ define([
 		}
 		if (parent.nodeName.toLowerCase() === "ul") { //$NON-NLS-0$
 			var li = document.createElement("li"); //$NON-NLS-0$
+			li.setAttribute("role", "none");
 			parent.appendChild(li);
 			parent = li;
 		} else {
@@ -483,6 +492,14 @@ define([
 		return element;
 	}
 	
+	function toggleSwitch(element) {
+		if (element.getAttribute("aria-pressed") === "true") { //$NON-NLS-0$ //$NON-NLS-1$
+			element.setAttribute("aria-pressed", "false"); //$NON-NLS-0$ //$NON-NLS-1$
+		} else {
+			element.setAttribute("aria-pressed", "true"); //$NON-NLS-0$ //$NON-NLS-1$
+		}
+	}
+
 	function createCommandMenuItem(parent, command, commandInvocation, keyBinding, callback, keyBindingString) {
 		var element, li;
 		var dropdown = parent.dropdown;
@@ -498,6 +515,9 @@ define([
 				element.href = href;
 			} else {  // no href
 				element.href = "#"; //$NON-NLS-0$
+			}
+			if(command.hrefTarget){
+				element.target = command.hrefTarget;
 			}
 			element.addEventListener("keydown", function(e) { //$NON-NLS-0$
 				if (e.keyCode === lib.KEY.ENTER || e.keyCode === lib.KEY.SPACE) {
@@ -683,6 +703,7 @@ define([
 			this.callback = options.callback; // optional callback that should be called when command is activated (clicked)
 			this.preCallback = options.preCallback; // optional callback that should be called when command is activated (clicked)
 			this.hrefCallback = options.hrefCallback; // optional callback that returns an href for a command link
+			this.hrefTarget = options.hrefTarget; // optional href target determinds if a new tab should be opened
 			this.choiceCallback = options.choiceCallback; // optional callback indicating that the command will supply secondary choices.  
 														// A choice is an object with a name, callback, and optional image
 			this.positioningNode = options.positioningNode; // optional positioning node choice command.
@@ -714,6 +735,7 @@ define([
 			choices.forEach(function(choice) {
 				if (choice.name) {
 					var itemNode = document.createElement("li"); //$NON-NLS-0$
+					itemNode.setAttribute("role", "none");
 					parent.appendChild(itemNode);
 					var node = document.createElement("span"); //$NON-NLS-0$
 					node.tabIndex = 0; 

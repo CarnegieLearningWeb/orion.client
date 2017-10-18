@@ -13,9 +13,10 @@
 define([
 		'orion/editor/textTheme',
 		'orion/widgets/themes/ThemeVersion',
+		'orion/Deferred',
 		'orion/objects',
 
-], function(mTextTheme, THEMES_VERSION, objects) {
+], function(mTextTheme, THEMES_VERSION, Deferred, objects) {
 
 	// *******************************************************************************
 	//
@@ -37,9 +38,9 @@ define([
 			cornFlowerblue  String      String      String
 			----------------------------------------------- */
 		
-		var defaultFont = '"Source Code Pro", "Consolas", "Monaco", "Vera Mono", monospace'; //$NON-NLS-0$
+		var defaultFont = '"Consolas", "Menlo", "Monaco", "Vera Mono", monospace'; //$NON-NLS-0$
 		var defaultFontSize = '12px'; //$NON-NLS-0$
-		var prospecto, darker, ceol;
+		var prospecto, darker;
 
 		function ThemeData() {
 
@@ -49,32 +50,77 @@ define([
 				"className": "prospecto",
 				"name": "Prospecto",
 				"styles": {
+					"lines":{
+						"isTopLevel": true,
+						"annotation" : {
+							"diffAdded" : {
+								"backgroundColor": "rgba(159, 202, 86, 0.68)"
+							},
+							"diffModified": {
+								"color": "#515151",
+								"backgroundColor": "rgba(85, 181, 219, 0.67)"
+							},
+							"blame":{
+								"color": "#707070",
+								"backgroundColor": "rgb(255, 132, 44)"
+							},
+							"currentBlame":{
+								"color": "#1B1B1B",
+								"backgroundColor": "rgb(184, 103, 163)"
+							}
+						}
+					},
+					"annotationOverview":{
+						"warning": {
+							"backgroundColor": "#B27F21"
+						},
+						"info":{
+							"backgroundColor": "#001DF5"
+						},
+						"error":{
+							"backgroundColor": "#EC3324"
+						},
+						"diffDeleted":{
+							"color": "#EC111D"
+						}
+					},
 					"annotationLine": {
+						"searchRange": {
+							"backgroundColor": "#D3D3D3"
+						},
 						"currentLine": {
 							"backgroundColor": "#EAF2FE"
+						},
+						"highlightedLine": {
+							"backgroundImage": "linear-gradient(rgba(255, 255, 153, .5) 100%, rgba(255, 255, 153, .5))"
 						}
 					},
 					"annotationRange": {
 						"currentBracket": {
-							"backgroundColor": "#00FE00"
+							"backgroundColor": "#ADFFAD"
 						},
 						"matchingBracket": {
-							"backgroundColor": "#00FE00"
+							"backgroundColor": "#ADFFAD"
 						},
 						"matchingSearch": {
-							"backgroundColor": "#c3e1ff",
+							"backgroundColor": "#C3E1FF",
+							"outline": "1px solid",
+							"outlineColor": "rgba(24, 159, 227, 0)",
 							"currentSearch": {
-								"backgroundColor": "#53d1ff"
+								"backgroundColor": "#53D1FF"
 							}
 						},
 						"writeOccurrence": {
-							"backgroundColor": "#ffff00"
+							"backgroundColor": "#ECD099"
+						},
+						"readOccurrence": {
+							"backgroundColor": "#CACACA"
 						}
 					},
-					"backgroundColor": "#ffffff",
+					"backgroundColor": "#FFFFFF",
 					"color": "#151515",
 					"comment": {
-						"color": "#3C802C"
+						"color": "#357D21"
 					},
 					"constant": {
 						"color": "#9932CC",
@@ -87,9 +133,9 @@ define([
 					},
 					"entity": {
 						"name": {
-							"color": "#98937B",
+							"color": "#7D7755",
 							"function": {
-								"color": "#67BBB8",
+								"color": "#007B78",
 								"fontWeight": "bold"
 							}
 						},
@@ -103,7 +149,7 @@ define([
 					"fontSize": defaultFontSize,
 					"keyword": {
 						"control": {
-							"color": "#CC4C07",
+							"color": "#C04600",
 							"fontWeight": "bold"
 						},
 						"operator": {
@@ -112,10 +158,13 @@ define([
 						},
 						"other": {
 							"documentation": {
-								"color": "#7F9FBF",
+								"color": "#37739F",
 								"task": {
-									"color": "#5595ff"
+									"color": "#006DD4"
 								}
+							},
+							"directive" : {
+								"color": "#9F4177"
 							}
 						}
 					},
@@ -130,7 +179,7 @@ define([
 							"fontStyle": "italic"
 						},
 						"list": {
-							"color": "#CC4C07"
+							"color": "#C04600"
 						},
 						"other": {
 							"separator": {
@@ -140,11 +189,11 @@ define([
 								"textDecoration": "line-through"
 							},
 							"table": {
-								"color": "#3C802C"
+								"color": "#357D21"
 							}
 						},
 						"quote": {
-							"color": "#446FBD"
+							"color": "#314DCE"
 						},
 						"raw": {
 							"fontFamily": "monospace",
@@ -161,41 +210,41 @@ define([
 					"meta": {
 						"documentation": {
 							"annotation": {
-								"color": "#7F9FBF"
+								"color": "#37739F"
 							},
 							"tag": {
-								"color": "#7F7F9F"
+								"color": "#737396"
 							}
 						},
 						"preprocessor": {
 							"color": "#A4A4A4"
 						},
 						"tag": {
-							"color": "#CC4C07",
+							"color": "#C04600",
 							"attribute": {
-								"color": "#93a2aa"
+								"color": "#58727E"
 							}
 						}
 					},
 					"punctuation": {
 						"operator": {
-							"color":"#D1416F"
+							"color":"#CD2B65"
 						}
 					},
 					"ruler": {
 						"annotations": {
-							"backgroundColor": "#ffffff"
+							"backgroundColor": "#FFFFFF"
 						},
-						"backgroundColor": "#ffffff",
+						"backgroundColor": "#FFFFFF",
 						"overview": {
-							"backgroundColor": "#ffffff"
+							"backgroundColor": "#FFFFFF"
 						}
 					},
 					"rulerLines": {
 						"color": "#767676"
 					},
 					"string": {
-						"color": "#446FBD",
+						"color": "#314DCE",
 						"interpolated": {
 							"color": "#151515"
 						}
@@ -214,10 +263,10 @@ define([
 						"backgroundColor": "rgba(180,213,255,0.99)"
 					},
 					"textviewLeftRuler": {
-						"borderColor": "#ffffff"
+						"borderColor": "#FFFFFF"
 					},
 					"textviewRightRuler": {
-						"borderColor": "#ffffff"
+						"borderColor": "#FFFFFF"
 					},
 					"textviewSelection": {
 						"backgroundColor": "rgba(180,213,255,0.99)"
@@ -231,88 +280,157 @@ define([
 							"fontWeight": "bold"
 						},
 						"other": {
-							"color": "#E038AD"
+							"color": "#DB0FA6"
 						},
 						"parameter": {
-							"color": "#D1416F"
+							"color": "#CD2B65"
 						}
 					}
 				}
 			};
 			this.styles.push(prospecto);
 
-
-			ceol = {
-				"className": "ceol",
-				"name": "Ceol",
+			darker = {
+				"className": "darker",
+				"name": "Dark",
 				"styles": {
+					"fontFamily": defaultFont,
+					"fontSize": defaultFontSize,
+					"lines":{
+						"isTopLevel": true,
+						"annotation" : {
+							"diffAdded" : {
+								"color" : "rgb(36, 36, 36)",
+								"backgroundColor": "rgb(116, 149, 73)"
+							},
+							"diffModified": {
+								"color" : "rgb(19, 19, 19)",
+								"backgroundColor": "rgb(66, 133, 162)"
+							},
+							"blame":{
+								"color": "#EBEBEB",
+								"backgroundColor": "rgb(177, 74, 0)"
+							},
+							"currentBlame":{
+								"backgroundColor": "rgb(148, 53, 211)"
+							}
+						}
+					},
+					"annotationOverview":{
+						"warning": {
+							"backgroundColor": "#FFFF00"
+						},
+						"info":{
+							"backgroundColor": "#65C8FF"
+						},
+						"error":{
+							"backgroundColor": "#FF898C"
+						},
+						"diffDeleted":{
+							"color": "#FF0000"
+						}
+					},
 					"annotationLine": {
+						"searchRange": {
+							"backgroundColor": "#6C7279"
+						},
 						"currentLine": {
-							"backgroundColor": "#152935"
+							"color": "#1bd2f7",
+							"backgroundColor": "#3B4B53"
+						},
+						"highlightedLine": {
+							"backgroundImage": "linear-gradient(rgba(255, 255, 153, .5) 100%, rgba(255, 255, 153, .5))"
 						}
 					},
 					"annotationRange": {
 						"currentBracket": {
-							"backgroundColor": "#00FE00"
+							"color": "#94EAFB",
+							"backgroundColor": "#006E00"
+						},
+						"currentSearch": {
+							"backgroundColor": "#5d5d5d"
 						},
 						"matchingBracket": {
-							"backgroundColor": "#4178be"
+							"color": "#94EAFB",
+							"backgroundColor": "#006E00"
 						},
 						"matchingSearch": {
-							"backgroundColor": "#A6266E",
+							"backgroundColor": "#363636",
+							"outline": "1px solid",
+							"outlineColor": "rgba(24, 159, 227, 1)",
 							"currentSearch": {
-								"backgroundColor": "#008571"
+								"backgroundColor": "#465E47"
 							}
 						},
 						"writeOccurrence": {
-							"backgroundColor": "#ffff00"
+							"backgroundColor": "#093f59",
+							"outline": "1px solid #BEA100"
+						},
+						"readOccurrence": {
+							"backgroundColor": "#CACACA",
+							"outline": "1px solid #BEA100"
+						},
+						"selectedLinkedGroup": {
+							"backgroundColor": "rgb(16,106,91)",
+							"outline": "1px solid #BEA100"
+						},
+						"currentLinkedGroup": {
+							"backgroundColor": "rgba(16,106,91,0.8)",
+							"outline": "1px solid #BEA100"
+						},
+						"warning":{
+							"backgroundImage": "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAHUlEQVQYV2NkgIL//xn+MzIyMDKC+DAOmIZxYCoBNEkMAR1F6ZQAAAAASUVORK5CYII=)"
+						},
+						"info":{
+							"backgroundImage": "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAH0lEQVQYV2NkgILUE///z7ZgZGQE8WEcEM0I48BUAgB9cA8vM5pJ1QAAAABJRU5ErkJggg==)"
+						},
+						"error":{
+							"backgroundImage": "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAHUlEQVQYV2NkgIL/nT3/GctLGBlBfBgHTMM4MJUAe30PF+f8aegAAAAASUVORK5CYII=)"
 						}
 					},
-					"backgroundColor": "#152935",
-					"color": "#ffa5b4",
+					"backgroundColor": "#26343F",
+					"color": "#07ADCF",
 					"comment": {
-						"color": "#406d89"
+						"color": "#ADB9C0",
 					},
 					"constant": {
-						"color": "#7cc7ff",
+						"color": "#F47D64",
 						"numeric": {
-							"color": "#71c9ff",
-							"hex": {
-								"color": "#71c9ff"
-							}
+							"color": "#D3AAFE"
 						}
 					},
 					"entity": {
 						"name": {
 							"color": "#98937B",
 							"function": {
-								"color": "#67BBB8",
+								"color": "#7EC5C3",
 								"fontWeight": "bold"
 							}
 						},
 						"other": {
 							"attribute-name": {
-								"color": "#5F9EA0"
+								"color": "#01B199"
 							}
 						}
 					},
-					"fontFamily": "\"Source Code Pro\", \"Consolas\", \"Monaco\", \"Vera Mono\", monospace",
-					"fontSize": "12px",
 					"keyword": {
 						"control": {
-							"color": "#a7fae6",
+							"color": "#FCD600",
 							"fontWeight": "bold"
 						},
 						"operator": {
-							"color": "#a7fae6",
+							"color": "#FFFFFF",
 							"fontWeight": "bold"
 						},
 						"other": {
 							"documentation": {
 								"color": "#7F9FBF",
 								"task": {
-									"color": "#5595ff"
+									"color": "#8DB6F1"
 								}
+							},
+							"directive" : {
+								"color": "#DAA1C0"
 							}
 						}
 					},
@@ -321,7 +439,7 @@ define([
 							"fontWeight": "bold"
 						},
 						"heading": {
-							"color": "#0000FF"
+							"color": "#91C23D"
 						},
 						"italic": {
 							"fontStyle": "italic"
@@ -331,7 +449,7 @@ define([
 						},
 						"other": {
 							"separator": {
-								"color": "#00008F"
+								"color": "#E8D075"
 							},
 							"strikethrough": {
 								"textDecoration": "line-through"
@@ -346,7 +464,8 @@ define([
 						"raw": {
 							"fontFamily": "monospace",
 							"html": {
-								"backgroundColor": "#E4F7EF"
+								"backgroundColor": "#696969",
+								"color": "white"
 							}
 						},
 						"underline": {
@@ -358,305 +477,71 @@ define([
 					"meta": {
 						"documentation": {
 							"annotation": {
-								"color": "#7F9FBF"
+								"color": "#A1BAD5"
 							},
 							"tag": {
-								"color": "#7F7F9F"
+								"color": "#9898B2"
 							}
 						},
 						"preprocessor": {
 							"color": "#A4A4A4"
 						},
 						"tag": {
-							"attribute": {
-								"color": "#eed2ff"
-							},
-							"color": "#a7fae7"
+							"color": "#C0BDDC"
 						}
 					},
 					"punctuation": {
 						"operator": {
-							"color": "#ba8ff7"
+							"color":"#FFA83E"
 						}
 					},
 					"ruler": {
-						"annotations": {
-							"backgroundColor": "#112935"
-						},
-						"backgroundColor": "#112935",
-						"overview": {
-							"backgroundColor": "#112935"
-						}
+						"backgroundColor": "#26343F"
 					},
 					"rulerLines": {
-						"color": "#396f8a",
-						"even": {
-							"color": "#396f8a"
-						},
-						"odd": {
-							"color": "#396f8a"
-						}
+						"color": "#93A2AA",
 					},
 					"string": {
-						"color": "#61cdff",
+						"color": "#01D1B6",
 						"interpolated": {
-							"color": "#151515"
+							"color": "#DADADA"
 						}
 					},
 					"support": {
 						"type": {
 							"propertyName": {
-								"color": "#a7fae7"
+								"color": "#FFFFFF"
 							}
 						}
 					},
 					"textviewContent ::-moz-selection": {
-						"backgroundColor": "rgba(50,92,128,0.99)"
+						"backgroundColor": "rgba(16,106,91,0.99)"
 					},
 					"textviewContent ::selection": {
-						"backgroundColor": "rgba(50,92,128,0.99)"
+						"backgroundColor": "rgba(16,106,91,0.99)"
 					},
 					"textviewLeftRuler": {
-						"borderColor": "#112935"
+						"borderRight": "1px solid #424C53"
 					},
 					"textviewRightRuler": {
-						"borderColor": "#112935"
+						"borderLeft": "1px solid #424C53"
 					},
 					"textviewSelection": {
-						"backgroundColor": "rgba(50,92,128,0.99)"
+						"backgroundColor": "rgba(16,106,91,0.99)"
 					},
 					"textviewSelectionUnfocused": {
-						"backgroundColor": "rgba(50,92,128,0.99)"
+						"backgroundColor": "rgba(16,106,91,0.99)"
 					},
 					"variable": {
 						"language": {
-							"color": "#a2f9e7",
+							"color": "#9994CA",
 							"fontWeight": "bold"
 						},
 						"other": {
 							"color": "#E038AD"
 						},
 						"parameter": {
-							"color": "#a2f9e7"
-						}
-					}
-				}
-			};
-			this.styles.push(ceol);
-
-			darker = {
-				"className": "darker",
-				"name": "Darker",
-				"styles": {
-					"annotationLine": {
-						"currentLine": {
-							"backgroundColor": "#171c20"
-						}
-					},
-					"annotationRange": {
-						"currentBracket": {
-							"backgroundColor": "#006E00"
-						},
-						"currentSearch": {
-							"backgroundColor": "#5d5d5d"
-						},
-						"matchingBracket": {
-							"backgroundColor": "#006E00"
-						},
-						"matchingSearch": {
-							"backgroundColor": "#363636",
-							"currentSearch": {
-								"backgroundColor": "#465e47"
-							}
-						},
-						"writeOccurrence": {
-							"backgroundColor": "#093f59"
-						}
-					},
-					"backgroundColor": "#1a1d1e",
-					"color": "#dadada",
-					"comment": {
-						"block": {
-							"color": "#5e7175"
-						},
-						"color": "#5e7175",
-						"line": {
-							"color": "#5e7175"
-						}
-					},
-					"constant": {
-						"color": "#c8333a",
-						"numeric": {
-							"color": "#c8333a",
-							"hex": {
-								"color": "#cd3f45"
-							}
-						}
-					},
-					"entity": {
-						"name": {
-							"color": "#30a7d3",
-							"function": {
-								"color": "#30a7d3",
-								"fontWeight": "normal"
-							}
-						},
-						"other": {
-							"attribute-name": {
-								"color":"#5F9EA0"
-							}
-						}
-					},
-					"fontFamily": defaultFont,
-					"fontSize": defaultFontSize,
-					"keyword": {
-						"control": {
-							"color": "#e8d075",
-							"fontWeight":"normal"
-						},
-						"operator": {
-							"color": "#91c23d",
-							"fontWeight": "normal"
-						},
-						"other": {
-							"documentation": {
-								"color": "#7F9FBF",
-								"task": {
-									"color": "#8db6f1"
-								}
-							}
-						}
-					},
-					"markup": {
-						"bold": {
-							"fontWeight": "bold"
-						},
-						"heading": {
-							"color": "#91c23d"
-						},
-						"italic": {
-							"fontStyle": "italic"
-						},
-						"list": {
-							"color": "#CC4C07"
-						},
-						"other": {
-							"separator": {
-								"color":"#e8d075"
-							},
-							"strikethrough": {
-								"textDecoration": "line-through"
-							},
-							"table": {
-								"color": "#3C802C"
-							}
-						},
-						"quote": {
-							"color": "#55b5db"
-						},
-						"raw": {
-							"fontFamily": "monospace",
-							"html": {
-								"backgroundColor": "#3B4B53"
-							}
-						},
-						"underline": {
-							"link": {
-								"textDecoration": "underline"
-							}
-						}
-					},
-					"meta": {
-						"documentation": {
-							"annotation": {
-								"color": "#7F9FBF"
-							},
-							"tag": {
-								"color": "#7F7F9F"
-							}
-						},
-						"preprocessor": {
-							"color": "#A4A4A4"
-						},
-						"tag": {
-							"color": "#999999",
-							"attribute": {
-								"color": "#07e2d9"
-							}
-						}
-					},
-					"punctuation": {
-						"operator": {
-							"color":"#FF8C00"
-						}
-					},
-					"ruler": {
-						"annotations": {
-							"backgroundColor": "#0f1113"
-						},
-						"backgroundColor":"#0f1113",
-						"overview": {
-							"backgroundColor": "#0f1113"
-						}
-					},
-					"rulerLines": {
-						"color":"#3d4750",
-						"even": {
-							"color":"#3d4750"
-						},
-						"odd": {
-							"color":"#3d4750"
-						}
-					},
-					"string": {
-						"color": "#55b5db",
-						"interpolated": {
-							"color":"#dadada"
-						},
-						"quoted": {
-							"double": {
-								"color": "#55b5db"
-							},
-							"single": {
-								"color": "#55b5db"
-							}
-						}
-					},
-					"support": {
-						"type": {
-							"propertyName": {
-								"color": "#9fca56"
-							}
-						}
-					},
-					"textviewContent ::-moz-selection": {
-						"backgroundColor":"rgba(49,115,112,0.99)"
-					},
-					"textviewContent ::selection": {
-						"backgroundColor":"rgba(49,115,112,0.99)"
-					},
-					"textviewLeftRuler": {
-						"borderColor":"#0e1112"
-					},
-					"textviewRightRuler": {
-						"borderColor":"#0e1112"
-					},
-					"textviewSelection": {
-						"backgroundColor": "rgba(49,115,112,0.99)"
-					},
-					"textviewSelectionUnfocused": {
-						"backgroundColor": "rgba(49,115,112,0.99)"
-					},
-					"variable": {
-						"language": {
-							"color": "#9fca56",
-							"fontWeight":"normal"
-						},
-						"other": {
-							"color":"#E038AD"
-						},
-						"parameter": {
-							"color":"#FF8C00"
+							"color": "#8CD211"
 						}
 					}
 				}
@@ -665,20 +550,33 @@ define([
 		}
 		
 		function getStyles(){
-			return this.styles;
+			var d = new Deferred();
+			d.resolve(this.styles);
+			return d;
 		}
 		
 		ThemeData.prototype.styles = [];
 		ThemeData.prototype.getStyles = getStyles;
 
-		function getDefaultTheme(options) {
+		function getBaseTheme(options) {
 			/* return a copy of the appropriate theme definition */
 			return JSON.parse(JSON.stringify((options || {}).dark ? darker : prospecto));
+		}
+		ThemeData.prototype.getBaseTheme = getBaseTheme;
+		
+		function getDefaultTheme() {
+			var d = new Deferred();
+			var useLightTheme = document.body.classList.contains("lightPage");
+			var defaultTheme = useLightTheme ? 'Prospecto' : 'Dark';
+			d.resolve(defaultTheme);
+			return d;
 		}
 		ThemeData.prototype.getDefaultTheme = getDefaultTheme;
 		
 		function getProtectedThemes() {
-			return ["Prospecto", "Darker"]; //$NON-NLS-1$ //$NON-NLS-0$
+			var d = new Deferred();
+			d.resolve(["Prospecto", "Dark"]);
+			return d;
 		}
 
 		ThemeData.prototype.getProtectedThemes = getProtectedThemes;
@@ -687,13 +585,20 @@ define([
 		
 		ThemeData.prototype.fontSettable = fontSettable;
 		
-		function getThemeStorageInfo(){
+		function getThemeVersion() {
+			var d = new Deferred();
+			d.resolve(THEMES_VERSION);
+			return d;
+		}
+		
+		ThemeData.prototype.getThemeVersion = getThemeVersion;
+		
+		function getThemeStorageInfo(){	
+			var useLightTheme = document.body.classList.contains("lightPage");
 			return {
-				storage:'/themes',
-				styleset:'editorstyles',
-				defaultTheme:'Prospecto',
-				selectedKey: 'editorSelected',
-				version: THEMES_VERSION
+				storage: '/themes', //$NON-NLS-0$
+				styleset: 'editorstyles', //$NON-NLS-0$
+				selectedKey: 'editorSelected', //$NON-NLS-0$
 			}; 
 		}
 		ThemeData.prototype.getThemeStorageInfo = getThemeStorageInfo;
@@ -708,7 +613,7 @@ define([
 		return {
 			ThemeData: ThemeData,
 			getStyles: getStyles,
-			getDefaultTheme: getDefaultTheme
+			getBaseTheme: getBaseTheme
 		};
 	}
 );

@@ -19,8 +19,9 @@ define([
 	'orion/compare/compareCommands',
 	'orion/compare/resourceComparer',
 	'orion/webui/littlelib',
+	'orion/bidiUtils',
 	'orion/git/util'
-], function(messages, Tooltip, mCompareCommands, mResourceComparer, lib, mGitUtil) {
+], function(messages, Tooltip, mCompareCommands, mResourceComparer, lib, bidiUtils, mGitUtil) {
 	var exports = Object.create(mGitUtil); // extend util
 
 	function createFilter(section, msg, callback) {
@@ -31,15 +32,15 @@ define([
 		filter.type = "search"; //$NON-NLS-1$
 		filter.placeholder = msg;
 		filter.setAttribute("aria-label", msg); //$NON-NLS-1$ 
+		bidiUtils.initInputField(filter);
 		filterDiv.appendChild(filter);
 		
 		var createTooltip = function(button) {
-			var tooltip = new Tooltip.Tooltip({
+			return button.tooltip = new Tooltip.Tooltip({
 				node: button,
 				text: msg,
 				position: ["above", "below", "right", "left"] //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
 			});
-			return tooltip;
 		};
 		
 		var button = document.createElement("button"); //$NON-NLS-0$
@@ -63,6 +64,7 @@ define([
 			doFilter();
 		};
 		button.addEventListener("click", clickFilter); //$NON-NLS-0$
+		filter.addEventListener ("search", clickFilter, false);
 		
 		var sectionContent = section.getContentElement();
 		sectionContent.insertBefore(filterDiv, sectionContent.firstChild);
@@ -72,7 +74,7 @@ define([
 				doFilter();
 			}
 		};
-		filter.addEventListener("keydown", keyDownFilter); //$NON-NLS-0$	
+		filter.addEventListener("keydown", keyDownFilter); //$NON-NLS-0$
 		
 		return {
 			filter: filter,
@@ -84,6 +86,7 @@ define([
 			destroy: function() {
 				this.commandTooltip.destroy();
 				this.button.removeEventListener("click", this.clickFilter);
+				this.filter.removeEventListener("search", this.clickFilter);
 				this.filter.removeEventListener("keydown", this.keyDownFilter);
 			}
 		};
@@ -142,7 +145,7 @@ define([
 		};
 		
 		var diffProvider = new mResourceComparer.DefaultDiffProvider(serviceRegistry);
-		var cmdProvider = new mCompareCommands.CompareCommandFactory({commandService: commandService, commandSpanId: commandSpanId, toggleCommandSpanId: toggleCommandSpanId, gridRenderer: gridRenderer});
+		var cmdProvider = new mCompareCommands.CompareCommandFactory({commandService: commandService, commandSpanId: commandSpanId, toggleCommandSpanId: toggleCommandSpanId, gridRenderer: gridRenderer, serviceRegistry: serviceRegistry});
 		var ignoreWhitespace = false;
 		var mode = "inline";  //$NON-NLS-0$
 		if (preferencesService) {

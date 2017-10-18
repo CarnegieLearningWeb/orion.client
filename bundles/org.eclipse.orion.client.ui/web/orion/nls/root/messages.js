@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2016 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -35,7 +35,7 @@ define({//Default message bundle
 	"ShowAllKeyBindings": "Show a list of all the keybindings on this page",
 	"Show Keys": "Show Keys",
 	"HideShowBannerFooter": "Hide or show the page banner",
-	"Toggle banner and footer": "Toggle banner",
+	"Toggle Banner and Footer": "Toggle Banner",
 	"ChooseFileOpenEditor": "Choose a file by name and open an editor on it",
 	"FindFile": "Open File...",
 	"System Configuration Details": "System Configuration Details",
@@ -82,8 +82,7 @@ define({//Default message bundle
 	"Global search" : "Global search",
 	"Orion Home" : "Home",
 	"Close notification" : "Close notification",
-	"OpPressSpaceMsg" : "Operations - Press spacebar to show current operations",
-	"Toggle side panel" : "Toggle side panel",
+	"Toggle Side Panel" : "Toggle Side Panel",
 	"Open or close the side panel": "Open or close the side panel",
 	"Projects" : "Projects",
 	"Toggle Sidebar" : "Toggle Sidebar",
@@ -129,6 +128,8 @@ define({//Default message bundle
 	"title (optional)": "title (optional)",
 	"url": "url",
 	"workedProgress": "${0} (${1}/${2})",
+	"ConfirmLogout": "Do you want to logout?",
+	"VerticalPaneOrientation": "Vertical pane orientation",
 	"TogglePaneOrientationTooltip": "Toggle split pane orientation",
 	"WarningDuplicateLinkId": "Duplicate link ID: ${0} (link IDs are not case-sensitive)",
 	"WarningHeaderTooDeep": "Header level cannot exceed 6",
@@ -169,5 +170,8 @@ define({//Default message bundle
 	"justNow": "just now", //Represent that the time elapsed is less than 1 minute
     "Orion HTML Editor": "Orion HTML Editor",
 	"Orion JavaScript Editor": "Orion JavaScript Editor",
-	"fixAll": "Fix all"
+	"fixAll": "Fix all",
+	"nextSplitter" : "Next Splitter",
+	"nextSplitterTooltip": "Move focus through the available splitters",
+	"Confirm": "Confirm"
 });

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -9,19 +9,26 @@
  *	 IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'),
-	writeError = api.writeError;
-var git = require('nodegit');
-var clone = require('./clone');
-var express = require('express');
-var bodyParser = require('body-parser');
+var api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
+	git = require('nodegit'),
+	clone = require('./clone'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	responseTime = require('response-time');
 
 function router(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+	
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
 
 	return express.Router()
 	.use(bodyParser.json())
+	.use(responseTime({digits: 2, header: "X-GitapiStatus-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
 	.get('*', getStatus);
 	
 	function getStatus(req, res) {
@@ -47,9 +54,9 @@ function router(options) {
 					var orionFilePath = api.join(fileDir, file.path());
 					return {
 						"Git": {
-							"CommitLocation": "/gitapi/commit/HEAD" + orionFilePath,
-							"DiffLocation": "/gitapi/diff/" + diffType + orionFilePath,
-							"IndexLocation": "/gitapi/index" + orionFilePath
+							"CommitLocation": gitRoot + "/commit/HEAD" + orionFilePath,
+							"DiffLocation": gitRoot + "/diff/" + diffType + orionFilePath,
+							"IndexLocation": gitRoot + "/index" + orionFilePath
 						},
 						"Location": orionFilePath,
 						"Name": file.path(),
@@ -105,21 +112,21 @@ function router(options) {
 					repoState = "CHERRY_PICKING";
 				}
 				
-				res.status(200).json({
+				writeResponse(200, res, null, {
 					"Added": added,
 					"Changed": changed,
-					"CloneLocation": "/gitapi/clone" + fileDir,
-					"CommitLocation": "/gitapi/commit/HEAD" + fileDir,
+					"CloneLocation": gitRoot + "/clone" + fileDir,
+					"CommitLocation": gitRoot + "/commit/HEAD" + fileDir,
 					"Conflicting": conflicting,
-					"IndexLocation": "/gitapi/index" + fileDir,
-					"Location": "/gitapi/status/file" + fileDir,
+					"IndexLocation": gitRoot + "/index" + fileDir,
+					"Location": gitRoot + "/status" + fileRoot + fileDir,
 					"Missing": missing,
 					"Modified": modified,
 					"Removed": removed,
 					"RepositoryState": repoState,
 					"Type": "Status",
 					"Untracked": untracked   
-				});
+				}, true);
 			});
 		})
 		.catch(function(err) {

@@ -1,12 +1,14 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2009, 2012 IBM Corporation and others.
- * All rights reserved. This program and the accompanying materials are made 
- * available under the terms of the Eclipse Public License v1.0 
- * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
- * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html). 
- * 
- * Contributors: IBM Corporation - initial API and implementation
+ * Copyright (c) 2009, 2017 IBM Corporation and others.
+ * All rights reserved. This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License v1.0
+ * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
+ * License v1.0 (http://www.eclipse.org/org/documents/edl-v10.html).
+ *
+ * Contributors: 
+ *     IBM Corporation - initial API and implementation
+ *     Casey Flynn - Google Inc.
  ******************************************************************************/
 
 /*eslint-env browser, amd*/
@@ -19,64 +21,94 @@ define([
 	'orion/explorers/explorer',
 	'orion/EventTarget',
 	'orion/objects',
-	'orion/util'
-], function(messages, Deferred, lib, i18nUtil, mFileUtils, mExplorer, EventTarget, objects, util){
+	'orion/util',
+	'orion/generalPreferences',
+	'orion/urlModifier'
+], function(messages, Deferred, lib, i18nUtil, mFileUtils, mExplorer, EventTarget, objects, util, mGeneralPrefs, urlModifier) {
 
+	var generalPreferences;
+	
 	/**
 	 * Tree model used by the FileExplorer
+	 * @param {?} serviceRegistry The backing registry
+	 * @param {?} root The root item for the model
+	 * @param {FileClient} fileClient The backing FileClient instance
+	 * @param {string} idPrefix The prefix to  use for the new model nodes
+	 * @param {boolean} excludeFiles The optional flag for if files should be left out of the model
+	 * @param {boolean} excludeFolders The optional flag for if folders should be left out of the model
+	 * @param {?} filteredResources The optional map of names to be left out of the model (filtered)
 	 */
-	function FileModel(serviceRegistry, root, fileClient, idPrefix, excludeFiles, excludeFolders) {
+	function FileModel(serviceRegistry, root, fileClient, idPrefix, excludeFiles, excludeFolders, filteredResources) {
 		this.registry = serviceRegistry;
 		this.root = root;
 		this.fileClient = fileClient;
 		this.idPrefix = idPrefix || "";
-		if(typeof this.idPrefix !== "string") {
+		if (typeof this.idPrefix !== "string") {
 			this.idPrefix = this.idPrefix.id;
 		}
-		this.excludeFiles = !!excludeFiles;
-		this.excludeFolders = !!excludeFolders;
+		this.excludeFiles = Boolean(excludeFiles);
+		this.excludeFolders = Boolean(excludeFolders);
+		if(!this.filteredResources) {
+			//is set from project nav not via arguments
+			this.filteredResources = filteredResources;
+		}
+		this.filter = new FileFilter(this.filteredResources);
+		this._annotations = [];
+		// Listen to annotation changed events
+		this._annotationChangedHandler = this._handleAnnotationChanged.bind(this)
+		this.fileClient.addEventListener('AnnotationChanged', this._annotationChangedHandler);
 	}
-	FileModel.prototype = new mExplorer.ExplorerModel(); 
+	FileModel.prototype = new mExplorer.ExplorerModel();
 	objects.mixin(FileModel.prototype, /** @lends orion.explorer.FileModel.prototype */ {
+		destroy: function () {
+			this.fileClient.removeEventListener("AnnotationChanged", this._annotationChangedHandler);
+			mExplorer.ExplorerModel.prototype.destroy.call(this);
+		},
+
 		getRoot: function(onItem){
 			onItem(this.root);
 		},
-	
+
 		/*
 		 *	Process the parent and children, doing any filtering or sorting that may be necessary.
 		 */
-		processParent: function(parent, children) {
+		processParent: function(parentItem, children) {
 			// Note that the Parents property is not available for metadatas retrieved with fetchChildren().
-			var parents = parent.Projects ? [] : [parent].concat(parent.Parents || []);
-			if (this.excludeFiles || this.excludeFolders) {
+			var parents = parentItem.Projects ? [] : [parentItem].concat(parentItem.Parents || []);
+			if (this.excludeFiles || this.excludeFolders || this.filteredResources) {
 				var filtered = [];
-				for (var i in children) {
-					var exclude = children[i].Directory ? this.excludeFolders : this.excludeFiles;
-					if (!exclude) {
-						filtered.push(children[i]);
-						children[i].parent = parent;
-						if (!children[i].Parents)
-							children[i].Parents = parents;
+				children.forEach(function(child) {
+					var exclude = child.Directory ? this.excludeFolders : this.excludeFiles;
+					if(this.filteredResources && this.filter) {
+						exclude = exclude || this.filter.isFiltered(child.Name);
 					}
-				}
+					if (!exclude) {
+						filtered.push(child);
+						child.parent = parentItem;
+						if (!child.Parents) {
+							child.Parents = parents;
+						}
+					}
+				}.bind(this));
 				children = filtered;
 			} else {
-				for (var j in children) {
-					children[j].parent = parent;
-					if (!children[j].Parents)
-						children[j].Parents = parents;
-				}
+				children.forEach(function(child) {
+					child.parent = parentItem;
+					if (!child.Parents) {
+						child.Parents = parents;
+					}
+				});
 			}
-		
+
 			//link the parent and children together
-			parent.children = children;
-	
+			parentItem.children = children;
+
 			// not ideal, but for now, sort here so it's done in one place.
 			// this should really be something pluggable that the UI defines
-			parent.children.sort(this.sortChildren); 
+			parentItem.children.sort(this.sortChildren);
 			return children;
 		},
-		
+
 		sortChildren: function(a, b) {
 			var isDir1 = a.Directory;
 			var isDir2 = b.Directory;
@@ -85,30 +117,35 @@ define([
 			}
 			var n1 = a.Name && a.Name.toLowerCase();
 			var n2 = b.Name && b.Name.toLowerCase();
-			if (n1 < n2) { return -1; }
-			if (n1 > n2) { return 1; }
+			if (n1 < n2) {
+				return -1;
+			}
+			if (n1 > n2) {
+				return 1;
+			}
 			return 0;
 		},
-		
+
 		getChildren: function(parentItem, /* function(items) */ onComplete) {
-			var self = this;
 			// the parent already has the children fetched
 			if (parentItem.children) {
 				onComplete(parentItem.children);
-			} else if (parentItem.Directory!==undefined && parentItem.Directory===false) {
+			} else if (parentItem.Directory !== undefined && parentItem.Directory === false) {
 				onComplete([]);
 			} else if (parentItem.Children) {
-				onComplete(self.processParent(parentItem, parentItem.Children));
+				onComplete(this.processParent(parentItem, parentItem.Children));
 			} else if (parentItem.Location) {
 				var progress = null;
-				if(this.registry) {
+				if (this.registry) {
 					progress = this.registry.getService("orion.page.progress"); //$NON-NLS-0$
 				}
-				(progress ? progress.progress(this.fileClient.fetchChildren(parentItem.ChildrenLocation), messages["Fetching children of "] + parentItem.Name) : this.fileClient.fetchChildren(parentItem.ChildrenLocation)).then( //$NON-NLS-0$
+				(progress ? progress.progress(this.fileClient.fetchChildren(parentItem.ChildrenLocation), messages["Fetching children of "] + parentItem.Name) : this.fileClient.fetchChildren(parentItem.ChildrenLocation)).then(
 					function(children) {
-						if (self.destroyed) { return; }
-						onComplete(self.processParent(parentItem, children));
-					},
+						if (this.destroyed) {
+							return;
+						}
+						onComplete(this.processParent(parentItem, children));
+					}.bind(this),
 					function() {
 						onComplete([]);
 					}
@@ -117,17 +154,94 @@ define([
 				onComplete([]);
 			}
 		},
-		
+
 		hasChildren: function() {
 			var result = false;
 			if (this.root.Children) {
 				result = this.root.Children.length > 0;
 			}
 			return result;
+		},
+
+		getAnnotations: function() {
+			return this._annotations;
+		},
+
+		_handleAnnotationChanged: function(evt) {
+			var model = this;
+			if (evt.removeTypes) {
+				for (var i = this._annotations.length - 1; i >= 0; i--) {
+					for (var j = 0; j < evt.removeTypes.length; j++) {
+						if (this._annotations[i] instanceof evt.removeTypes[j]) {
+							this._annotations.splice(i, 1);
+							break;
+						}
+					}
+				}
+			}
+			evt.annotations.forEach(function(annotation) {
+				model._annotations.push(annotation);
+			});
 		}
 	});
-	
+
 	FileModel.prototype.constructor = FileModel;
+
+	/**
+	 * String matcher used by FileModel
+	 * @param {string[]} filteredResources - file names or patterns to filter, where a pattern may contain:
+	 * 										 	* to match one or more characters in a path segment
+	 * 											? to match on one character in a path segment
+	 */
+	function FileFilter(filteredResources) {
+		this._fileRegex = [];
+		this._fileLookup = {};
+		this._create(filteredResources);
+	}
+	
+	objects.mixin(FileFilter.prototype, /** @lends orion.explorer.FileFilter.prototype */ {
+		_create: function(filteredResources) {
+			if (filteredResources) {
+				Object.keys(filteredResources).forEach(function(resourceName) {
+					if (this._isExpression(resourceName)) {
+						this._fileRegex.push(this._buildExpression(resourceName));
+					} else {
+						this._fileLookup[resourceName] = true;
+					}
+				}.bind(this));
+			}
+		},
+		_isExpression: function(fileFilter) {
+			if (fileFilter) {
+				return (fileFilter.indexOf("*") > -1) || (fileFilter.indexOf("?") > -1);
+			}
+			return false;
+		},
+		_buildExpression: function(fileFilter) {
+			// Escape all regular expression characters except for * and .
+			var escaped = fileFilter.replace(/[\-\[\]\/\{\}\(\)\+\.\\\^\$\|\,\#]/g, "\\$&");
+			// Replace * with .*
+			escaped = escaped.replace(/\*/g, ".+");
+			// Replace ? with .
+			escaped = escaped.replace(/\?/g, ".");
+			// Add ^ and $ to the string
+			return new RegExp("^" + escaped + "$");
+		},
+		_isFilteredByRegex: function(fileName) {
+			for (var i=0; i<this._fileRegex.length; i++) {
+				if (this._fileRegex[i].test(fileName)) {
+					return true;
+				}
+			}
+			return false;
+		},
+		isFiltered: function(fileName) {
+			if (this._fileLookup.hasOwnProperty(fileName)) {
+				return true;
+			}
+			return this._isFilteredByRegex(fileName);
+		}
+	});
 
 
 	/**
@@ -169,6 +283,12 @@ define([
 	function FileExplorer(options) {
 		EventTarget.attach(this);
 		this.registry = options.serviceRegistry;
+		if(this.registry) {
+			this.preferences = this.registry.getService('orion.core.preference');
+		}
+		if(this.preferences) {
+			this.generalPrefs = new mGeneralPrefs.GeneralPreferences(this.preferences);
+		}
 		this.treeRoot = options.treeRoot;
 		this.selection = options.selection;
 		this.fileClient = options.fileClient;
@@ -183,25 +303,29 @@ define([
 		this.myTree = null;
 		this.checkbox = false;
 		this._hookedDrag = false;
+		this.filteredResources = options.filteredResources;
+		this._annotations = [];
 		var modelEventDispatcher = options.modelEventDispatcher ? options.modelEventDispatcher : new EventTarget();
 		this.modelEventDispatcher = modelEventDispatcher;
-		//Listen to all resource changed events
+		// Listen to all resource changed events
 		this.fileClient.addEventListener("Changed", this._resourceChangedHandler = this.handleResourceChange.bind(this));
+		// Listen to annotation changed events
+		this.fileClient.addEventListener('AnnotationChanged', this._annotationChangedHandler = this._handleAnnotationChanged.bind(this));
 		// Listen to model changes from fileCommands
 		var _self = this;
 		this._modelListeners = {};
 		//We still need to listen to the "create project" events.
 		//Refer to projectCommnads.js for details on how special UI model calculation is done for the event.
 		["create"].forEach(function(eventType) { //$NON-NLS-1$//$NON-NLS-0$
-				modelEventDispatcher.addEventListener(eventType, _self._modelListeners[eventType] = _self.modelHandler[eventType].bind(_self));
-			});
-			
+			modelEventDispatcher.addEventListener(eventType, _self._modelListeners[eventType] = _self.modelHandler[eventType].bind(_self));
+		});
+
 		var parentNode = lib.node(this.parentId);
 		this._clickListener = function(evt) {
-            if (!(evt.metaKey || evt.altKey || evt.shiftKey || evt.ctrlKey)) {
-                var navHandler = _self.getNavHandler();
-                if (navHandler && navHandler.getSelectionPolicy() !== "cursorOnly") {
-                	var temp = evt.target;
+			if (!(evt.metaKey || evt.altKey || evt.shiftKey || evt.ctrlKey)) {
+				var navHandler = _self.getNavHandler();
+				if (navHandler && navHandler.getSelectionPolicy() !== "cursorOnly") {
+					var temp = evt.target;
 					while (temp && temp !== parentNode) {
 						if (temp._item) {
 							break;
@@ -209,22 +333,44 @@ define([
 						temp = temp.parentNode;
 					}
 					if (temp && temp._item) {
-	                    var link = lib.$("a", evt.target);
-	                    if (link) {
-	                    	if(evt.type === "click") {
-		            			window.location.href = link.href;
-	            				//_self._clickLink(link);
-            				} else if(evt.type === "dblclick"){
-            					this.handleLinkDoubleClick(link, evt);
-            				}
-	                    }
-                	}
-                }
-            }
+						var link = lib.$("a", evt.target);
+						if (link) {
+							if (evt.type === "click") {
+								window.location.href = urlModifier(link.href);
+								//_self._clickLink(link);
+							} else if (evt.type === "dblclick") {
+								this.isEditorTabsEnabled().then(function(editorTabsEnabled) {
+									if(editorTabsEnabled){
+										var target = evt.target || evt.srcElement;
+										var href = target.querySelector("a").href;
+										this.dispatchEvent({
+											type: "fileDoubleClicked",
+											href: href
+										});
+									}else{
+										this.isDesktopSelectionMode().then(function(desktopMode){
+											if(desktopMode){
+												this.handleLinkDoubleClick(link, evt);
+											}
+										}.bind(this));
+									}
+								}.bind(this));
+							}
+						}
+					}
+				}
+			}
 		};
 		if (parentNode) {
-			parentNode.addEventListener("click", this._clickListener.bind(this)); //$NON-NLS-0$
-			parentNode.addEventListener("dblclick", this._clickListener.bind(this)); //$NON-NLS-0$
+			parentNode.addEventListener("click", this._clickListener.bind(this));
+			parentNode.addEventListener("dblclick", this._clickListener.bind(this));
+		}
+		
+		// Set general preferences
+		if(this.generalPrefs) {
+			this.generalPrefs.getPrefs().then(function(generalPrefs) {
+				generalPreferences = generalPrefs;
+			});
 		}
 	}
 	
@@ -239,106 +385,147 @@ define([
 			});
 			var parentNode = lib.node(this.parentId);
 			if (parentNode) {
-				parentNode.removeEventListener("click", this._clickListener); //$NON-NLS-0$
+				parentNode.removeEventListener("click", this._clickListener);
 			}
 			this.fileClient.removeEventListener("Changed", this._resourceChangedHandler);
+			this.fileClient.removeEventListener("AnnotationChanged", this._annotationChangedHandler);
 			mExplorer.Explorer.prototype.destroy.call(this);
 		},
+		_isFileCreationAtRootEnabled : function() {
+			if (generalPreferences && generalPreferences.hasOwnProperty("enableFileCreationAtRoot")) {
+				return generalPreferences.enableFileCreationAtRoot;
+			}
+			return false;
+		},
 		_getUIModel: function(loc) {
-			if(!this.model || !loc) {
+			if (!this.model || !loc) {
 				return null;
 			}
 			var elementNode;
-			if(loc === "/file" && util.isElectron){
-				// Special case in electron, need to find the workspace element to create file at workspace level.
-				elementNode = this.model.root;
-			}else{
-				var elementId = this.model.getId({Location: loc});
+			// Special case in electron, or when create file at root enabled.
+			// Need to find the workspace element to create file at workspace level.
+			if (loc === "/file") {
+				if (util.isElectron || this._isFileCreationAtRootEnabled()) {
+					elementNode = this.model.root;
+				}
+			} else {
+				var elementId = this.model.getId({
+					Location: loc
+				});
 				elementNode = lib.node(elementId) && lib.node(elementId)._item || null;
 			}
 			return elementNode;
 		},
 		handleResourceChange: function(evt) {
-			if(!this.model) {
+			if (!this.model) {
 				return new Deferred().resolve();
 			}
-			if(evt && evt.deleted) {
+			if (evt && evt.deleted) {
 				return this._handleResourceDelete(evt);
 			}
-			if(evt && ( evt.moved || evt.copied)) {
+			if (evt && (evt.moved || evt.copied)) {
 				return this._handleResourceMoveOrCopy(evt);
 			}
-			if(evt && evt.created) {
+			if (evt && evt.created) {
 				return this._handleResourceCreate(evt);
 			}
 			return new Deferred().resolve();
 		},
 		_handleResourceCreate: function(evt) {
 			//Convert the item array( {parent, result} ) to an array of {newValue, oldValue, parent}
-			var items = evt.created.map(function(createdItem){
-				return {type: "create", select: createdItem.eventData ? createdItem.eventData.select : false, newValue: createdItem.result, parent: this._getUIModel(createdItem.parent)};
+			var items = evt.created.map(function(createdItem) {
+				return {
+					type: "create",
+					select: createdItem.eventData ? createdItem.eventData.select : false,
+					newValue: createdItem.result,
+					parent: this._getUIModel(createdItem.parent),
+					silent: evt.silent
+				};
 			}.bind(this));
-			return this.onModelCreate(items[0]).then(function(/*result*/){
+			return this.onModelCreate(items[0]).then(function( /*result*/ ) {
 				return items[0];
 			});
 		},
 		_handleResourceDelete: function(evt) {
 			//Convert the location array( a string array) to an array of {newValue, oldValue, parent}
-			var items = evt.deleted.map(function(deletedItem){
+			var items = evt.deleted.map(function(deletedItem) {
 				var loc = deletedItem.eventData && deletedItem.eventData.itemLocation ? deletedItem.eventData.itemLocation : deletedItem.deleteLocation;
 				var uiModel = this._getUIModel(loc);
-				return {oldValue: uiModel, newValue: null, parent: uiModel ? uiModel.parent : null};
+				return {
+					oldValue: uiModel,
+					newValue: null,
+					parent: uiModel ? uiModel.parent : null,
+					silent: evt.silent
+				};
 			}.bind(this));
-			var newEvent = {items: items};
-			return this.onModelDelete(newEvent).then(function(/*result*/){
+			var newEvent = {
+				items: items
+			};
+			return this.onModelDelete(newEvent).then(function( /*result*/ ) {
 				return items[0];
 			});
 		},
 		_handleResourceMoveOrCopy: function(evt) {
 			//Convert the item array( {source, target, result} ) to an array of {newValue, oldValue, parent}
 			var itemArray = evt.moved ? evt.moved : evt.copied;
-			var items = itemArray.map(function(movedItem){
-				return {oldValue: this._getUIModel(movedItem.source), newValue: movedItem.result, parent: this._getUIModel(movedItem.target)};
+			var items = itemArray.map(function(movedItem) {
+				return {
+					oldValue: this._getUIModel(movedItem.source),
+					newValue: movedItem.result,
+					parent: this._getUIModel(movedItem.target),
+					silent: evt.silent
+				};
 			}.bind(this));
-			var newEvent = {items: items};
+			var newEvent = {
+				items: items
+			};
 			var moveOrCopy = evt.moved ? this.onModelMove.bind(this) : this.onModelCopy.bind(this);
-			return moveOrCopy(newEvent).then(function(/*result*/){
+			return moveOrCopy(newEvent).then(function( /*result*/ ) {
 				return items[0];
 			});
 		},
-//		_clickLink: function(linkElement) {
-//			if (linkElement.tagName === "A") { //$NON-NLS-0$
-//				var temp = linkElement;
-//				while (temp) {
-//					if (temp._item) {
-//						break;
-//					}
-//					temp = temp.parentNode;
-//				}
-//				if (temp && temp._item) {
-//					this.onLinkClick({type: "linkClick", item: temp._item}); //$NON-NLS-0$
-//				}
-//			}
-//		},
-//		onLinkClick: function(clickEvent) {
-//			this.dispatchEvent(clickEvent);
-//		},
+		//		_clickLink: function(linkElement) {
+		//			if (linkElement.tagName === "A") { //$NON-NLS-0$
+		//				var temp = linkElement;
+		//				while (temp) {
+		//					if (temp._item) {
+		//						break;
+		//					}
+		//					temp = temp.parentNode;
+		//				}
+		//				if (temp && temp._item) {
+		//					this.onLinkClick({type: "linkClick", item: temp._item}); //$NON-NLS-0$
+		//				}
+		//			}
+		//		},
+		//		onLinkClick: function(clickEvent) {
+		//			this.dispatchEvent(clickEvent);
+		//		},
+
+		_handleAnnotationChanged: function(evt) {
+			if (this.myTree) {
+				this.myTree.requestAnnotationRefresh();
+			}
+		},
+
 		onModelCreate: function(modelEvent) {
-			return this.changedItem(modelEvent.parent, true);
+			return this.changedItem(modelEvent.parent, !modelEvent.silent);
 		},
 		onModelCopy: function(modelEvent) {
-			var ex = this, changedLocations = {};
+			var ex = this,
+				changedLocations = {};
 			(modelEvent.items || [modelEvent]).forEach(function(item) {
 				var itemParent = item.parent;
 				itemParent = itemParent || ex.treeRoot;
 				changedLocations[itemParent.Location] = itemParent;
 			});
 			return Deferred.all(Object.keys(changedLocations).map(function(loc) {
-				return ex.changedItem(changedLocations[loc], true);
+				return ex.changedItem(changedLocations[loc], !modelEvent.silent);
 			}));
 		},
 		onModelMove: function(modelEvent) {
-			var ex = this, changedLocations = {};
+			var ex = this,
+				changedLocations = {};
 			(modelEvent.items || [modelEvent]).forEach(function(item) {
 				var treeRoot = ex.treeRoot;
 				if (item.oldValue && (treeRoot.Location || treeRoot.ContentLocation) === item.oldValue.Location) {
@@ -347,7 +534,11 @@ define([
 					var newItem = item.newValue;
 					var realNewItem = newItem.ChildrenLocation ? newItem : this.fileClient.read(newItem.ContentLocation, true);
 					return Deferred.when(realNewItem, function(newItem) {
-						ex.dispatchEvent({ type: "rootMoved", oldValue: oldRoot, newValue: newItem }); //$NON-NLS-0$
+						ex.dispatchEvent({
+							type: "rootMoved",
+							oldValue: oldRoot,
+							newValue: newItem
+						});
 						ex.loadResourceList(newItem);
 					});
 				}
@@ -359,22 +550,23 @@ define([
 				if (itemParent) {
 					changedLocations[itemParent.Location] = itemParent;
 				}
-				
+
 				// If the renamed item was an expanded directory, force an expand.
 				if (item.oldValue && item.oldValue.Directory && item.newValue && ex.isExpanded(item.oldValue)) {
 					changedLocations[item.newValue.Location] = item.newValue;
 				}
 			});
 			return Deferred.all(Object.keys(changedLocations).map(function(loc) {
-				return ex.changedItem(changedLocations[loc], true);
+				return ex.changedItem(changedLocations[loc], !modelEvent.silent);
 			}));
 		},
 		onModelDelete: function(modelEvent) {
 			var items = modelEvent.items || [modelEvent];
-			var ex = this, treeRoot = ex.treeRoot;
+			var ex = this,
+				treeRoot = ex.treeRoot;
 			var newRoot;
 			var treeRootDeleted = items.some(function(item) {
-				if(!item.oldValue) {
+				if (!item.oldValue) {
 					return false;
 				}
 				if (item.oldValue.Location === (treeRoot.Location || treeRoot.ContentLocation)) {
@@ -387,20 +579,20 @@ define([
 			});
 			if (treeRootDeleted) {
 				return this.loadResourceList(newRoot);
-			} 
+			}
 			// Refresh every parent folder
 			var changedLocations = {};
 			items.forEach(function(item) {
 				var parent = item.parent;
-				if(parent) {
+				if (parent) {
 					changedLocations[parent.Location] = parent;
 				}
 			});
 			return Deferred.all(Object.keys(changedLocations).map(function(loc) {
-				return ex.changedItem(changedLocations[loc], true);
+				return ex.changedItem(changedLocations[loc], !modelEvent.silent);
 			}));
 		},
-	
+
 		/**
 		 * Handles model changes. Subclasses can override these methods to control how the FileExplorer reacts to various types of model changes.
 		 * The default implementations generally just refresh the affected row(s) in the explorer.
@@ -422,7 +614,7 @@ define([
 				modelEvent.select = true;
 				return this.onModelCreate(modelEvent);
 			},
-			"delete": function(modelEvent) { //$NON-NLS-0$
+			"delete": function(modelEvent) {
 				if (modelEvent.count) {
 					return; //Handled in deleteMultiple
 				}
@@ -431,7 +623,7 @@ define([
 			deleteMultiple: function(modelEvent) {
 				return this.onModelDelete(modelEvent);
 			},
-			"import": function(modelEvent) { //$NON-NLS-0$
+			"import": function(modelEvent) {
 				var target = modelEvent.target;
 				return this.changedItem(target, true);
 			},
@@ -445,7 +637,7 @@ define([
 				return this.onModelMove(modelEvent);
 			}
 		},
-		
+
 		/**
 		 * @param {Object} parentItem The item in the model which represents the new item's parent
 		 * @param {Object} child An object describing the child that a placeholder needs to be created for.
@@ -456,13 +648,13 @@ define([
 		 */
 		makeNewChildItemPlaceholder: function(parentItem, child, domId) {
 			var deferred = new Deferred();
-			
-			this.model.getChildren(parentItem, function(children){
+
+			this.model.getChildren(parentItem, function(children) {
 				var item = null;
 				var insertAfter = false;
-				if(children) {
-					if(!child.Location) {
-						child.Location = parentItem.Location + child.Name + child.Directory ? "/":"";
+				if (children) {
+					if (!child.Location) {
+						child.Location = parentItem.Location + child.Name + child.Directory ? "/" : "";
 					}
 					children.push(child);
 					children.sort(this.model.sortChildren);
@@ -478,27 +670,28 @@ define([
 						} else {
 							item = parentItem;
 						}
-						
+
 						insertAfter = true;
 					}
 				} else {
 					//place before parentItem
 					item = parentItem;
 				}
-				
+
 				var placeholder = this.makeNewItemPlaceholder(item, domId, insertAfter);
 				deferred.resolve(placeholder);
 			}.bind(this));
-			
+
 			return deferred;
 		},
 
 		_makeDropTarget: function(item, node, persistAndReplace) {
+			var that = this;
 			if (this.dragAndDrop) {
 				var explorer = this;
 				var performDrop = this.dragAndDrop;
-				
-				function findItemfromNode(target){
+
+				function findItemfromNode(target) {
 					var tmp = target;
 					var source;
 					while (tmp) {
@@ -510,38 +703,47 @@ define([
 					}
 					return source;
 				}
-				
+
 				var dragStart = function(evt) {
-					dragStartTarget = evt.target;
-					var source = findItemfromNode(dragStartTarget);
-					if (source) {
-						var exportName = source.Directory ? dragStartTarget.text + ".zip" : dragStartTarget.text;
-						var downloadUrl = new URL(source.Directory ? source.ExportLocation : source.Location, self.location.href).href;
-						evt.dataTransfer.setData('DownloadURL', "application/zip,application/octet-stream:"+ exportName +":" + downloadUrl);
-					}
+					var currentSelections = that.selection.getSelections();
+					if(currentSelections.length > 1){
+						dragStartTarget = currentSelections;
+						var crt = this.cloneNode(true);
+						crt.style.display = "none";
+						evt.dataTransfer.setDragImage(crt, 0, 0);
+						// For Electron Orion, export multiple selections using Electron APIs
+					}else{
+						dragStartTarget = evt.target;
+						var source = findItemfromNode(dragStartTarget);
+						if (source) {
+							var exportName = source.Directory ? source.Name + ".zip" : source.Name;
+							var downloadUrl = new URL(source.Directory ? (source.ExportLocation || source.Location) : source.Location, self.location.href).href;
+							evt.dataTransfer.setData('DownloadURL', "application/zip,application/octet-stream:" + exportName + ":" + downloadUrl);
+						}
+ 					}
 				};
-				
+
 				if (persistAndReplace) {
 					if (this._oldDragStart) {
-						node.removeEventListener("dragstart", this._oldDragStart, false); //$NON-NLS-0$
+						node.removeEventListener("dragstart", this._oldDragStart, false);
 					}
 					this._oldDragStart = dragStart;
 				}
-				node.addEventListener("dragstart", dragStart, false); //$NON-NLS-0$
-				
-				
+				node.addEventListener("dragstart", dragStart, false);
+
+
 				var dragEnd = function(evt) {
 					dragStartTarget = null;
 				};
 				if (persistAndReplace) {
 					if (this._oldDragEnd) {
-						node.removeEventListener("dragend", this._oldDragEnd, false); //$NON-NLS-0$
+						node.removeEventListener("dragend", this._oldDragEnd, false);
 					}
 					this._oldDragEnd = dragEnd;
 				}
-				node.addEventListener("dragend", dragEnd, false); //$NON-NLS-0$
-				
-				var dragLeave = function(evt) { //$NON-NLS-0$
+				node.addEventListener("dragend", dragEnd, false);
+
+				var dragLeave = function(evt) {
 					node.classList.remove("dragOver"); //$NON-NLS-0$
 					evt.preventDefault();
 					evt.stopPropagation();
@@ -549,22 +751,22 @@ define([
 				// if we are rehooking listeners on a node, unhook old before hooking and remembering new
 				if (persistAndReplace) {
 					if (this._oldDragLeave) {
-						node.removeEventListener("dragleave", this._oldDragLeave, false); //$NON-NLS-0$
+						node.removeEventListener("dragleave", this._oldDragLeave, false);
 					}
 					this._oldDragLeave = dragLeave;
 				}
-				node.addEventListener("dragleave", dragLeave, false); //$NON-NLS-0$
-	
-				var dragEnter = function (evt) {
+				node.addEventListener("dragleave", dragLeave, false);
+
+				var dragEnter = function(evt) {
 					if (dragStartTarget) {
 						var copy = util.isMac ? evt.altKey : evt.ctrlKey;
 						dropEffect = evt.dataTransfer.dropEffect = copy ? "copy" : "move"; //$NON-NLS-1$ //$NON-NLS-0$
 					} else {
 						/* accessing dataTransfer.effectAllowed here throws an error on IE */
-						if (!util.isIE && (evt.dataTransfer.effectAllowed === "all" ||   //$NON-NLS-0$
-							evt.dataTransfer.effectAllowed === "uninitialized" ||  //$NON-NLS-0$
-							evt.dataTransfer.effectAllowed.indexOf("copy") >= 0)) {   //$NON-NLS-0$
-								evt.dataTransfer.dropEffect = "copy";  //$NON-NLS-0$
+						if (!util.isIE && (evt.dataTransfer.effectAllowed === "all" ||
+								evt.dataTransfer.effectAllowed === "uninitialized" ||
+								evt.dataTransfer.effectAllowed.indexOf("copy") >= 0)) { //$NON-NLS-0$
+							evt.dataTransfer.dropEffect = "copy"; //$NON-NLS-0$
 						}
 					}
 					node.classList.add("dragOver"); //$NON-NLS-0$
@@ -572,58 +774,64 @@ define([
 				};
 				if (persistAndReplace) {
 					if (this._oldDragEnter) {
-						node.removeEventListener("dragenter", this._oldDragEnter, false); //$NON-NLS-0$
+						node.removeEventListener("dragenter", this._oldDragEnter, false);
 					}
 					this._oldDragEnter = dragEnter;
 				}
-				node.addEventListener("dragenter", dragEnter, false); //$NON-NLS-0$
-	
+				node.addEventListener("dragenter", dragEnter, false);
+
 				// this listener is the same for any time, so we don't need to remove/rehook.
-				var dragOver = function (evt) {
+				var dragOver = function(evt) {
 					if (dragStartTarget) {
 						var copy = util.isMac ? evt.altKey : evt.ctrlKey;
 						dropEffect = evt.dataTransfer.dropEffect = copy ? "copy" : "move"; //$NON-NLS-1$ //$NON-NLS-0$
 					} else {
 						// default behavior is to not trigger a drop, so we override the default
-						// behavior in order to enable drop.  
+						// behavior in order to enable drop.
 						// we have to specify "copy" again here, even though we did in dragEnter
 						/* accessing dataTransfer.effectAllowed here throws an error on IE */
-						if (!util.isIE && (evt.dataTransfer.effectAllowed === "all" ||   //$NON-NLS-0$
-							evt.dataTransfer.effectAllowed === "uninitialized" ||  //$NON-NLS-0$
-							evt.dataTransfer.effectAllowed.indexOf("copy") >= 0)) {   //$NON-NLS-0$
-								evt.dataTransfer.dropEffect = "copy";  //$NON-NLS-0$
-						}   
+						if (!util.isIE && (evt.dataTransfer.effectAllowed === "all" ||
+								evt.dataTransfer.effectAllowed === "uninitialized" ||
+								evt.dataTransfer.effectAllowed.indexOf("copy") >= 0)) { //$NON-NLS-0$
+							evt.dataTransfer.dropEffect = "copy"; //$NON-NLS-0$
+						}
 					}
 					lib.stop(evt);
 				};
 				if (persistAndReplace && !this._oldDragOver) {
-					node.addEventListener("dragover", dragOver, false); //$NON-NLS-0$
+					node.addEventListener("dragover", dragOver, false);
 					this._oldDragOver = dragOver;
 				}
-	
+
 				var progress = null;
 				var statusService = null;
-				if(explorer.registry) {
+				if (explorer.registry) {
 					progress = explorer.registry.getService("orion.page.progress"); //$NON-NLS-0$
-					statusService = explorer.registry.getService("orion.page.message");	 //$NON-NLS-0$
+					statusService = explorer.registry.getService("orion.page.message"); //$NON-NLS-0$
 				}
-				
+
 				var errorHandler = function(error) {
 					if (statusService) {
 						var errorMessage = null;
 						if ("string" === typeof error) {
-							errorMessage = {Severity: "Error", Message: error};
+							errorMessage = {
+								Severity: "Error",
+								Message: error
+							};
 						} else if (error && error.error) {
-							errorMessage = {Severity: "Error", Message: error.error};
+							errorMessage = {
+								Severity: "Error",
+								Message: error.error
+							};
 						} else {
-							errorMessage = error;	
+							errorMessage = error;
 						}
-						statusService.setProgressResult(errorMessage);	//$NON-NLS-0$ 
+						statusService.setProgressResult(errorMessage);
 					} else {
 						window.console.log(error);
 					}
 				};
-						
+
 				function dropFileEntry(entry, target, explorer, performDrop, fileClient, deferredWrapper) {
 					var preventNotification = false;
 					var targetIsRoot = mFileUtils.isAtRoot(target.Location);
@@ -633,20 +841,23 @@ define([
 						deferredWrapper.entryCount++;
 					} else if (entry.isDirectory) {
 						preventNotification = true; //we don't want to notify for each item that is in the folder
-						deferredWrapper = {entryCount: 1, deferred: new Deferred()};
-						explorer._makeUploadNode(target, entry.name, true).then(function(uploadNodeContainer){
+						deferredWrapper = {
+							entryCount: 1,
+							deferred: new Deferred()
+						};
+						explorer._makeUploadNode(target, entry.name, true).then(function(uploadNodeContainer) {
 							var cleanup = function() {
 								uploadNodeContainer.destroyFunction();
 								if (targetIsRoot) {
-									explorer.loadResourceList(explorer.treeRoot.Path, true);	
+									explorer.loadResourceList(explorer.treeRoot.Path, true);
 								} else {
-									explorer.changedItem(target);	
-								}						
+									explorer.changedItem(target);
+								}
 							};
 							deferredWrapper.deferred.then(cleanup, cleanup);
 						});
 					}
-					
+
 					var decrementEntryCount = function() {
 						if (deferredWrapper) {
 							deferredWrapper.entryCount--;
@@ -655,49 +866,74 @@ define([
 							}
 						}
 					};
-					
+
 					var internalErrorHandler = function(error) {
 						if (statusService) {
 							var errorMessage = null;
 							if ("string" === typeof error) {
-								errorMessage = {Severity: "Error", Message: error};
+								errorMessage = {
+									Severity: "Error",
+									Message: error
+								};
 							} else if (error && error.error) {
-								errorMessage = {Severity: "Error", Message: error.error};
+								errorMessage = {
+									Severity: "Error",
+									Message: error.error
+								};
 							} else {
-								errorMessage = error;	
+								errorMessage = error;
 							}
-							statusService.setProgressResult(errorMessage);	//$NON-NLS-0$ 
+							statusService.setProgressResult(errorMessage);
 						} else {
 							window.console.log(error);
 						}
 						decrementEntryCount();
 					};
-					
+
 					if (!target.Location && target.fileMetadata) {
 						target = target.fileMetadata;
 					}
 					if (entry.isFile) {
 						// can't drop files directly into workspace.
-						if (targetIsRoot){ //$NON-NLS-0$
-							internalErrorHandler(messages["CreateFolderErr"]); //$NON-NLS-0$
+						if (targetIsRoot) {
+							internalErrorHandler(messages["CreateFolderErr"]);
 						} else {
 							entry.file(function(file) {
 								if (deferredWrapper) {
-									// this is part of a folder upload, upload the file directly without showing 
+									// this is part of a folder upload, upload the file directly without showing
 									// progress for it but call decrementEntryCount when the upload finishes
-									var unzip = file.name.indexOf(".zip") === file.name.length-4 && window.confirm(i18nUtil.formatMessage(messages["Unzip ${0}?"], file.name)); //$NON-NLS-1$ //$NON-NLS-0$
-									var handlers = {
-										error: function(event) {
-											var errorMessage = messages["UploadingFileErr"] + file.name;
-											if (statusService) {
-												statusService.setProgressResult({Severity: "Error", Message: errorMessage}); //$NON-NLS-0$ 
-											} else {
-												window.console.log(errorMessage);
+									var d = new Deferred();
+									if(file.name.indexOf(".zip") === file.name.length - 4){
+										var dialog = explorer.serviceRegistry.getService("orion.page.dialog");								
+										dialog.confirm(i18nUtil.formatMessage(messages["Unzip ${0}?"], file.name), function(result){
+											if(!result){
+												result = false;
 											}
-										},
-										loadend: decrementEntryCount
-									};
-									performDrop(target, file, explorer, unzip, false, handlers, true);
+											d.resolve(result);
+										});	
+									}else{
+										d.resolve(false);
+									}
+									Deferred.when(d, function(unzip){
+										performDrop(target, file, explorer, unzip, false, true).then(
+											decrementEntryCount,
+											function(error) {
+												decrementEntryCount();
+												var errorMessage = messages["UploadingFileErr"] + file.name;
+												if (error && error.Message) {
+													errorMessage += " [" + error.Message + "]";
+												}
+												if (statusService) {
+													statusService.setProgressResult({
+														Severity: "Error",
+														Message: errorMessage
+													});
+												} else {
+													window.console.log(errorMessage);
+												}
+											}
+										);
+									});
 								} else {
 									explorer._uploadFile(item, file, true);
 								}
@@ -707,46 +943,46 @@ define([
 						var dirReader = entry.createReader();
 						var traverseChildren = function(folder) {
 							dirReader.readEntries(function(entries) {
-								for (var i=0; i<entries.length; i++) {
-									dropFileEntry(entries[i], folder, explorer, performDrop, fileClient, deferredWrapper); //$NON-NLS-0$
+								for (var i = 0; i < entries.length; i++) {
+									dropFileEntry(entries[i], folder, explorer, performDrop, fileClient, deferredWrapper);
 								}
 								decrementEntryCount();
 							});
 						};
-						
-						if (targetIsRoot){ //$NON-NLS-0$
-							(progress ? progress.progress(fileClient.createProject(target.ChildrenLocation, entry.name), i18nUtil.formatMessage(messages["Creating ${0}"], entry.name)) : 
-										fileClient.createProject(target.ChildrenLocation, entry.name)).then(function(project) {
+
+						if (targetIsRoot) {
+							(progress ? progress.progress(fileClient.createProject(target.ChildrenLocation, entry.name), i18nUtil.formatMessage(messages["Creating ${0}"], entry.name)) :
+								fileClient.createProject(target.ChildrenLocation, entry.name)).then(function(project) {
 								(progress ? progress.progress(fileClient.read(project.ContentLocation, true), messages["Loading "] + project.name) :
-											fileClient.read(project.ContentLocation, true)).then(function(folder) {
-										traverseChildren(folder);
-									}, internalErrorHandler);
+									fileClient.read(project.ContentLocation, true)).then(function(folder) {
+									traverseChildren(folder);
+								}, internalErrorHandler);
 							}, internalErrorHandler);
 						} else {
 							(progress ? progress.progress(fileClient.createFolder(target.Location, entry.name), i18nUtil.formatMessage(messages["Creating ${0}"], entry.name)) :
-										fileClient.createFolder(target.Location, entry.name)).then(function(subFolder) {
+								fileClient.createFolder(target.Location, entry.name)).then(function(subFolder) {
 								var dispatcher = explorer.modelEventDispatcher;
 								if (!preventNotification) {
-									dispatcher.dispatchEvent({ type: "create", parent: item, newValue: subFolder }); //$NON-NLS-0$	
+									dispatcher.dispatchEvent({
+										type: "create",
+										parent: item,
+										newValue: subFolder
+									});
 								}
 								traverseChildren(subFolder);
 							}, internalErrorHandler);
 						}
 					}
 				}
-				
+
 				var drop = function(evt) {
 					var i, deferred;
 					node.classList.remove("dragOver"); //$NON-NLS-0$
+					var currentSelections = this.selection.getSelections();
 					
-					if (dragStartTarget) {
+					function finishDrop(source){
 						var fileClient = explorer.fileClient;
-						var source = findItemfromNode(dragStartTarget);
-						if (!source) {
-							return;
-						}
-						
-						var isCopy = dropEffect === "copy"; //$NON-NLS-0$
+						var isCopy = dropEffect === "copy";
 						var func = isCopy ? fileClient.copyFile : fileClient.moveFile;
 						deferred = func.apply(fileClient, [source.Location, item.Location, source.Name]);
 						if (progress) {
@@ -755,7 +991,12 @@ define([
 						}
 						deferred.then(function(result) {
 							var dispatcher = explorer.modelEventDispatcher;
-							dispatcher.dispatchEvent({type: isCopy ? "copy" : "move", oldValue: source, newValue: result, parent: item}); //$NON-NLS-1$ //$NON-NLS-0$
+							dispatcher.dispatchEvent({
+								type: isCopy ? "copy" : "move",
+								oldValue: source,
+								newValue: result,
+								parent: item
+							});
 						}, function(error) {
 							if (error.status === 400 || error.status === 412) {
 								var resp = error.responseText;
@@ -764,21 +1005,32 @@ define([
 										resp = JSON.parse(resp);
 										resp.Message = messages[isCopy ? "CopyFailed" : "MoveFailed"];
 										error = resp;
-									} catch(error) {}
+									} catch (error) {}
 								}
 							}
 							errorHandler(error);
+						});
+					}
+					if (dragStartTarget) {
+						if(Array.isArray(dragStartTarget)){
+							dragStartTarget.forEach(function(each){
+								finishDrop(each);
+							});	
+						}else{
+							var source = findItemfromNode(dragStartTarget);
+							if (!source) {
+								return;
+							}
+							finishDrop(source);
 						}
-					);
-						
-					// webkit supports testing for and traversing directories
-					// http://wiki.whatwg.org/wiki/DragAndDropEntries
+						// webkit supports testing for and traversing directories
+						// http://wiki.whatwg.org/wiki/DragAndDropEntries
 					} else if (evt.dataTransfer.items && evt.dataTransfer.items.length > 0) {
-						for (i=0; i<evt.dataTransfer.items.length; i++) {
+						for (i = 0; i < evt.dataTransfer.items.length; i++) {
 							var entry = null;
-							if (typeof evt.dataTransfer.items[i].getAsEntry === "function") { //$NON-NLS-0$
+							if (typeof evt.dataTransfer.items[i].getAsEntry === "function") {
 								entry = evt.dataTransfer.items[i].getAsEntry();
-							} else if (typeof evt.dataTransfer.items[i].webkitGetAsEntry === "function") { //$NON-NLS-0$
+							} else if (typeof evt.dataTransfer.items[i].webkitGetAsEntry === "function") {
 								entry = evt.dataTransfer.items[i].webkitGetAsEntry();
 							}
 							if (entry) {
@@ -786,15 +1038,15 @@ define([
 							}
 						}
 					} else if (evt.dataTransfer.files && evt.dataTransfer.files.length > 0) {
-						for (i=0; i<evt.dataTransfer.files.length; i++) {
+						for (i = 0; i < evt.dataTransfer.files.length; i++) {
 							var file = evt.dataTransfer.files[i];
 							// this test is reverse engineered as a way to figure out when a file entry is a directory.
 							// The File API in HTML5 doesn't specify a way to check explicitly (when this code was written).
 							// see http://www.w3.org/TR/FileAPI/#file
 							if (!file.size && !file.type) {
-								errorHandler(i18nUtil.formatMessage(messages["FolderDropNotSupported"], file.name)); //$NON-NLS-0$
-							} else if (mFileUtils.isAtRoot(item.Location)){ //$NON-NLS-0$
-								errorHandler(messages["CreateFolderErr"]); //$NON-NLS-0$ 
+								errorHandler(i18nUtil.formatMessage(messages["FolderDropNotSupported"], file.name));
+							} else if (mFileUtils.isAtRoot(item.Location)) {
+								errorHandler(messages["CreateFolderErr"]);
 							} else {
 								explorer._uploadFile(item, file, true);
 							}
@@ -802,23 +1054,23 @@ define([
 					}
 					lib.stop(evt);
 				};
-					
+
 				if (persistAndReplace) {
 					if (this._oldDrop) {
-						node.removeEventListener("drop", this._oldDrop, false); //$NON-NLS-0$
+						node.removeEventListener("drop", this._oldDrop, false);
 					}
 					this._oldDrop = drop;
 				}
-				node.addEventListener("drop", drop, false); //$NON-NLS-0$
+				node.addEventListener("drop", drop.bind(this), false);
 			}
 		},
-		
+
 		/**
 		 * Uploads the specified file as a child of the specified parent item.
-		 * 
+		 *
 		 * @param {Object} parentItem The item in the model representing the folder under which the file should be placed.
-	 	 * @param {File} file The file to upload.
-	 	 * @param {Boolean} expandParent Specifies whether or not the parentItem should be expanded after the upload completes.
+		 * @param {File} file The file to upload.
+		 * @param {Boolean} expandParent Specifies whether or not the parentItem should be expanded after the upload completes.
 		 */
 		_uploadFile: function(parentItem, file, expandParent) {
 			var targetItem = parentItem;
@@ -826,79 +1078,114 @@ define([
 				targetItem = targetItem.fileMetadata;
 			}
 			var uploadImpl = function() {
-				this._makeUploadNode(targetItem, file.name, false).then(function(uploadNodeContainer){
+				this._makeUploadNode(targetItem, file.name, false).then(function(uploadNodeContainer) {
 					var refNode = uploadNodeContainer.refNode; //td
 					var progressBar = uploadNodeContainer.progressBar;
 					var cancelButton = uploadNodeContainer.cancelButton;
 					var destroy = uploadNodeContainer.destroyFunction;
-					
-					var statusService = this.registry.getService("orion.page.message");	 //$NON-NLS-0$
-					
-					var handlers = {
-						progress: function(event) {
-							var percentageText = ""; //$NON-NLS-0$
-							if (event.lengthComputable) {
-								percentageText = Math.floor(event.loaded / event.total * 100) + "%"; //$NON-NLS-0$
-								progressBar.style.width = percentageText;
-								var loadedKB = Math.round(event.loaded / 1024);
-								var totalKB = Math.round(event.total / 1024);
-								progressBar.title = messages["Upload progress: "] + percentageText + ",  " + loadedKB + "/" + totalKB + " KB"; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-								refNode.title = progressBar.title;
+					var ignoreErrors = false;
+
+					var statusService = this.registry.getService("orion.page.message"); //$NON-NLS-0$
+					var d = new Deferred();
+					if(file.name.indexOf(".zip") === file.name.length - 4){
+						var dialog = this.serviceRegistry.getService("orion.page.dialog");								
+						dialog.confirm(i18nUtil.formatMessage(messages["Unzip ${0}?"], file.name), function(result){
+							if(!result){
+								result = false;
 							}
-						},
-						loadend: function(event) {
+							d.resolve(result);
+						});	
+					}else{
+						d.resolve(false);
+					}
+					Deferred.when(d, function(unzip){
+						var promise = this.dragAndDrop(targetItem, file, this, unzip, false, true);
+						var done = function() {
 							destroy();
-							this.changedItem(targetItem, true);
-						}.bind(this),
-						error: function(event) {
-							var errorMessage = messages["UploadingFileErr"] + file.name; //$NON-NLS-0$
-							if (statusService) {
-								statusService.setProgressResult({Severity: "Error", Message: errorMessage});	//$NON-NLS-0$ 
-							} else {
-								window.console.log(errorMessage);
+							this.fileClient.dispatchEvent({
+								type: "Changed",
+								created: [{
+									parent: targetItem.Location,
+									eventData: {
+										select: false
+									}
+								}]
+							});
+						}.bind(this);
+						promise.then(
+							done,
+							function(error) {
+								done();
+								if (ignoreErrors || error.userCanceled) {
+									return;
+								}
+								var errorMessage = messages["UploadingFileErr"] + file.name;
+								if (event && event.Message) {
+									errorMessage += " [" + event.Message + "]";
+								}
+								if (statusService) {
+									statusService.setProgressResult({
+										Severity: "Error",
+										Message: errorMessage
+									});
+								} else {
+									window.console.log(errorMessage);
+								}
+							},
+							function(event) {
+								var percentageText = "";
+								if (event.lengthComputable) {
+									percentageText = Math.floor(event.loaded / event.total * 100) + "%";
+									progressBar.style.width = percentageText;
+									var loadedKB = Math.round(event.loaded / 1024);
+									var totalKB = Math.round(event.total / 1024);
+									progressBar.title = messages["Upload progress: "] + percentageText + ",  " + loadedKB + "/" + totalKB + " KB"; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+									refNode.title = progressBar.title;
+								}
 							}
-						}
-					};
-						
-					var unzip = file.name.indexOf(".zip") === file.name.length-4 && window.confirm(i18nUtil.formatMessage(messages["Unzip ${0}?"], file.name)); //$NON-NLS-1$ //$NON-NLS-0$
-					var req = this.dragAndDrop(targetItem, file, this, unzip, false, handlers, true); 
-					
-					cancelButton.addEventListener("click", function(){ //$NON-NLS-0$
-						req.abort();
-					});
+						);
+	
+						cancelButton.addEventListener("click", function() {
+							ignoreErrors = true;
+							promise.cancel();
+						});
+					}.bind(this));
 				}.bind(this));
 			}.bind(this);
-			
+
 			if (expandParent) {
 				this.expandItem(targetItem, false).then(uploadImpl);
 			} else {
 				uploadImpl();
 			}
-			
+
 		},
-		
+
 		/**
 		 * Creates a placeholder node in the navigator which shows the name
 		 * of the artifact being uploaded as well as progress and an option
 		 * to cancel the upload (if possible).
-		 * 
+		 *
 		 * @param {Object} parentItem The item in the model representing the folder under which the file should be placed. Workspace root is supported.
-	 	 * @param {String} artifactName The name of the file or folder being uploaded.
-	 	 * @param {Boolean} isDirectory true if the artifact is a directory, false otherwise
-	 	 * 
-	 	 * @returns {orion.Deferred.promise} which resolves with the following object:
-	 	 * 		 {Object} nodeContainer An object containing the following:
-	 	 * 			nodeContainer.refNode The td of the newly created DOM node
-	 	 * 			nodeContainer.tempNode The tr of the newly created DOM node (this is the top-level DOM node)
-	 	 * 			nodeContainer.progressBar The DOM node containing the progress bar
-	 	 * 			nodeContainer.cancelButton The DOM node of the upload cancel button (only if isFile === true)
-	 	 * 			nodeContainer.destroyFunction The function that should be called to remove the temporary upload node from the navigator
+		 * @param {String} artifactName The name of the file or folder being uploaded.
+		 * @param {Boolean} isDirectory true if the artifact is a directory, false otherwise
+		 *
+		 * @returns {orion.Deferred.promise} which resolves with the following object:
+		 * 		 {Object} nodeContainer An object containing the following:
+		 * 			nodeContainer.refNode The td of the newly created DOM node
+		 * 			nodeContainer.tempNode The tr of the newly created DOM node (this is the top-level DOM node)
+		 * 			nodeContainer.progressBar The DOM node containing the progress bar
+		 * 			nodeContainer.cancelButton The DOM node of the upload cancel button (only if isFile === true)
+		 * 			nodeContainer.destroyFunction The function that should be called to remove the temporary upload node from the navigator
 		 */
 		_makeUploadNode: function(parentItem, artifactName, isDirectory) {
-			
+
 			var domId = this.getRow(parentItem) ? this.getRow(parentItem).id : this.parentId;
-			var child = {Name: artifactName, Directory: isDirectory};
-			
+			var child = {
+				Name: artifactName,
+				Directory: isDirectory
+			};
+
 			return this.makeNewChildItemPlaceholder(parentItem, child, domId).then(function(placeholder) {
 				var nodeContainer = null;
 				var refNode, wrapperNode;
@@ -907,43 +1194,43 @@ define([
 					refNode = placeholder.refNode;
 					wrapperNode = placeholder.wrapperNode;
 					refNode.classList.add("uploadNode"); //$NON-NLS-0$
-					
+
 					nodeContainer.refNode = refNode;
 					nodeContainer.wrapperNode = wrapperNode;
-					
+
 					var textSpan = document.createElement("span");
 					textSpan.classList.add("uploadNodeText");
 					textSpan.appendChild(document.createTextNode(artifactName));
-					refNode.appendChild(textSpan); //$NON-NLS-0$
-					
-					var progressBarWrapper = document.createElement("span"); //$NON-NLS-0$
+					refNode.appendChild(textSpan);
+
+					var progressBarWrapper = document.createElement("span");
 					progressBarWrapper.classList.add("progressBarWrapper"); //$NON-NLS-0$
-					
-					var progressBar = document.createElement("span"); //$NON-NLS-0$
+
+					var progressBar = document.createElement("span");
 					progressBar.classList.add("progressBar"); //$NON-NLS-0$
 					progressBarWrapper.appendChild(progressBar);
 					refNode.appendChild(progressBarWrapper);
-					
+
 					nodeContainer.progressBar = progressBar;
-					
+
 					if (isDirectory) {
 						progressBar.classList.add("continuous"); //$NON-NLS-0$
-						refNode.title = messages["Uploading "] + artifactName; //$NON-NLS-0$
-						progressBar.title = refNode.title; //$NON-NLS-0$
+						refNode.title = messages["Uploading "] + artifactName;
+						progressBar.title = refNode.title;
 					} else {
-						var cancelButton = document.createElement("button"); //$NON-NLS-0$
+						var cancelButton = document.createElement("button");
 						cancelButton.classList.add("imageSprite"); //$NON-NLS-0$
 						cancelButton.classList.add("core-sprite-delete"); //$NON-NLS-0$
 						cancelButton.classList.add("uploadCancelButton"); //$NON-NLS-0$
-						cancelButton.title = messages["Cancel upload"]; //$NON-NLS-0$
+						cancelButton.title = messages["Cancel upload"];
 						refNode.appendChild(cancelButton);
-						
+
 						nodeContainer.cancelButton = cancelButton;
 					}
-					
+
 					nodeContainer.destroyFunction = placeholder.destroyFunction;
 				}
-				
+
 				return nodeContainer;
 			}.bind(this));
 		},
@@ -954,7 +1241,7 @@ define([
 		 * @returns {orion.explorer.FileModel}
 		 */
 		createModel: function() {
-			return new FileModel(this.registry, this.treeRoot, this.fileClient, this.parentId, this.excludeFiles, this.excludeFolders);
+			return new FileModel(this.registry, this.treeRoot, this.fileClient, this.parentId, this.excludeFiles, this.excludeFolders, this.filteredResources);
 		},
 
 		/**
@@ -966,7 +1253,7 @@ define([
 		 * @returns {orion.Promise}
 		 */
 		changedItem: function(parentItem, forceExpand) {
-			if(!parentItem) {
+			if (!parentItem) {
 				return new Deferred().resolve();
 			}
 			if (this.treeRoot && this.treeRoot.Location === parentItem.Location) {
@@ -977,7 +1264,7 @@ define([
 			parentItem.children = parentItem.Children = null;
 			this.model.getChildren(parentItem, function(children) {
 				//If a key board navigator is hooked up, we need to sync up the model
-				if(that.getNavHandler()){
+				if (that.getNavHandler()) {
 					//that._initSelModel();
 				}
 				that.myTree.refresh.bind(that.myTree)(parentItem, children, forceExpand);
@@ -997,13 +1284,13 @@ define([
 			if (!item || !this.model || !this.myTree) {
 				return deferred.reject();
 			}
-			if (!this.myTree.showRoot && item.Location === this.treeRoot.Location) {
+			if (!this.myTree.showRoot && (item.Location === this.treeRoot.Location || item.Location === this.treeRoot.ContentLocation)) {
 				return deferred.resolve(this.treeRoot);
 			}
 			var row = this.getRow(item);
 			if (row) {
 				deferred.resolve(row._item || item);
-			} else if (item.Parents && item.Parents.length>0) {
+			} else if (item.Parents && item.Parents.length > 0) {
 				item.Parents[0].Parents = item.Parents.slice(1);
 				return this.expandItem(item.Parents[0], reroot).then(function(parent) {
 					// Handles model out of sync
@@ -1014,7 +1301,7 @@ define([
 							if (!row) {
 								parent.children.unshift(item);
 								this.myTree.refresh(parent, parent.children, false);
-								row = this.getRow(item);	
+								row = this.getRow(item);
 							}
 							return row ? row._item : new Deferred().reject();
 						}.bind(this));
@@ -1053,7 +1340,7 @@ define([
 			}.bind(this), deferred.reject);
 			return deferred;
 		},
-		
+
 		/**
 		 * Create and return the row for the given item
 		 * @param {Object} The parent of the row.
@@ -1062,7 +1349,7 @@ define([
 		insertMissingItem: function(parent, item) {
 			return null;
 		},
-		
+
 		/**
 		 * Shows and selects the given item.
 		 * @param {Object} The item to be revealed.
@@ -1107,18 +1394,17 @@ define([
 			if (rowId) {
 				// I know this from my renderer below.
 				// TODO This approach fails utterly for a custom renderer, better hope they override this method.
-				return lib.node(rowId+"NameLink"); //$NON-NLS-0$
+				return lib.node(rowId + "NameLink"); //$NON-NLS-0$
 			}
 		},
 
 		/**
-		 * The explorerNavHandler hooked up by the explorer will call this function when left arrow key is pressed on a 
+		 * The explorerNavHandler hooked up by the explorer will call this function when left arrow key is pressed on a
 		 * top level item that is aleady collapsed. The default implementation does nothing.
 		 * @name orion.explorer.FileExplorer#scopeUp
 		 * @function
 		 */
-		scopeUp: function() {
-		},
+		scopeUp: function() {},
 
 		/**
 		 * The explorerNavHandler hooked up by the explorer will call this function when the focus into command is clicked.
@@ -1126,8 +1412,7 @@ define([
 		 * @name orion.explorer.FileExplorer#scopeDown
 		 * @function
 		 */
-		scopeDown: function(item) {
-		},
+		scopeDown: function(item) {},
 
 		/**
 		 * Load the resource at the given path.
@@ -1140,19 +1425,16 @@ define([
 		 * @returns {orion.Promise}
 		 */
 		loadResourceList: function(path, force, postLoad) {
-			if (path && typeof path === "object") { //$NON-NLS-0$
+			if (path && typeof path === "object") {
 				path = path.ChildrenLocation || path.ContentLocation;
 			}
 			path = mFileUtils.makeRelative(path);
-			if (!force && path === this._lastPath) {
-				return new Deferred().resolve(this.treeRoot);
-			}
-			this._lastPath = path;
 			var self = this;
-			if (force || path !== this.treeRoot.Path) {
-				return this.load(this.fileClient.loadWorkspace(path), messages["Loading "] + path, postLoad).then(function(p) {
+			if (force || path !== this.treeRoot.Path || path !== this._lastPath) {
+				this._lastPath = path;
+				return this.load(this.fileClient.read(path, true), messages["Loading "] + path, postLoad).then(function() {
 					self.treeRoot.Path = path;
-					return new Deferred().resolve(self.treeRoot);
+					return self.treeRoot;
 				}, function(err) {
 					self.treeRoot.Path = null;
 					return new Deferred().reject(err);
@@ -1170,29 +1452,31 @@ define([
 		 * @returns {orion.Promise} A promise that resolves to the loaded <code>treeRoot</code>, or rejects with an error.
 		 */
 		load: function(root, progressMessage, postLoad) {
-			var parent = lib.node(this.parentId);			
-	
+			var parent = lib.node(this.parentId);
+
 			// Progress indicator
-			var progress = lib.node("progress");  //$NON-NLS-0$
-			if(!progress){
-				progress = document.createElement("div"); //$NON-NLS-0$
+			var progress = lib.node("progress"); //$NON-NLS-0$
+			if (!progress) {
+				progress = document.createElement("div");
 				progress.id = "progress"; //$NON-NLS-0$
 				progress.classList.add("fileExplorerProgressDiv"); //$NON-NLS-0$
 				lib.empty(parent);
 				parent.appendChild(progress);
 			}
 			lib.empty(progress);
-			
+
 			var progressTimeout = setTimeout(function() {
 				lib.empty(progress);
 				progress.appendChild(document.createTextNode(progressMessage));
 			}, 500); // wait 500ms before displaying
-						
+
 			var self = this;
 			return Deferred.when(root,
 				function(root) {
 					clearTimeout(progressTimeout);
-					if (self.destroyed) { return; }
+					if (self.destroyed) {
+						return;
+					}
 					self.treeRoot = {};
 					// copy properties from root json to our object
 					for (var property in root) {
@@ -1206,7 +1490,7 @@ define([
 						} else {
 							// uses two different techniques from Modernizr
 							// first ascertain that drag and drop in general is supported
-							var supportsDragAndDrop = parent && ('draggable' in parent || 'ondragstart' in parent && 'ondrop' in parent);  //$NON-NLS-2$  //$NON-NLS-1$  //$NON-NLS-0$ 
+							var supportsDragAndDrop = parent && ('draggable' in parent || 'ondragstart' in parent && 'ondrop' in parent);
 							// then check that file transfer is actually supported, since this is what we will be doing.
 							// For example IE9 has drag and drop but not file transfer
 							supportsDragAndDrop = supportsDragAndDrop && !!(window.File && window.FileList && window.FileReader);
@@ -1219,7 +1503,7 @@ define([
 							}
 						}
 					}
-					
+
 					var deferred = new Deferred();
 					self.createTree(self.parentId, self.model, {
 						onComplete: function(tree) {
@@ -1227,29 +1511,32 @@ define([
 						},
 						navHandlerFactory: self.navHandlerFactory,
 						showRoot: self.showRoot,
-						setFocus: typeof self.setFocus === "undefined" ? true : self.setFocus, //$NON-NLS-0$
-						selectionPolicy: self.renderer.selectionPolicy, 
+						setFocus: typeof self.setFocus === "undefined" ? true : self.setFocus,
+						selectionPolicy: self.renderer.selectionPolicy,
 						onCollapse: function(model) {
-							if(self.getNavHandler()){
+							if (self.getNavHandler()) {
 								self.getNavHandler().onCollapse(model);
 							}
 						}
 					});
-					
+
 					return deferred.then(function() {
-						if (typeof postLoad === "function") { //$NON-NLS-0$
+						if (typeof postLoad === "function") {
 							try {
 								postLoad();
-							} catch(e){
+							} catch (e) {
 								if (self.registry) {
-									self.registry.getService("orion.page.message").setErrorMessage(e);	 //$NON-NLS-0$
+									self.registry.getService("orion.page.message").setErrorMessage(e); //$NON-NLS-0$
 								}
 							}
-						}				
-						if (typeof self.onchange === "function") { //$NON-NLS-0$
+						}
+						if (typeof self.onchange === "function") {
 							self.onchange(self.treeRoot);
 						}
-						self.dispatchEvent({ type: "rootChanged", root: self.treeRoot }); //$NON-NLS-0$
+						self.dispatchEvent({
+							type: "rootChanged",
+							root: self.treeRoot
+						});
 						return self.treeRoot;
 					});
 				},
@@ -1259,7 +1546,10 @@ define([
 					if (self.registry) {
 						self.registry.getService("orion.page.message").setProgressResult(error); //$NON-NLS-0$
 					}
-					self.dispatchEvent({ type: "rootChanged", root: self.treeRoot }); //$NON-NLS-0$
+					self.dispatchEvent({
+						type: "rootChanged",
+						root: self.treeRoot
+					});
 					return new Deferred().reject(error);
 				}
 			);
@@ -1270,14 +1560,14 @@ define([
 		 * @function
 		 * @param {Object} item
 		 */
-		onchange: function(item) {
-		}
+		onchange: function(item) {}
 	});
 	FileExplorer.prototype.constructor = FileExplorer;
 
 	//return module exports
 	return {
 		FileExplorer: FileExplorer,
-		FileModel: FileModel
+		FileModel: FileModel,
+		FileFilter: FileFilter,
 	};
 });

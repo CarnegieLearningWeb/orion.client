@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015, 2016 IBM Corporation and others.
+ * Copyright (c) 2015, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -38,6 +38,9 @@ define([
 			}
 			if (expected[i].data || expected[i].data === ''){
 				assert.equal(expected[i].data, results[i].data, 'Different node data. \nResult node:\n' + rString + '\nExpected node:\n' + eString + '\nResult:\n' + resultString + '\nExpected:\n' + expectedString + '\n');
+			}
+			if (expected[i].selfClosing){
+				assert.equal(expected[i].selfClosing, results[i].selfClosing, 'Expected a self closing tag to be marked as such.  \nResult node:\n' + rString + '\nExpected node:\n' + eString + '\nResult:\n' + resultString + '\nExpected:\n' + expectedString + '\n');
 			}
 			if (expected[i].range){
 				assert(results[i].range, 'Missing node range. \nResult node:\n' + rString + '\nExpected node:\n' + eString + '\nResult:\n' + resultString + '\nExpected:\n' + expectedString + '\n');
@@ -284,6 +287,7 @@ define([
 	    		{
 	    			name: 'html',
 	    			type: 'tag',
+	    			selfclosing: true,
 	    			range: [0,7],
 	    			openrange: [0,7]
 	    		}
@@ -301,6 +305,18 @@ define([
 	    		}
 		    ]);
 		});
+		it("Parse tags - void tag with unnecessary self closed tag", function() {
+			var results = parse('<img/>');
+		    assertResults(results.children, [
+	    		{
+	    			name: 'img',
+	    			type: 'tag',
+	    			selfclosing: true,
+	    			range: [0,6],
+	    			openrange: [0,6]
+	    		}
+		    ]);
+		});
 		it("Parse tags - void tag with unnecessary closing tag", function() {
 			var results = parse('<img></img>');
 		    assertResults(results.children, [
@@ -309,6 +325,62 @@ define([
 	    			type: 'tag',
 	    			range: [0,5],
 	    			openrange: [0,5]
+	    		}
+		    ]);
+		});
+		
+		it("Parse tags - svg tag", function() {
+			var results = parse('<svg>\n<defs>\n<linearGradient>\n<stop offset="0"/>\n</linearGradient>\n</defs>\n</svg>');
+		    assertResults(results.children, [{
+	    		"range":[0,81],
+	    		"openrange":[0,5],
+	    		"name":"svg",
+	    		"type":"tag",
+	    		"children":[{
+	    			"range":[6,74],
+	    			"openrange":[6,12],
+	    			"name":"defs",
+	    			"type":"tag",
+	    			"children":[{
+	    				"range":[13,66],
+	    				"openrange":[13,29],
+	    				"name":"lineargradient",
+	    				"type":"tag",
+	    				"children":[{
+	    					"range":[30,48],
+	    					"openrange":[30,48],
+	    					"name":"stop",
+	    					selfclosing: true,
+	    					"type":"tag",
+	    					"attributes":[{
+	    						"offset":{
+	    							"value":"0",
+	    							"range":[36,46],
+	    							"valueRange":[43,46],
+	    							"name":"offset",
+	    							"type":"attr"
+	    						}
+	    					}],
+	    				}],
+	    				"text":{"range":[0,0],"type":"text","value":"\n"},
+	    				"endrange":[49,66]
+	    			}],
+	    			"text":{"range":[0,0],"type":"text","value":"\n"},
+	    			"endrange":[67,74]
+	    		}],
+	    		"text":{"range":[0,0],"type":"text","value":"\n"},
+	    		"endrange":[75,81]
+	    	}]);
+		});
+		it("Parse tags - self closed non-void tag", function() {
+			var results = parse('<span/>');
+		    assertResults(results.children, [
+	    		{
+	    			name: 'span',
+	    			type: 'tag',
+	    			selfclosing: true,
+	    			range: [0,7],
+	    			openrange: [0,7]
 	    		}
 		    ]);
 		});
@@ -358,6 +430,11 @@ define([
 		    		type: 'tag',
 		    		name: 'a',
 		    		attributes: [
+		    			{
+    						name: 'src',
+    						value: 'test',
+    						range: [3,13]
+						},
 		    			{
     						name: 'src',
     						value: 'test2',

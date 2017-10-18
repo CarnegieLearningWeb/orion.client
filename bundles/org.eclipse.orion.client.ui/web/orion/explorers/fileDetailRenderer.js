@@ -1,5 +1,5 @@
 /*******************************************************************************
- * @license Copyright (c) 2014 IBM Corporation and others. All rights
+ * @license Copyright (c) 2014, 2017 IBM Corporation and others. All rights
  *          reserved. This program and the accompanying materials are made
  *          available under the terms of the Eclipse Public License v1.0
  *          (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse
@@ -18,9 +18,15 @@ define([
 	'orion/webui/littlelib',
 	'orion/explorers/navigationUtils',
 	'orion/objects',
+	'orion/webui/tooltip',
+	'orion/breadcrumbs',
+	'orion/URITemplate',
 	'orion/Deferred'
-], function(messages, i18nUtil, mExplorer, lib, mNavUtils, objects, Deferred) {
+], function(messages, i18nUtil, mExplorer, lib, mNavUtils, objects, mTooltip, mBreadcrumbs, URITemplate, Deferred) {
 	
+	var uriTemplate = new URITemplate("#{,resource,params*}");
+	var breadCrumbs = [];
+	var tooltips = [];
     /* Internal wrapper functions*/
     function _connect(nodeOrId, event, eventHandler) {
         var node = lib.node(nodeOrId);
@@ -83,8 +89,14 @@ define([
     
     function showFullPath(parentNode, show) {
 		if (show) {
+			tooltips.forEach(function(tooltip){
+        		tooltip.turnOff();
+        	});
         	parentNode.classList.add("showFullPath"); //$NON-NLS-0$
         } else {
+        	tooltips.forEach(function(tooltip){
+        		tooltip.turnOn();
+        	});
         	parentNode.classList.remove("showFullPath"); //$NON-NLS-0$
         }
     }
@@ -140,7 +152,9 @@ define([
 	    },
 	    _getFileRenderName: function(item) {
 	    	var renderName;
-	    	if (item.totalMatches) {
+	    	if (item.totalMatches === 1) {
+	    		renderName = this.explorer.model.getFileName(item) + " " + messages["singleMatch"]; //$NON-NLS-0$
+    		} else if (item.totalMatches > 1) {
 	    		renderName = this.explorer.model.getFileName(item) + " (" + i18nUtil.formatMessage(messages["${0} matches"], item.totalMatches) + ")"; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 	    	} else if(item.type === 'file') {
 	    		renderName = this.explorer.model.getFileName(item);
@@ -376,12 +390,12 @@ define([
 						this._lastFileIconDom = span;
 	                	span = _createSpan(null, this.getFileSpanId(item), col, null);
 	                    this.renderFileElement(item, span, this.explorer.model);
-						tableRow.title = item.name;
+		                this.generateBreadCrumb(tableRow, this.generateFileMetaForBreadCrumb(item), this.explorer._shouldShowFullPath);
 	                } else if (item.type === "group") { //$NON-NLS-0$
 	                	col.colSpan = 2;
 	                	span = _createSpan(null, null, col, null);
 	                    this.renderGroupElement(item, span, this.explorer.model);
-						tableRow.title = item.name;
+	                    this.generateBreadCrumb(tableRow, item.name);
 	                } else {
 	                	this.renderDetailLineNumber(item, col, item.parent.type === "group");
 	                }
@@ -420,6 +434,88 @@ define([
 	        
 	        return col;
 	    },
+	    
+	    generateBreadCrumb: function(tableRow, metadata, shouldShowFullPath){
+	    	if(typeof metadata === "string"){
+	    		var groupNodeTooltip = new mTooltip.Tooltip({
+					node: tableRow,
+					text: metadata,
+					position: ["below", "above", "right", "left"]
+				});
+				tooltips.push(groupNodeTooltip);
+	    	}else{
+		    	var fileNodeTooltip = new mTooltip.Tooltip({
+					node: tableRow,
+					position: ["below", "above", "right", "left"]
+				});
+				// Create breadcrumb for tooltip.
+				var localBreadcrumbNode = document.createElement("div");
+				var tipContainer = fileNodeTooltip.contentContainer();
+				tipContainer.appendChild(localBreadcrumbNode);
+				
+				var makeHref = function(segment, folderLocation, folder) {
+					segment.href = uriTemplate.expand({resource: folderLocation});
+					if (folder) {
+						if (metadata && metadata.Location === folder.Location) {
+							segment.addEventListener("click", function() { //$NON-NLS-0$
+								if (this.explorer.sidebarNavInputManager){
+									this.explorer.sidebarNavInputManager.reveal(folder);
+								}
+							}.bind(this));
+						}
+					}
+				}.bind(this);
+				var breadcrumbUniquifier = "_explorer_";
+				var breadcrumbOptions = {
+					container: localBreadcrumbNode,
+					resource: metadata,
+					makeFinalHref: true,
+					makeHref: makeHref,
+					// This id should be unique regardless of editor views open.
+					id: "breadcrumb" + metadata.Location + breadcrumbUniquifier
+				};
+				new mBreadcrumbs.BreadCrumbs(breadcrumbOptions);
+				if(shouldShowFullPath){
+					fileNodeTooltip.turnOff();
+				}
+				tooltips.push(fileNodeTooltip);
+	    	}
+	    },
+	    
+	    generateFileMetaForBreadCrumb: function(item){
+	    	var fileMeta = {
+	    		Location: item.location,
+	    		Name: item.name
+	    	};
+	    	var parentSegs = item.location.split("/");
+	    	var parents = [];
+	 		parentSegs.reduce(function(acc, curV, curI, array){
+	 			if(curI !== array.length -1){
+					var path = (acc ? acc : "/") +  curV + "/";
+					if(curI > 2){ //skip "file" and "orionode" for breadcrumb segs
+	 					parents.push({
+			 				Name: curV,
+			 				Location: path
+			 			});
+	 				}
+	 				return path;
+ 				}
+	 		});
+	 		parents = parents.reverse().slice(0);
+	 		fileMeta.Parents = parents;
+	 		fileMeta.workspace = item.workspace;
+	 		return fileMeta;
+	    },
+	    
+	    cleanBreadCrumbs: function(){
+	    	if(tooltips){
+		    	tooltips.forEach(function(tooltip){
+		    		tooltip.destroy();
+		    	});
+		    	tooltips = [];
+	    	}
+	    },
+	    
 	    //This is an optional function for explorerNavHandler. It provides the div with the "href" attribute.
 	    //The explorerNavHandler hooked up by the explorer will check if the href exist as the attribute and react on enter key press.
 	    getRowActionElement: function(tableRowId) {

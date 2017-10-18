@@ -60,18 +60,14 @@
 	padding-left:0 !important;
 }
 
-.navbar:focus {
-	outline: none
-}
-
 .navbar-item {
 	border-bottom: 1px solid #eee;
-	color: gray;
+	color: #707070;
 	display: block;
 	font-size: 8pt;
 	font-weight: bold;
 	outline: none;
-	padding: 17px 0;
+	padding: 6px 0;
 	padding-left: 20px;
 	cursor: pointer;
 	list-style: none;
@@ -205,6 +201,10 @@ html[dir="rtl"] .setting-row { /* ACGC */
 	padding-right: 10px;
 	padding-left:10px;
 	text-transform: uppercase;
+}
+
+.git-setting-header {
+	min-width: 230px;
 }
 
 .setting-header-generated {
@@ -489,12 +489,12 @@ html[dir="rtl"] .serviceContainer { /* ACGC */
 	border-radius: 4px;
 	background: white;
 	float: left;
-	color: #AAA;
+	color: #707070;
 	text-align: center;
 	font-size: 9px;
 	font-weight: normal;
 	margin-left: 5px;
-	border: 1px solid #CCC;
+	border: 1px solid #707070;
 }
 
 html[dir="rtl"] .serviceCount { /* ACGC */
@@ -756,7 +756,7 @@ _:-moz-tree-row(hover), .colorpicker-input { /* Firefox  HACK */
 .scopeList li{
     padding:10px 15px;
     border-bottom: 1px dotted #EFEFEF;
-    color: gray;
+    color: #707070;
 }
 
 .scopeList li select{
@@ -775,17 +775,20 @@ html[dir="rtl"] .scopeList li select{ /* ACGC */
 .scopeListHeader, .editorSectionHeader {
     padding: 10px 15px;  
     border-bottom: 1px solid #dadada;  
-    border-right: 1px solid #dadada;
     font-weight: bold;
 }
 
 html[dir="rtl"] .scopeListHeader, .editorSectionHeader { /* ACGC */
     border-left: 1px solid #dadada;
-    border-right: 0px;
+    border-right: 0;
+}
+
+.scopeListHeader {
+    border-right: 1px solid #dadada;
 }
 
 .editorSectionHeader{
-	border-right:none;
+	border-left: 0;
 }
 
 .editorSection {
@@ -822,6 +825,7 @@ html[dir="rtl"] .editorSection { /* ACGC */
 
 #editorThemeDelete, #editorThemeRevert, #editorThemeSave {
     float: right;
+    margin-right: 10px;
 }
 
 html[dir="rtl"] #editorThemeDelete, #editorThemeRevert, #editorThemeSave { /* ACGC */
@@ -836,7 +840,7 @@ html[dir="rtl"] #editorThemeDelete, #editorThemeRevert, #editorThemeSave { /* AC
 }
 
 .editorThemeButton {
-    color: gray;  
+    color: #707070;  
     padding: 0;  
     font-size: 14px;
 }
@@ -849,10 +853,6 @@ html[dir="rtl"] #editorThemeDelete, #editorThemeRevert, #editorThemeSave { /* AC
 .git-sprite-revert:before{
 	font-family: 'Orion Icon Font';
 	content: '\E021';
-}
-
-#editorThemeRevert {
-    margin-right: 10px;
 }
 
 html[dir="rtl"] #editorThemeRevert { /* ACGC */

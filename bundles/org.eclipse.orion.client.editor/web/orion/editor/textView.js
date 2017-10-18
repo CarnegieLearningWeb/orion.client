@@ -94,33 +94,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 		return obj1;
 	}
 	/** @private */
-	function compare(s1, s2) {
-		if (s1 === s2) { return true; }
-		if (s1 && !s2 || !s1 && s2) { return false; }
-		if ((s1 && s1.constructor === String) || (s2 && s2.constructor === String)) { return false; }
-		if (s1 instanceof Array || s2 instanceof Array) {
-			if (!(s1 instanceof Array && s2 instanceof Array)) { return false; }
-			if (s1.length !== s2.length) { return false; }
-			for (var i = 0; i < s1.length; i++) {
-				if (!compare(s1[i], s2[i])) {
-					return false;
-				}
-			}
-			return true;
-		}
-		if (!(s1 instanceof Object) || !(s2 instanceof Object)) { return false; }
-		var p;
-		for (p in s1) {
-			if (s1.hasOwnProperty(p)) {
-				if (!s2.hasOwnProperty(p)) { return false; }
-				if (!compare(s1[p], s2[p])) {return false; }
-			}
-		}
-		for (p in s2) {
-			if (!s1.hasOwnProperty(p)) { return false; }
-		}
-		return true;
-	}
+	var compare = textUtil.compare;
 	/** @private */
 	function convertDelimiter(text, addTextFunc, addDelimiterFunc) {
 		var cr = 0, lf = 0, index = 0, len = text.length;
@@ -677,8 +651,9 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 	}
 	TextLine.prototype = /** @lends orion.editor.TextLine.prototype */ {
 		/** @private */
-		create: function(_parent, div) {
+		create: function(_parent, div, drawing) {
 			if (this._lineDiv) { return; }
+			this.drawing = drawing;
 			var child = this._lineDiv = this._createLine(_parent, div, this.lineIndex);
 			child._line = this;
 			return child;
@@ -769,7 +744,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 					end += text.length;
 					style = range.style;
 					if (oldSpan) {
-						oldText = oldSpan.firstChild.data;
+						oldText = oldSpan.firstChild ? oldSpan.firstChild.data : " ";
 						oldStyle = oldSpan.viewStyle;
 						if (oldText === text && compare(style, oldStyle)) {
 							oldEnd += oldText.length;
@@ -783,7 +758,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 									if (spanEnd >= changeStart) {
 										spanEnd -= changeCount;
 									}
-									var t = oldSpan.firstChild.data;
+									var t = oldSpan.firstChild ? oldSpan.firstChild.data : " ";
 									var len = t ? t.length : 0;
 									if (oldEnd + len > spanEnd) { break; }
 									oldEnd += len;
@@ -859,6 +834,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				while (tabIndex !== -1 && tabIndex < end) {
 					if (start < tabIndex) {
 						range = {text: text.substring(start, tabIndex), style: style};
+						range = bidiUtils.enforceTextDir(range);
 						data.ranges.push(range);
 						if (bidiUtils.isBidiEnabled()) {
 							data.ranges.push(bidiRange);
@@ -888,6 +864,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			}
 			if (start <= end) {
 				range = {text: text.substring(start, end), style: style};
+				range = bidiUtils.enforceTextDir(range);
 				data.ranges.push(range);
 				if (bidiUtils.isBidiEnabled()) {
 					data.ranges.push(bidiRange);
@@ -913,7 +890,11 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				child.innerHTML = style.html;
 				child.ignore = true;
 			} else if (style && style.node) {
-				child.appendChild(style.node);
+				if (this.drawing) {
+					child.appendChild(style.node);
+				} else {
+					child.appendChild(style.node.cloneNode(true));
+				}
 				child.ignore = true;
 			} else if (style && style.bidi) {				
 				child.ignore = true;
@@ -6565,7 +6546,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			}	
 		},
 		_isOverOverlayScroll: function() {
-			var scrollShowing = Date.now() - this._lastScrollTime < 200;
+			var scrollShowing = Date.now() - this._lastScrollTime < 1000;
 			if (!scrollShowing) {
 				return {};
 			}
@@ -6617,7 +6598,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 			} else {
 				if (e.selection.length > 1) this._startUndo();
 			}
-			
+
 			var model = this._model;
 			try {
 				if (e._ignoreDOMSelection) { this._ignoreDOMSelection = true; }
@@ -6635,7 +6616,7 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				if (e._ignoreDOMSelection) { this._ignoreDOMSelection = false; }
 			}
 			this._setSelection(e.selection, show, true, callback);
-			
+
 			undo = this._compoundChange;
 			if (undo) undo.owner.selection = e.selection;
 			
@@ -7505,14 +7486,14 @@ define("orion/editor/textView", [  //$NON-NLS-1$
 				var frag = doc.createDocumentFragment();
 				for (lineIndex=lineStart; lineIndex<=lineEnd; lineIndex++) {
 					if (!child || child.lineIndex > lineIndex) {
-						new TextLine(this, lineIndex).create(frag, null);
+						new TextLine(this, lineIndex).create(frag, null, true);
 					} else {
 						if (frag.firstChild) {
 							clientDiv.insertBefore(frag, child);
 							frag = doc.createDocumentFragment();
 						}
 						if (child && child.lineChanged) {
-							child = new TextLine(this, lineIndex).create(frag, child);
+							child = new TextLine(this, lineIndex).create(frag, child, true);
 							child.lineChanged = false;
 						}
 						child = this._getLineNext(child);

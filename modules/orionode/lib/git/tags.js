@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -9,39 +9,46 @@
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
 /*eslint-env node */
-var api = require('../api'), writeError = api.writeError;
-var git = require('nodegit');
-var async = require('async');
-var url = require('url');
-var clone = require('./clone');
-var express = require('express');
-var bodyParser = require('body-parser');
-var util = require('./util');
+var api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
+	git = require('nodegit'),
+	async = require('async'),
+	url = require('url'),
+	clone = require('./clone'),
+	express = require('express'),
+	bodyParser = require('body-parser'),
+	responseTime = require('response-time');
 
 module.exports = {};
 
 module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
-	if (!fileRoot) { throw new Error('options.root is required'); }
-	
+	var gitRoot = options.gitRoot;
+	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
+	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
+
+	var contextPath = options && options.configParams["orion.context.path"] || "";
+	fileRoot = fileRoot.substring(contextPath.length);
+
 	module.exports.tagJSON = tagJSON;
 
 	return express.Router()
 	.use(bodyParser.json())
-	.get('/file*', getTags)
+	.use(responseTime({digits: 2, header: "X-GitapiTags-Response-Time", suffix: true}))
+	.use(options.checkUserAccess)
+	.get(fileRoot + '*', getTags)
 	.get('/:tagName*', getTags)
 	.delete('/:tagName*', deleteTag);
 
-function tagJSON(fullName, shortName, sha, timestamp, fileDir) {
+function tagJSON(fullName, shortName, sha, timestamp, fileDir, annotated) {
 	return {
 		"FullName": fullName,
 		"Name": shortName,
-		"CloneLocation": "/gitapi/clone" + fileDir,
-		"CommitLocation": "/gitapi/commit/" + sha + fileDir,
+		"CloneLocation": gitRoot + "/clone" + fileDir,
+		"CommitLocation": gitRoot + "/commit/" + sha + fileDir,
 		"LocalTimeStamp": timestamp,
-		"Location": "/gitapi/tag/" + util.encodeURIComponent(shortName) + fileDir,
-		"TagType": "LIGHTWEIGHT",
-		"TreeLocation": "/gitapi/tree" + fileDir + "/" + util.encodeURIComponent(shortName),
+		"Location": gitRoot + "/tag/" + api.encodeURIComponent(shortName) + fileDir,
+		"TagType": annotated ? "ANNOTATED" : "LIGHTWEIGHT",
+		"TreeLocation": gitRoot + "/tree" + fileDir + "/" + api.encodeURIComponent(shortName),
 		"Type": "Tag"
 	};
 }
@@ -56,8 +63,32 @@ function getTagCommit(repo, ref) {
 	});
 }
 
+/**
+ * @param {NodeGit.Repository} repo the Git repository that owns the given referenced
+ * @param {NodeGit.Reference} ref the reference to check whether it's pointing at an annotated tag or not
+ * @return {boolean|String} <tt>true</tt> if the reference points at an annotated tag,
+ * 							<tt>false</tt> if it points at a commit object,
+ * 							a <tt>String</tt> error message if it points at another Git object type
+ */
+function isAnnotated(repo, ref) {
+	// get the object being referenced and check its type
+	return git.Object.lookup(repo, ref.target(), git.Object.TYPE.ANY)
+	.then(function(object) {
+		var type = object.type();
+		if (type === git.Object.TYPE.TAG) {
+			// referenced object is a tag, annotated tag then
+			return true;
+		} else if (type !== git.Object.TYPE.COMMIT) {
+			// otherwise, should be pointing at a commit and not an annotated tag,
+			// but if not, then something is wrong
+			return "Invalid object type found for '" + theRef.name() + "' (" + type + ")";
+		}
+		return false;
+	});
+}
+
 function getTags(req, res) {
-	var tagName = util.decodeURIComponent(req.params.tagName || "");
+	var tagName = api.decodeURIComponent(req.params.tagName || "");
 	var fileDir;
 	var query = req.query;
 	var page = Number(query.page) || 1;
@@ -77,10 +108,18 @@ function getTags(req, res) {
 		})
 		.then(function(ref) {
 			theRef = ref;
-			return getTagCommit(theRepo, ref);
+			// get the object being referenced and check its type
+			return isAnnotated(theRepo, ref);
 		})
-		.then(function(commit) {
-			res.status(200).json(tagJSON(theRef.name(), theRef.shorthand(), commit.sha(), commit.timeMs(), fileDir));
+		.then(function(annotated) {
+			if (typeof annotated === 'string') {
+				return writeError(400, res, annotated);
+			}
+
+			return getTagCommit(theRepo, theRef)
+			.then(function(commit) {
+				writeResponse(200, res, null, tagJSON(theRef.name(), theRef.shorthand(), commit.sha(), commit.timeMs(), fileDir, annotated), true);
+			});
 		})
 		.catch(function(err) {
 			writeError(404, res, err.message);
@@ -110,15 +149,21 @@ function getTags(req, res) {
 		}))
 		.then(function(referenceList) {
 			async.each(referenceList, function(ref,callback) {
-				getTagCommit(theRepo, ref)
-				.then(function(commit) {
-					tags.push(tagJSON(ref.name(), ref.shorthand(), commit.sha(), commit.timeMs(), fileDir));
-					callback();
-				})
-				.catch(function() {
-					// ignore errors looking up commits
-					tags.push(tagJSON(ref.name(), ref.shorthand(), ref.target().toString(), 0, fileDir));
-					callback();
+				isAnnotated(theRepo, ref)
+				.then(function(annotated) {
+					if (typeof annotated === 'string') {
+						return writeError(400, res, annotated);
+					}
+					getTagCommit(theRepo, ref)
+					.then(function(commit) {
+						tags.push(tagJSON(ref.name(), ref.shorthand(), commit.sha(), commit.timeMs(), fileDir, annotated));
+						callback();
+					})
+					.catch(function() {
+						// ignore errors looking up commits
+						tags.push(tagJSON(ref.name(), ref.shorthand(), ref.target().toString(), 0, fileDir, annotated));
+						callback();
+					});
 				});
 			}, function(err) {
 				if (err) {
@@ -145,7 +190,7 @@ function getTags(req, res) {
 					resp['PreviousLocation'] = prevLocation;
 				}
 	
-				res.status(200).json(resp);
+				writeResponse(200, res, null, resp, true);
 			});
 		});
 	})
@@ -155,14 +200,14 @@ function getTags(req, res) {
 }
 
 function deleteTag(req, res) {
-	var tagName = util.decodeURIComponent(req.params.tagName);
+	var tagName = api.decodeURIComponent(req.params.tagName);
 	return clone.getRepo(req)
 	.then(function(repo) {
 		return git.Tag.delete(repo, tagName);
 	})
 	.then(function(resp) {
 		if (!resp) {
-			res.status(200).end();
+			writeResponse(200, res)
 		} else {
 			writeError(403, res);
 		} 

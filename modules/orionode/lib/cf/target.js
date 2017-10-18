@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016 IBM Corporation and others.
+ * Copyright (c) 2016, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -8,21 +8,29 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-/*eslint-env node */
+/*eslint-env node, es6*/
 var express = require("express");
 var bodyParser = require("body-parser");
 var tasks = require("../tasks");
 var request = require("request");
 var orgs = require("./orgs_spaces");
-var UseraccessToken = {};
+var bearerTokenStore = require("./accessTokenStore");
+var LRU = require("lru-cache");
 
-module.exports.router = function() {
+// Caching for already located targets
+var targetCache = LRU({max: 10000, maxAge: 1800000 });
+
+module.exports.router = function(options) {
+	if(options.configParams["cf.bearer.token.store"]){
+		var getBearerToken = require(options.configParams["cf.bearer.token.store"]).getBearerTokenfromUserId;
+	}
 	
 	module.exports.getAccessToken = getAccessToken;
 	module.exports.parsebody = parsebody;
 	module.exports.computeTarget = computeTarget;
 	module.exports.cfRequest = cfRequest;
 	module.exports.caughtErrorHandler = caughtErrorHandler;
+	module.exports.fullTarget = fullTarget;
 
 	return express.Router()
 	.use(bodyParser.json())
@@ -82,17 +90,32 @@ function tryLogin(url, Username, Password, userId){
 			request.post(authorizationHeader, function (error, response, body) {
 				var respondJson = parsebody(body);
 				if(!error && response.statusCode === 200){
-					UseraccessToken[userId] = respondJson.access_token;
+					bearerTokenStore.setBearerToken && bearerTokenStore.setBearerToken(userId, respondJson.access_token);		
 					return fulfill();
 				}
-				return error ? reject({"code": 400, "data":error, "bundleid":"org.eclipse.orion.server.core"}) : 
-				reject({"code":response.statusCode,"data": respondJson,"bundleid":"org.eclipse.orion.server.core"});
+				if(error){
+					error.code = 400;
+					error.data = error;
+					error.bundleid = "org.eclipse.orion.server.core"
+					return reject(error);
+				}
+				var errorStatus = new Error();
+				errorStatus.code = response.statusCode;
+				errorStatus.data = respondJson;
+				errorStatus.bundleid = "org.eclipse.orion.server.core"
+				reject(errorStatus);
 			});
 		});
 	});
 }
 function computeTarget(userId, targetRequest){
 	if(targetRequest){
+		if (userId && targetRequest.Url && targetRequest.Org && targetRequest.Space) {
+			var getKey = userId + targetRequest.Url + targetRequest.Org + targetRequest.Space;
+			if (targetCache.get(getKey)) {
+				return Promise.resolve(targetCache.get(getKey));
+			}
+		}
 		return orgs.getOrgsRequest(userId, targetRequest)
 		.then(function(OrgsArray){	
 			if(!targetRequest.Org){
@@ -112,28 +135,34 @@ function computeTarget(userId, targetRequest){
 				space = aimedSpace;
 			}
 			delete org.Spaces;
-			return  {
+			
+			var target = {
 				"Type": "Target",
 				"Url": targetRequest.Url,
 				"Org": org,
 				"Space":space
 			};
+			
+			var putKey = userId + targetRequest.Url + org.entity.name + space.entity.name;
+			targetCache.set(putKey, target);
+			
+			return  target;
 		});
 	}
 	if(!targetRequest){
-		return Promise.reject({
-			"code":500, 
-			"message":"Target not set",
-			"detailMessage":"Target not set",
-			"data":{
-				"description": "Target not set",
-				"error_code": "CF-TargetNotSet"
-			}
-		});
+		var errorStatus = new Error("Target not set");
+		errorStatus.code = 500;
+		errorStatus.data = {
+			"description": "Target not set",
+			"error_code": "CF-TargetNotSet"
+		};
+		errorStatus.detailMessage = "Target not set";
+		errorStatus.bundleid = "org.eclipse.orion.server.core"
+		return Promise.reject(errorStatus);
 	}
 }
-function getAccessToken(userId){
-	return UseraccessToken[userId];
+function getAccessToken(userId, target){
+	return bearerTokenStore.getBearerToken(userId, target, getBearerToken);
 }
 function caughtErrorHandler(task, err){
 	var errorResponse = {
@@ -144,29 +173,41 @@ function caughtErrorHandler(task, err){
 		Message: err.message,
 		Severity: "Error"
 	};
+	//properly handle parse errors from the YAML parser
+	if(err.name && err.name === 'YAMLException') {
+		errorResponse.JsonData = err.mark;
+		errorResponse.JsonData.Line = err.mark.line + 1;
+		errorResponse.JsonData.Message = err.message;
+	}
 	if(err.bundleid){
 		errorResponse.BundleId = err.bundleid;
 	}
 	task.done(errorResponse);
 }
 function parsebody(body){
-	return typeof body === "string" ? JSON.parse(body): body;
+	var result;
+	try{
+		result = typeof body === "string" ? JSON.parse(body): body;
+	}catch(err){
+		result = body;
+	}
+	return result;
 }
-function cfRequest (method, userId, url, query, body, headers, requestHeader) {
-	return new Promise(function(fulfill, reject) {
+function cfRequest (method, userId, url, query, body, headers, requestHeader, target) {
+	var waitFor;
+	if(!requestHeader){
+		waitFor = getAccessToken(userId, target);
+	}
+	return Promise.resolve(waitFor).then(function(cloudAccessToken){
 		if(!requestHeader){
-			var cloudAccessToken = getAccessToken(userId);
 			if (!cloudAccessToken) {
-				return reject(
-					{
-						"code":401,
-						"message":"Not authenticated",
-						"data":{
-							"description": "Not authenticated",
-							"error_code": "CF-NotAuthenticated"
-						}
-					}
-				);
+				var errorStatus = new Error("Not authenticated");
+				errorStatus.code = 401;
+				errorStatus.data = {
+					"description": "Not authenticated",
+					"error_code": "CF-NotAuthenticated"
+				};
+				return Promise.reject(errorStatus);
 			}
 			headers = headers || {};
 			headers.Authorization = cloudAccessToken;
@@ -180,20 +221,28 @@ function cfRequest (method, userId, url, query, body, headers, requestHeader) {
 		if (requestHeader.headers.Authorization) {
 			requestHeader.headers.Authorization = "bearer " + requestHeader.headers.Authorization;
 		}
-		request(requestHeader, /* @callback */ function (error, response, body) {
-			if (error) {
-				return reject(error);
-			}
-//			if (response.status) {
-//				return reject();
-//			}
-			if (body instanceof Uint8Array) {
-				fulfill(response);
-			}
-			else {
-            	fulfill(parsebody(body));
-			}
-		});
+		return new Promise(function(fullfill,reject){
+			request(requestHeader, /* @callback */ function (error, response, body) {
+				if (error) {
+					return reject(error);
+				}
+	//			if (response.status) {
+	//				return reject();
+	//			}
+				if (body instanceof Uint8Array) {
+					fullfill(response);
+				}
+				else {
+					fullfill(parsebody(body));
+				}
+			});
+		})
 	});
+}
+function fullTarget(req,target){
+	if(req.headers['accept-language']){	
+		target['accept-language'] = req.headers['accept-language'];
+	}
+	return target;
 }
 };

@@ -458,6 +458,7 @@ define([
 			case "reset": //$NON-NLS-0$
 			case "commit": //$NON-NLS-0$
 			case "revert": //$NON-NLS-0$
+			case "cherrypick": //$NON-NLS-0$
 				this.changedItem();
 				break;
 			case "applyPatch":  //$NON-NLS-0$
@@ -729,7 +730,7 @@ define([
 				createQuery: function() {return "";}, 
 				getValue: function() {return that.model.repositoryPath;}, 
 				setValue: function(s) {that.repositoryPath = that.model.repositoryPath = s;}
-			}, true, false, true, true);
+			}, true, false, false, true);
 			pathSection.domNode.classList.add("commitFilter"); //$NON-NLS-0$
 			pathSection.getContentElement().classList.add("pathFilter"); //$NON-NLS-0$
 			pathSection.domNode.tabIndex = -1;
@@ -951,6 +952,7 @@ define([
 					data.handler.changedItem();
 				},
 				imageClass:"git-sprite-train-track",
+				name: messages["ShowGraph"],
 				tooltip: messages["ToggleGraph"],
 				spriteClass: "gitCommandSprite", //$NON-NLS-0$
 				type: "toggle" //$NON-NLS-0$		

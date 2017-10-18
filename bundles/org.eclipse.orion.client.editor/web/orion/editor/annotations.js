@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2014 IBM Corporation and others.
+ * Copyright (c) 2010, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -153,6 +153,11 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 	 */
 	AnnotationType.ANNOTATION_WARNING = "orion.annotation.warning"; //$NON-NLS-0$
 	/**
+	 * Info annotation type.
+	 * @since 14.0
+	 */
+	AnnotationType.ANNOTATION_INFO = "orion.annotation.info"; //$NON-NLS-0$
+	/**
 	 * Task annotation type.
 	 */
 	AnnotationType.ANNOTATION_TASK = "orion.annotation.task"; //$NON-NLS-0$
@@ -160,6 +165,10 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 	 * Breakpoint annotation type.
 	 */
 	AnnotationType.ANNOTATION_BREAKPOINT = "orion.annotation.breakpoint"; //$NON-NLS-0$
+	/**
+	 * Breakpoint annotation type.
+	 */
+	AnnotationType.ANNOTATION_CONDITIONAL_BREAKPOINT = "orion.annotation.conditionalBreakpoint"; //$NON-NLS-0$
 	/**
 	 * Bookmark annotation type.
 	 */
@@ -183,11 +192,19 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 	/**
 	 * Current search annotation type.
 	 */
+	AnnotationType.ANNOTATION_HIGHLIGHTED_LINE = "orion.annotation.highlightedLine"; //$NON-NLS-0$
+	/**
+	 * Current search annotation type.
+	 */
 	AnnotationType.ANNOTATION_CURRENT_SEARCH = "orion.annotation.currentSearch"; //$NON-NLS-0$
 	/**
 	 * Matching search annotation type.
 	 */
 	AnnotationType.ANNOTATION_MATCHING_SEARCH = "orion.annotation.matchingSearch"; //$NON-NLS-0$
+	/**
+	 * Search range annotation type.
+	 */
+	AnnotationType.ANNOTATION_SEARCH_RANGE = "orion.annotation.searchRange"; //$NON-NLS-0$
 	/**
 	 * Read Occurrence annotation type.
 	 */
@@ -228,6 +245,10 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 	 * Diff Modification annotation type.
 	 */
 	AnnotationType.ANNOTATION_DIFF_MODIFIED = "orion.annotation.diffModified"; //$NON-NLS-0$
+	/**
+	 * Collab Line Change annotation type.
+	 */
+	AnnotationType.ANNOTATION_COLLAB_LINE_CHANGED = "orion.annotation.collabLineChanged"; //$NON-NLS-0$
 
 	/** @private */
 	var annotationTypes = {};
@@ -300,24 +321,29 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 	}
 	registerType(AnnotationType.ANNOTATION_ERROR);
 	registerType(AnnotationType.ANNOTATION_WARNING);
+	registerType(AnnotationType.ANNOTATION_INFO);
 	registerType(AnnotationType.ANNOTATION_TASK);
 	registerType(AnnotationType.ANNOTATION_BREAKPOINT);
+	registerType(AnnotationType.ANNOTATION_CONDITIONAL_BREAKPOINT);
 	registerType(AnnotationType.ANNOTATION_BOOKMARK);
 	registerType(AnnotationType.ANNOTATION_CURRENT_BRACKET);
 	registerType(AnnotationType.ANNOTATION_MATCHING_BRACKET);
 	registerType(AnnotationType.ANNOTATION_CURRENT_SEARCH);
 	registerType(AnnotationType.ANNOTATION_MATCHING_SEARCH);
+	registerType(AnnotationType.ANNOTATION_SEARCH_RANGE, true);
 	registerType(AnnotationType.ANNOTATION_READ_OCCURRENCE);
 	registerType(AnnotationType.ANNOTATION_WRITE_OCCURRENCE);
 	registerType(AnnotationType.ANNOTATION_SELECTED_LINKED_GROUP);
 	registerType(AnnotationType.ANNOTATION_CURRENT_LINKED_GROUP);
 	registerType(AnnotationType.ANNOTATION_LINKED_GROUP);
 	registerType(AnnotationType.ANNOTATION_CURRENT_LINE, true);
+	registerType(AnnotationType.ANNOTATION_HIGHLIGHTED_LINE, true);
 	registerType(AnnotationType.ANNOTATION_BLAME, true);
 	registerType(AnnotationType.ANNOTATION_CURRENT_BLAME, true);
 	registerType(AnnotationType.ANNOTATION_DIFF_ADDED);
 	registerType(AnnotationType.ANNOTATION_DIFF_DELETED);
 	registerType(AnnotationType.ANNOTATION_DIFF_MODIFIED);
+	registerType(AnnotationType.ANNOTATION_COLLAB_LINE_CHANGED, true);
 
 	AnnotationType.registerType(AnnotationType.ANNOTATION_FOLDING, FoldingAnnotation);
 
@@ -407,8 +433,7 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 			var annotation, annotations = [];
 			while (iter.hasNext()) {
 				annotation = iter.next();
-				var priority = this.getAnnotationTypePriority(annotation.type);
-				if (priority === 0) { continue; }
+				if (!this.isAnnotationTypeVisible(annotation.type)) { continue; }
 				annotations.push(annotation);
 			}
 			var self = this;
@@ -427,7 +452,24 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 		 * @see orion.editor.AnnotationTypeList#removeAnnotationType
 		 */
 		isAnnotationTypeVisible: function(type) {
-			return this.getAnnotationTypePriority(type) !== 0;
+			if (this.getAnnotationTypePriority(type) === 0) return false;
+			return !this._visibleAnnotationTypes || this._visibleAnnotationTypes[type] === undefined || this._visibleAnnotationTypes[type] === true;
+		},
+		/**
+		 * Sets whether annotations of the given annotation type are visble. By default
+		 * all annotations added to the receiver are visible.
+		 * 
+		 * @param {Object} type
+		 * @param {Boolean} visible
+		 * @since 14.0
+		 */
+		setAnnotationTypeVisible: function(type, visible) {
+			if (typeof type === "object") {
+				this._visibleAnnotationTypes = type;
+			} else {
+				if (!this._visibleAnnotationTypes) this._visibleAnnotationTypes = {};
+				this._visibleAnnotationTypes[type] = visible;
+			}
 		},
 		/**
 		 * Removes an annotation type from the receiver.
@@ -558,7 +600,7 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 				skip = function() {
 					while (i < annotations.length) {
 						var a =  annotations[i++];
-						if ((start === a.start) || (start > a.start ? start < a.end : a.start < end)) {
+						if ((start === a.start) || (a.start === a.end && a.end === end) || (start > a.start ? start < a.end : a.start < end)) {
 							return a;
 						}
 						if (a.start >= end) {
@@ -761,7 +803,7 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 					e.changed.push(annotation);
 				} else if (annotation.end <= start) {
 					//nothing
-				} else if (annotation.start < start && end < annotation.end) {
+				} else if (annotation.start <= start && end < annotation.end) {//Annotation renderer does not render the last character
 					annotation._oldStart = annotation.start;
 					annotation._oldEnd = annotation.end;
 					annotation.end += changeCount;
@@ -866,7 +908,12 @@ define("orion/editor/annotations", ['i18n!orion/editor/nls/messages', 'orion/edi
 						}
 					}
 				}
-			}
+				if (style.html) {
+					result.html = style.html;
+				}
+				if (style.node) {
+					result.node = style.node;
+				}			}
 			return result;
 		},
 		_mergeStyleRanges: function(ranges, styleRange) {

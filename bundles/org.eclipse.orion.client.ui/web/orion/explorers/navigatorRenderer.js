@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2009, 2013 IBM Corporation and others.
+ * Copyright (c) 2009, 2013, 2017 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -326,21 +326,36 @@ define([
 			col.appendChild(span);
 			col.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-2$
 			span.className = "mainNavColumn"; //$NON-NLS-0$
+			// Append annotation container
+			var annotation = document.createElement("span"); //$NON-NLS-0$
+			annotation.id = tableRow.id + "Annotation"; //$NON-NLS-0$
+			annotation.classList.add("treeAnnotation");
+			annotation.classList.add("navAnnotation");
+			col.appendChild(annotation);
 			var itemNode;
+			if(this.explorer._parentId === "pageSidebar"){
+				var isDesktopMode = this.explorer._parentNode.parentNode.classList.contains("desktopmode");
+			}
 			if (item.Directory) {
 				// defined in ExplorerRenderer.  Sets up the expand/collapse behavior
 				this.getExpandImage(tableRow, span);
 				itemNode = this.createFolderNode(item);
-
 				span.appendChild(itemNode);
-				this.explorer._makeDropTarget(item, itemNode);
-				this.explorer._makeDropTarget(item, tableRow);
+				if(!isDesktopMode){
+					this.explorer._makeDropTarget(item, itemNode);
+					this.explorer._makeDropTarget(item, tableRow);
+				}
 			} else {
 				if (!this.openWithCommands) {
 					this.openWithCommands = mExtensionCommands.getOpenWithCommands(this.commandService);
 				}
 				itemNode = createLink("", item, this.commandService, this.contentTypeService, this.openWithCommands, null, null, null, this);
 				span.appendChild(itemNode); //$NON-NLS-0$
+			}
+			if(isDesktopMode){
+				span.setAttribute('draggable', true);
+				this.explorer._makeDropTarget(item, span);
+				this.explorer._makeDropTarget(item, tableRow);
 			}
 			if (itemNode) {
 				// orion.explorers.FileExplorer#getNameNode
