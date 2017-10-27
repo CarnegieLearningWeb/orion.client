@@ -14,7 +14,7 @@ define({
 	"name": "Dark",
 	"styles": {
 		"#configSection": {
-			"background-color": "#26343F !important",
+			"background-color": "#0b6481 !important",
 			"color": "#FFFFFF !important"
 		},
 		"#log": {
@@ -189,7 +189,7 @@ define({
 			"color": "#106A5B !important"
 		},
 		".mainToolbar": {
-			"background-color": "#26343F",
+			"background-color": "#0b6481",
 			"color": "#FFFFFF !important",
 			".commandButton.orionButton.dropdownTrigger": {
 				"border-color": "#26343F",
@@ -275,7 +275,7 @@ define({
 			}
 		},
 		".sideMenu": {
-			"background-color": "#26343F"
+			"background-color": "#0B6481"
 		},
 		".sideMenuItem": {
 			"color": "#FFFFFF !important"

@@ -92,8 +92,10 @@ define([
 		
 		function getDefaultTheme() {
 			var d = new Deferred();
-			var useLightTheme = document.body.classList.contains("lightPage");
-			var defaultTheme = useLightTheme ? 'Light' : 'Dark';
+                        
+                        //Jon Edit change default to Dark
+//			var useLightTheme = document.body.classList.contains("lightPage");
+			var defaultTheme = 'Dark';
 			if (this.provider && typeof this.provider.getDefaultTheme === "function") {
 				this.provider.getDefaultTheme().then(function(defaultTheme) {
 					d.resolve(defaultTheme);

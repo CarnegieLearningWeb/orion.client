@@ -552,6 +552,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			if (explorer && !explorer.isCommandsVisible()) {
 				return false;
 			}
+
+                        if (isDirectory(item)) {
+                            return false;
+                        }
+
 			var items = Array.isArray(item) ? item : [item];
 			if (items.length === 0) {
 				return false;
@@ -684,6 +689,11 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 					if (!explorer || !explorer.isCommandsVisible()) {
 						return false;
 					}
+
+                                        if (isDirectory(item)) {
+                                            return false;
+                                        }
+
 					if (Array.isArray(item)) {
 						return item.length === 1 && item[0].Name;
 					}
@@ -1161,25 +1171,25 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 			bufferedSelection = data.items;
 		};
 		
-		var cutCommand = new mCommands.Command({
-			name: messages["Cut"],
-			id: "eclipse.cut", //$NON-NLS-0$
-			callback: function(data) {
-				var navHandler = explorer.getNavHandler();
-				
-				copyToBuffer(data);
-				
-				if (bufferedSelection.length) {
-					isCutInProgress = true;
-					// disable cut items in explorer
-					bufferedSelection.forEach(function(cutItem){
-						navHandler.disableItem(cutItem);
-					});
-				}
-			},
-			visibleWhen: oneOrMoreFilesOrFolders
-		});
-		commandService.addCommand(cutCommand);
+//		var cutCommand = new mCommands.Command({
+//			name: messages["Cut"],
+//			id: "eclipse.cut", //$NON-NLS-0$
+//			callback: function(data) {
+//				var navHandler = explorer.getNavHandler();
+//				
+//				copyToBuffer(data);
+//				
+//				if (bufferedSelection.length) {
+//					isCutInProgress = true;
+//					// disable cut items in explorer
+//					bufferedSelection.forEach(function(cutItem){
+//						navHandler.disableItem(cutItem);
+//					});
+//				}
+//			},
+//			visibleWhen: oneOrMoreFilesOrFolders
+//		});
+//		commandService.addCommand(cutCommand);
 		
 		var copyToBufferCommand = new mCommands.Command({
 			name: messages["Copy"],
@@ -1278,8 +1288,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
 				}
 			});
 		commandService.addCommand(pasteFromBufferCommand);
-		return new Deferred().resolve();
-	};
 
     var duplicateFileCommand = new mCommands.Command({
             name: messages["Duplicate"],
@@ -1442,7 +1450,7 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
             var nextFilename      = lessonNames[indexOfNextLesson];
 
             return nextFilename;
-        };
+        }
 
         var pasteFromBufferNoPrompt = function(data, nextFilename) {
             var item = getTargetFolder(data.items);
@@ -1505,8 +1513,6 @@ define(['i18n!orion/navigate/nls/messages', 'orion/webui/littlelib', 'orion/i18n
         return new Deferred().resolve();
     };
 
-
-		
 	fileCommandUtils.createNewContentCommand = function(id, name, href, hrefContent, explorer, fileClient, progress, progressMessage) {
 		var parametersArray = href ? [] : [
 			new mCommandRegistry.CommandParameter("folderName", "text", messages['Folder name:'], name), //$NON-NLS-1$ //$NON-NLS-0$

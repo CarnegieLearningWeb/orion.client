@@ -388,7 +388,7 @@ define([
 							"backgroundImage": "url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAYAAAC09K7GAAAAHUlEQVQYV2NkgIL/nT3/GctLGBlBfBgHTMM4MJUAe30PF+f8aegAAAAASUVORK5CYII=)"
 						}
 					},
-					"backgroundColor": "#26343F",
+					"backgroundColor": "#0b6481",
 					"color": "#07ADCF",
 					"comment": {
 						"color": "#ADB9C0",
@@ -496,7 +496,7 @@ define([
 						}
 					},
 					"ruler": {
-						"backgroundColor": "#26343F"
+						"backgroundColor": "#0b6481"
 					},
 					"rulerLines": {
 						"color": "#93A2AA",
