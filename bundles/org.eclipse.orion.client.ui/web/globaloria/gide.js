@@ -291,7 +291,7 @@ define([
             // Check if the current element contains OrionContent
             // if it does, the next element will be the course folder.
             // Return that element
-            var re = /-OrionContent/;
+            var re = /OrionContent/;
             var courseName;
 
             for (var i = 0; i < hash.length; i++) {

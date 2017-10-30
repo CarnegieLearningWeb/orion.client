@@ -192,7 +192,7 @@ define({
 			"background-color": "#0b6481",
 			"color": "#FFFFFF !important",
 			".commandButton.orionButton.dropdownTrigger": {
-				"border-color": "#26343F",
+				"border-color": "#FFFFFF",
 				"color": "#FFFFFF !important",
 				".dropdownTriggerButtonLabel": {
 					"color": "#FFFFFF"
@@ -284,11 +284,11 @@ define({
 			"color": "#106A5B !important"
 		},
 		".sideMenuItemActive": {
-			"background-color": "#106A5B !important",
+			"background-color": "#fb9b3b !important",
 			"color": "#FFFFFF !important"
 		},
 		".sideMenuItemActive:hover": {
-			"background": "rgba(16,106,91,0.25) !important",
+			"background": "rgba(251, 155, 59, 0.25) !important",
 			"color": "#FFFFFF"
 		},
 		".sidebarWrapper": {

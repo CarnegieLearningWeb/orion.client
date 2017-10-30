@@ -306,7 +306,7 @@ define([
 			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.deleteFile", 4, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.renameResource", 5, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.duplicateFile", 6, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
-            commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.nextLesson", 7, "orion.commonNavContextMenuGroup/orion.editGroup", false);
+                        commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.nextLesson", 7, "orion.commonNavContextMenuGroup/orion.editGroup", false);
 
 			// Context Menu related actions
 			commandRegistry.addCommandGroup(contextMenuActionsScope, "orion.OpenWith", 1001, messages["OpenWith"], "orion.commonNavContextMenuGroup/orion.relatedActions", null, null, null, "dropdownSelection"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
