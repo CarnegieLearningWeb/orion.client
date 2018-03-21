@@ -22,7 +22,7 @@ module.exports = function(options) {
     var workspaceDir = options.workspaceDir;
     if (!workspaceDir) { throw new Error('options.workspaceDir path required'); }
 
-    var contextPath = options.configParams['orion.context.path'];
+    var contextPath = options.configParams.get('orion.context.path');
 
     module.exports.getFile = getFile;
     module.exports.treeJSON = treeJSON;
@@ -42,7 +42,7 @@ module.exports = function(options) {
 
     function getFile(res, filepath, stats, etag) {
         var stream = fs.createReadStream(filepath);
-        res.setHeader("Cache-Control", "no-cache");
+		api.setResponseNoCache(res);
         res.setHeader('Content-Length', stats.size);
         res.setHeader('ETag', etag);
         res.setHeader('Accept-Patch', 'application/json-patch; charset=UTF-8');

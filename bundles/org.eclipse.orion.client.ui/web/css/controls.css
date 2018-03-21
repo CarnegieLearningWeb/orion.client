@@ -39,14 +39,14 @@
 
 /* ----- side panel ----- */
 
-#auxpane .navlinkonpage, .nav_fakelink {
+.auxpane:not(#leftPane) .navlinkonpage, .nav_fakelink {
 	text-decoration: none;
 	padding-top: 2px;
 	padding-bottom: 2px;
 	color: inherit;
 }
 
-#auxpane .navlink {
+.auxpane:not(#leftPane) .navlink {
 	display: inline-block;
 	padding: 2px;
 	color: inherit;
@@ -55,7 +55,7 @@
 	border-bottom: 1px solid transparent;
 }
 
-#auxpane .navlink:hover {
+.auxpane:not(#leftPane) .navlink:hover {
 	border-bottom: 1px dotted;
 }
 
@@ -1098,6 +1098,9 @@ html[dir="rtl"] .uploadChooser{ /* ACGC */
 	width: 120px;
 }
 
+.userProfile input.setting-control {
+	width: 300px;
+}
 .local {
 	display: table;
 }
@@ -1114,6 +1117,10 @@ html[dir="rtl"] .uploadChooser{ /* ACGC */
 }
 
 .local .setting-content > div {
+	display: table-row;
+}
+
+.local .setting-content > div > label {
 	display: table-row;
 }
 
@@ -1296,11 +1303,16 @@ html[dir="rtl"] .sectionWrapper, html[dir="rtl"] .sectionTable{ /* ACGC */
 	margin-bottom: 5px;
 }
 
+.sectionTable.sectionOpened {
+	visibility: visible;
+}
+
 .sectionTable.sectionClosed {
 	height: 0;
 	-webkit-transform: scaleY(0);
 	-ms-transform: scaleY(0);
 	transform: scaleY(0);
+	visibility: hidden;
 }
 
 .sectionWrapper{
@@ -1781,4 +1793,20 @@ html[dir="rtl"] .fileExplorerProgressDiv { /* ACGC */
 	right: 3px;
 	top: 1px;
 	cursor: pointer;
+}
+
+/* The visuallyhidden class can be used to visually hide an element, yet keep it available to keyboard and screen reader users.
+ * In general, visually hiding an element in this way is a bad idea, and every effort should be made to fit the element into the
+ * the visual presentation (or hide it from everybody using display: none; visibility: hidden; or the hidden attribute).
+ * However, there are rare occasions when this is useful. For example, some inputs are hard to style, so if they are visuallyhidden,
+ * their corresponding label element can be styled instead (use input:focus + label to style the label when the input receives focus).
+ * Do not use this class for hiding label text; for that, use aria-label.
+ * <<<< READ THE COMMENT BEFORE USING */
+.visuallyhidden {
+    position: absolute;
+    left: -9999em;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
 }

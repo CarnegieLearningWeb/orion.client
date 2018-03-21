@@ -13,9 +13,10 @@ var api = require('../api'), writeError = api.writeError, writeResponse = api.wr
 	git = require('nodegit'),
 	clone = require('./clone'),
 	path = require('path'),
-	fs = require('fs'),
+	async = require('async'),
+	Promise = require('bluebird'),
+	fs = Promise.promisifyAll(require('fs')),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	responseTime = require('response-time');
 
 module.exports = {};
@@ -24,11 +25,10 @@ module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 	
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiIndex-Response-Time", suffix: true}))
 	.use(options.checkUserAccess)
 	.get(fileRoot + '*', getIndex)
@@ -75,6 +75,9 @@ function getIndex(req, res) {
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
@@ -90,16 +93,33 @@ function putIndex(req, res) {
 	})
 	.then(function(indexResult) {
 		index = indexResult;
-		function doPath(p) {
-			if (fs.existsSync(path.join(repo.workdir(), p))) {
-				return index.addByPath(p);
-			}
-			return index.removeByPath(p);
-		}
-		if (req.body.Path) {
-			return Promise.all(req.body.Path.map(doPath));
-		}
-		return doPath(filePath);
+		var files = req.body.Path || [filePath];
+		return new Promise(function(fulfill, reject) {
+			async.series(files.map(function(p) {
+				return function(cb) {
+					return fs.statAsync(path.join(repo.workdir(), p))
+					.catchReturn({ code: 'ENOENT' }, null)
+					.then(function(exists) {
+						if (exists) {
+							return index.addByPath(p);
+						}
+						return index.removeByPath(p);
+					})
+					.then(function() {
+						return cb();
+					})
+					.catch(function(err) {
+						return cb(err);
+					});
+				};
+			}), function(err) {
+				if (err) {
+					reject(err);
+				} else {
+					fulfill();
+				}
+			});
+		});
 	})
 	.then(function() {
 		// this will write both files to the index
@@ -109,6 +129,9 @@ function putIndex(req, res) {
 		writeResponse(200, res);
 	}).catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
@@ -154,6 +177,9 @@ function postIndex(req, res) {
 		writeResponse(200, res);
 	}).catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 };

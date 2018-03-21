@@ -41,7 +41,7 @@ define({
 				"box-shadow": "0 1px 2px 0 rgb(60, 113, 179)",
 				"color": "#000000"
 			},
-			".commandButton:not(.primaryButton):hover": {
+			".commandButton:not(.primaryButton):not([disabled]):hover": {
 				"background": "rgba(60, 113, 179, 0.50)",
 				"box-shadow": "0 1px 2px 0 rgb(60, 113, 179)",
 				"color": "#000000"
@@ -85,7 +85,7 @@ define({
 			"box-shadow": "0 1px 2px 0 rgb(60, 113, 179)",
 			"color": "#000000"
 		},
-		".commandButton:not(.primaryButton):hover": {
+		".commandButton:not(.primaryButton):not([disabled]):hover": {
 			"background-color": "rgba(60, 113, 179, 0.25)",
 			"box-shadow": "0 1px 2px 0 rgb(60, 113, 179)",
 			"color": "#000000"
@@ -117,6 +117,9 @@ define({
 		},
 		".dropdownTrigger:not(.dropdownDefaultButton)": {
 			"color": "#152935 !important"
+		},
+		".dropdownSelection.dropdownTriggerOpen": {
+			"background-color": "#CEDBEC !important"
 		},
 		".editorViewerHeader": {
 			"background": "#F5F7FA !important",
@@ -234,11 +237,9 @@ define({
 			"border-radius": "0 !important",
 			"color": "#FFFFFF !important"
 		},
-		".primaryButton:hover,": {
-			".primaryButton:focus": {
-				"background": "rgb(60, 113, 179)",
-				"border-color": "rgb(60, 113, 179)"
-			}
+		".primaryButton.disabled": {
+			"background-color": "rgba(60, 113, 179, 0.25) !important",
+			"border-color": "white !important"
 		},
 		".projectNavColumn": {
 			"color": "#000000"
@@ -346,8 +347,7 @@ define({
 		},
 		".statusLight.statusLightProgress": {
 			"background": "transparent",
-			"border-color": "lightgray",
-			"border-top-color": "transparent"
+			"border-color": "transparent lightgray lightgray lightgray",
 		},
 		".statusLight.statusLightRed": {
 			"background": "#C1272D"
@@ -362,11 +362,11 @@ define({
 			},
 			"color": "#FFFFFF",
 			"background-color": "rgb(60, 113, 179)",
-			".commandButton:not(.primaryButton):hover":{
+			".commandButton:not(.primaryButton):focus":{
 				"color": "white",
    				"background-color": "rgba(196, 197, 200, 0.25)"
 			},
-			".commandButton:not(.primaryButton):focus":{
+			".commandButton:not(.primaryButton):not([disabled]):hover":{
 				"color": "white",
    				"background-color": "rgba(196, 197, 200, 0.25)"
 			}
@@ -450,12 +450,6 @@ define({
 		".pageToolbar": {
 			".dropdownTrigger:not(.dropdownDefaultButton)": {
 				"color": "#C4C5C8"
-			}
-		},
-		".primaryButton:hover": {
-			".primaryButton:focus": {
-				"background": "#3C71B3",
-				"border-color": "#3C71B3"
 			}
 		},
 		".editorTabCloseButton:hover": {

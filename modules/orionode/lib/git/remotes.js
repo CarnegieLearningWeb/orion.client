@@ -16,7 +16,6 @@ var api = require('../api'), writeError = api.writeError, writeResponse = api.wr
 	tasks = require('../tasks'),
 	clone = require('./clone'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	gitUtil = require('./util'),
 	responseTime = require('response-time');
 
@@ -28,7 +27,7 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 
 	module.exports.remoteBranchJSON = remoteBranchJSON;
@@ -48,7 +47,6 @@ module.exports.router = function(options) {
 	}
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiRemotes-Response-Time", suffix: true}))
 	.use(checkUserAccess) // Use specified checkUserAceess implementation instead of the common one from options
 	.get(fileRoot + '*', getRemotes)
@@ -124,6 +122,7 @@ function getRemotes(req, res) {
 					cb();
 				});
 			}, function() {
+				clone.freeRepo(repo);
 				writeResponse(200, res, null, {
 					"Children": r,
 					"Type": "Remote"
@@ -166,6 +165,7 @@ function getRemotes(req, res) {
 						callback(err);
 					});
 				}, function(err) {
+					clone.freeRepo(repo);
 					if (err) {
 						return writeError(403, res);
 					}
@@ -196,6 +196,9 @@ function getRemotes(req, res) {
 		})
 		.catch(function() {
 			return writeError(403, res);
+		})
+		.finally(function() {
+			clone.freeRepo(theRepo);
 		});
 	}
 	return writeError(404, res);
@@ -259,6 +262,9 @@ function addRemote(req, res) {
 	})
 	.catch(function(err) {
 		writeError(403, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
@@ -299,7 +305,7 @@ function fetchRemote(req, res, remote, branch, force) {
 				callbacks: clone.getRemoteCallbacks(req.body, req.user.username, task),
 				downloadTags: 3     // 3 = C.GIT_REMOTE_DOWNLOAD_TAGS_ALL (libgit2 const) 
 			},
-			"fetch"	
+			"fetch"
 		);
 	})
 	.then(function(err) {
@@ -320,14 +326,17 @@ function fetchRemote(req, res, remote, branch, force) {
 			err.message = "Error fetching git remote";
 			err.code = 404;
 		}
-		clone.handleRemoteError(task, err, remoteObj.url());
+		clone.handleRemoteError(task, err, remoteObj ? remoteObj.url() : undefined);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
 function pushRemote(req, res, remote, branch, pushSrcRef, tags, force) {
 	var repo;
 	var remoteObj;
-	
+	var credsCopy = Object.assign({}, req.body);
 	var task = new tasks.Task(res, false, true, 0 ,true);	
 	return clone.getRepo(req)
 	.then(function(r) {
@@ -371,7 +380,7 @@ function pushRemote(req, res, remote, branch, pushSrcRef, tags, force) {
 	})
 	.then(function(refSpecs){
 		return remoteObj.push(
-			refSpecs, {callbacks: clone.getRemoteCallbacks(req.body, req.user.username, task)}
+			refSpecs, {callbacks: clone.getRemoteCallbacks(credsCopy, req.user.username, task)}
 		);
 	})
 	.then(function(err) {
@@ -397,14 +406,19 @@ function pushRemote(req, res, remote, branch, pushSrcRef, tags, force) {
 		}
 	})
 	.catch(function(err) {
-		clone.handleRemoteError(task, err, remoteObj.url());
+		clone.handleRemoteError(task, err, remoteObj ? remoteObj.url() : undefined);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
 function deleteRemote(req, res) {
+	var theRepo;
 	var remoteName = api.decodeURIComponent(req.params.remoteName);
 	clone.getRepo(req)
 	.then(function(repo) {
+		theRepo = repo;
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
 			if (err) {
@@ -423,6 +437,9 @@ function deleteRemote(req, res) {
 	})
 	.catch(function(err) {
 		return writeError(400, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 };

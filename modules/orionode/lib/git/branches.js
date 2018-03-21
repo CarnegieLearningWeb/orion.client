@@ -17,7 +17,6 @@ var api = require('../api'),
 	mRemotes = require('./remotes'),
 	clone = require('./clone'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	args = require('../args'),
 	responseTime = require('response-time');
 
@@ -29,7 +28,7 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 	
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 	
 	module.exports.branchJSON = branchJSON;
@@ -37,7 +36,6 @@ module.exports.router = function(options) {
 	module.exports.getBranchRemotes = getBranchRemotes;
 	
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiBranches-Response-Time", suffix: true}))
 	.use(options.checkUserAccess)
 	.get(fileRoot + '*', getBranches)
@@ -158,6 +156,9 @@ module.exports.router = function(options) {
 			})
 			.catch(function(err) {
 				writeError(500, res, err.message);
+			})
+			.finally(function() {
+				clone.freeRepo(theRepo);
 			});
 			return;
 		}
@@ -209,6 +210,9 @@ module.exports.router = function(options) {
 		})
 		.catch(function(err) {
 			writeError(500, res, err.message);
+		})
+		.finally(function() {
+			clone.freeRepo(theRepo);
 		});
 	}
 	
@@ -247,13 +251,18 @@ module.exports.router = function(options) {
 		})
 		.catch(function(err) {
 			writeError(500, res, err.message);
+		})
+		.finally(function() {
+			clone.freeRepo(theRepo);
 		});
 	}
 	
 	function deleteBranch(req, res) {
+		var theRepo;
 		var branchName = api.decodeURIComponent(req.params.branchName);
 		clone.getRepo(req)
 		.then(function(repo) {
+			theRepo = repo;
 			return git.Branch.lookup(repo, branchName, git.Branch.BRANCH.LOCAL);
 		})
 		.then(function(ref) {
@@ -265,6 +274,9 @@ module.exports.router = function(options) {
 		})
 		.catch(function(err) {
 			writeError(403, res, err.message);
+		})
+		.finally(function() {
+			clone.freeRepo(theRepo);
 		});
 	}
 };

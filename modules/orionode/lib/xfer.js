@@ -13,7 +13,9 @@ var api = require('./api'),
 	archiver = require('archiver'),
 	request = require('request'),
 	express = require('express'),
+	crypto = require("crypto"),
 	path = require('path'),
+	url = require('url'),
 	os = require('os'),
 //Busboy = require('busboy'),
 	Promise = require('bluebird'),
@@ -30,7 +32,7 @@ var writeError = api.writeError,
 	
 function getUploadsFolder(options) {
 	if (options) {
-		return path.join(options.configParams['orion.single.user'] ? 
+		return path.join(options.configParams.get('orion.single.user') ? 
 			path.join(os.homedir(), ".orion") : options.workspaceDir, ".uploads");
 	}
 	return path.join(os.homedir(), ".orion");
@@ -41,8 +43,12 @@ var fileRoot;
 
 function checkUserAccess(req, res, next){
 	var uri = (typeof req.contextPath === "string" && req.originalUrl.substring(req.contextPath.length)) || req.originalUrl;
+	uri = url.parse(uri).pathname;
 	// import/export rights depend on access to the file content
-	if (uri.startsWith("/xfer/export/") && uri.endsWith(".zip")){
+	if (uri.startsWith("/xfer/export/")){
+		if (path.extname(uri) !== ".zip") {
+			return writeError(400, res, "Export is not a zip");
+		}
 		uri = "/file/" + uri.substring("/xfer/export/".length, uri.length - 4) + '/';
 	} else if (uri.startsWith("/xfer/import/")) {
 		uri = "/file/" + uri.substring("/xfer/import/".length); //$NON-NLS-1$
@@ -59,6 +65,8 @@ module.exports.router = function(options) {
 	fileRoot = options.fileRoot;
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	module.exports.write = write;
+	module.exports.zipPath = zipPath;
+	module.exports.copyPath = copyPath;
 	module.exports.getUploadDir = getUploadDir;
 	
 	UPLOADS_FOLDER = getUploadsFolder(options);
@@ -214,7 +222,7 @@ function completeTransfer(req, res, tempFile, file, fileName, xferOptions, shoul
 					if (failed.length) {
 						return overrideError(failed);
 					}
-					res.setHeader("Location", api.join(fileRoot, file.workspaceId, file.path.substring(file.workspaceDir.length+1)));
+					res.setHeader("Location", fileUtil.encodeSlug(api.join(fileRoot, file.workspaceId, file.path.substring(file.workspaceDir.length+1))));
 					writeResponse(201, res);
 					res = null;
 				}
@@ -274,7 +282,7 @@ function completeTransfer(req, res, tempFile, file, fileName, xferOptions, shoul
 			if (err) {
 				return writeError(400, res, "Transfer failed");
 			}
-			res.setHeader("Location", api.join(fileRoot, file.workspaceId, file.path.substring(file.workspaceDir.length+1)));
+			res.setHeader("Location", fileUtil.encodeSlug(api.join(fileRoot, file.workspaceId, file.path.substring(file.workspaceDir.length+1))));
 			writeResponse(201, res);
 		});
 	}
@@ -283,15 +291,11 @@ function completeTransfer(req, res, tempFile, file, fileName, xferOptions, shoul
 function getXfer(req, res) {
 	var rest = req.params["0"];
 	var file = fileUtil.getFile(req, rest);
-	
-	if (path.extname(file.path) !== ".zip") {
-		return writeError(400, res, "Export is not a zip");
-	}
-	
 	getXferFrom(req, res, file);
 }
 
 function getXferFrom(req, res, file) {
+	api.setResponseNoCache(res);
 	var filePath = file.path.replace(/.zip$/, "");
 	var zip = archiver('zip');
 	zip.pipe(res);
@@ -309,7 +313,7 @@ function getXferFrom(req, res, file) {
 	});
 }
 
-function write (zip, base, filePath) {
+function write (zip, base, filePath, filter) {
 	return fs.statAsync(filePath)
 	.then(function(stats) {
 		/*eslint consistent-return:0*/
@@ -319,11 +323,87 @@ function write (zip, base, filePath) {
 			.then(function(directoryFiles) {
 				var SUBDIR_SEARCH_CONCURRENCY = 10;
 				return Promise.map(directoryFiles, function(entry) {
-					return write(zip, base, filePath + entry);
+					return write(zip, base, filePath + entry, filter);
 				},{ concurrency: SUBDIR_SEARCH_CONCURRENCY});
 			});
 		}
-		zip.file(filePath, { name: filePath.substring(base.length).replace(/\\/g, "/") });
+		if(!filter || !filter(filePath.substring(base.length + 1))){
+			zip.file(filePath, { name: filePath.substring(base.length).replace(/\\/g, "/") });
+		}
+	});
+}
+
+/**
+ * @name zipPath
+ * @description Used to zip a direcotry
+ * @param pathToZip
+ * @param options, options.additionalData is array of addition data, each one has a shape of {content:,filename:};options.filter is a filter function to exclude files
+ * @returns returns a Promise which resolves the zip file path
+ */
+function zipPath(pathToZip, options){
+	var zipFileName = crypto.randomBytes(5).toString("hex") + Date.now();
+	return new Promise(function(fulfill, reject){
+		var zip = archiver("zip");
+		var resultFilePath = path.join(getUploadDir(), zipFileName + ".zip");
+		mkdirp(path.dirname(resultFilePath), function(err) {
+			if (err) {
+				logger.error(err);
+				return reject(err);
+			}
+			var output = fs.createWriteStream(resultFilePath);
+			output.on('error', function(err) {
+				logger.error(err);
+				return reject(err);
+			});
+			zip.pipe(output);
+			return write(zip, pathToZip, pathToZip, options.filter)
+			.then(function() {
+				if(options.additionalData && options.additionalData.length > 0){
+					options.additionalData.forEach(function(data){
+						zip.append(data.content, data.filename);
+					});
+				}
+				zip.finalize();
+				zip.on("end", function(){
+					return fulfill(resultFilePath);
+				});
+				zip.on("error", function(err){
+					logger.error(err);
+					var errorStatus = new Error("Zipping process went wrong");
+					return reject(errorStatus);
+				});
+			});
+		});
+	});
+}
+/**
+ * @name copyPath
+ * @description Used to copy a file to a zip file
+ * @param filePath
+ * @returns returns Promise, which resolves the zip file path
+ */
+function copyPath(filePath){
+	var ramdomName = crypto.randomBytes(5).toString("hex") + Date.now();
+	var resultFilePath = path.join(getUploadDir(), ramdomName + ".zip");
+	return new Promise(function(fulfill, reject){
+		mkdirp(path.dirname(resultFilePath), function(err) {
+			if (err) {
+				logger.error(err);
+				return reject(err);
+			}
+			var readenWarfileStream = fs.createReadStream(filePath);
+			readenWarfileStream.on("error", function(err) {
+				reject(err);
+			});
+			var output = fs.createWriteStream(resultFilePath);
+			output.on("error", function(err) {
+				reject(err);
+			});
+			readenWarfileStream.on('end', function() {
+				return fulfill(resultFilePath);
+			});
+			readenWarfileStream.pipe(output);
+		});
 	});
 }
 function getUploadDir(){

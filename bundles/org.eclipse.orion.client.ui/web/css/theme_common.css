@@ -404,7 +404,7 @@ a.breadcrumb.currentLocation {
 	/* text-transform: uppercase; */
 }
 
-.commandButton:not(.primaryButton):hover {
+.commandButton:not(.primaryButton):not([disabled]):hover {
 	color: white;
 	background-color: #a5b5bc;
 	box-shadow: 0 1px 2px 0 rgba(0,0,0,0.2);
@@ -420,7 +420,7 @@ a.breadcrumb.currentLocation {
 	color: white;
 }
 
-.primaryButton:hover {
+.primaryButton:not([disabled]):hover {
 	background: #01CDB0;
 	border-color: #01CDB0;
 }
@@ -695,7 +695,6 @@ a.breadcrumb.currentLocation {
 	margin: 0; /* needed for context menu positioning to work properly */
 	cursor: default;
 	font-size: 12px;
-	margin: 0;
 	outline: none;
 	padding: 3px 0 3px;
 }
@@ -803,6 +802,10 @@ a.breadcrumb.currentLocation {
 	margin-bottom: -1px !important;
 	position: relative !important;
 	z-index: 200 !important;
+}
+
+.dropdownSelection.dropdownTriggerOpen {
+	background-color: #CEDBEC !important;
 }
 
 .checkedMenuItem {
@@ -1082,12 +1085,6 @@ a.breadcrumb.currentLocation {
 	height: 18px;
 	padding-left: 4px;
 	font-weight: bold;
-}
-
-.dialogDismiss {
-	display: block;
-	cursor: pointer;
-	padding: 2px;
 }
 
 .dialogContent {

@@ -13,7 +13,6 @@
 var express = require('express'),
 	electron = require('electron'),
 	autoUpdater = require('./autoUpdater.js'),
-	bodyParser = require('body-parser'),
 	prefs = require('./prefs'),
 	os = require('os'),
 	platform = os.platform(),
@@ -28,13 +27,12 @@ module.exports = {};
 module.exports.router = function(options) {
 	var configParams = options.configParams;
 	if (!configParams) { throw new Error('options.configParams is required'); }
-	var feedURL = configParams["orion.autoUpdater.url"];
+	var feedURL = configParams.get("orion.autoUpdater.url");
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-Update-Response-Time", suffix: true}))
 	.post('/downloadUpdates', function (req, res) {
 		var allPrefs = prefs.readElectronPrefs();
-		var updateChannel = allPrefs.user && allPrefs.user.updateChannel && allPrefs.user.updateChannel.name ? allPrefs.user.updateChannel.name : configParams["orion.autoUpdater.defaultChannel"];
+		var updateChannel = (allPrefs.Properties && allPrefs.Properties["updateChannel/name"]) || configParams.get("orion.autoUpdater.defaultChannel");
 		var task = new tasks.Task(res, false, true, 0, true);
 		if (platform === "linux") {
 			electron.shell.openExternal(feedURL + '/download/channel/' + updateChannel + '/linux');

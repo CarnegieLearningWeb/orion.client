@@ -10,7 +10,6 @@
  *******************************************************************************/
 /*eslint-env node*/
 var express = require('express'),
-	bodyParser = require('body-parser'),
 	api = require('./api'),
 	crypto = require('crypto'),
 	log4js = require('log4js'),
@@ -20,9 +19,9 @@ var express = require('express'),
 var writeError = api.writeError, 
 	writeResponse = api.writeResponse;
 	
-var MS_EXPIRATION = 86400 * 1000 * 7; /* 7 days */  // TODO should be settable per task by client
+var KEEP_MS_EXPIRATION = 86400 * 1000 * 2; /* 2 days */
+var TEMP_MS_EXPIRATION = 60 * 1000 * 15; /* 15 minutes */
 
-var taskCount = 0;
 var taskStore;
 var taskRoot = "/task";
 
@@ -33,7 +32,6 @@ function orionTasksAPI(options) {
 	if (!taskStore) { throw new Error('options.metastore is required'); }
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-Tasks-Response-Time", suffix: true}))
 	.param('id', function(req, res, next, value) {
 		req.id = value;
@@ -48,7 +46,7 @@ function orionTasksAPI(options) {
 				// task meta saved in fs doesn't have username, while task saved in RAM and mongo does.
 				return writeError(404, res);
 			}
-			writeResponse(200, res, null, toJSON(task, true));
+			writeResponse(200, res, null, toJSON(task, true), true);
 		});
 	})
 	.delete('', deleteAllOperations)
@@ -62,13 +60,10 @@ function orionTasksAPI(options) {
 				// task meta saved in fs doesn't have username, while task saved in RAM and mongo does.
 				return writeError(404, res);
 			}
-			writeResponse(200, res, null, toJSON(task, false));
+			writeResponse(200, res, null, toJSON(task, false), true);
 		});
 	})
 	.delete('/temp/:id', deleteOperation)
-	.get('/count', function(req, res/*, next*/) {
-		writeResponse(200, res, null, {"count": taskCount});
-	})
 	.put('/temp/:id', cancelOperation)
 	.put('/id/:id', cancelOperation);
 }
@@ -90,17 +85,53 @@ function getTaskMeta(req, taskLocationOrKeep, taskId) {
 	};
 }
 
+var allTasks = {};
+api.getOrionEE().on("close-server", function(data) {
+	if (data.code) {
+		logger.error("Cancelling all tasks in worker: " + process.pid);
+		var keys = Object.keys(allTasks);
+		keys.forEach(function(key) {
+			logger.error("Cancelling: " + key + " url=" + allTasks[key].res.req.method + " " + allTasks[key].res.req.originalUrl + " pid=" + process.pid);
+			allTasks[key].done({
+				HttpCode: 500,
+				Code: 0,
+				Message: "Task was canceled"
+			});
+		});
+	}
+	data.promises.push(new Promise(function (fulfill) {
+		var promises = [];
+		var keys = Object.keys(allTasks);
+		logger.info("Waiting for " + keys.length + " tasks in worker: " + process.pid);
+		keys.forEach(function(key) {
+			promises.push(allTasks[key].donePromise);
+		});
+		function done() {
+			logger.info("Tasks completed for worker: " + process.pid);
+			fulfill();
+		}
+		Promise.all(promises).then(done, done);
+	}));
+});
+
 function Task(res, cancelable, lengthComputable, wait, keep) {
 	this.timestamp = Date.now();
-	this.expires = this.timestamp + MS_EXPIRATION;
 	this.id = crypto.randomBytes(5).toString('hex') + this.timestamp;
 	this.cancelable = Boolean(cancelable);
 	this.lengthComputable = Boolean(lengthComputable);
 	this.keep = Boolean(keep);
+	this.expires = this.timestamp + (this.keep ? KEEP_MS_EXPIRATION : TEMP_MS_EXPIRATION);
 	this.total = this.loaded = 0;
 	this.type = "loadstart";
 	this.username = res.req.user.username;
 	this.res = res;
+	this.donePromise = new Promise(function(fulfill) {
+		this.doneFulfill = function(result) {
+			delete this.doneFulfill;
+			delete allTasks[this.id];
+			fulfill(result);
+		}.bind(this);
+	}.bind(this));
 
 	//TODO temporarily disabled timeout to work around client bug.
 	if (true || wait === 0) {
@@ -115,7 +146,7 @@ function Task(res, cancelable, lengthComputable, wait, keep) {
 Task.prototype = {
 	start: function() {
 		if (!this.isRunning()) return;
-		taskCount++;
+		allTasks[this.id] = this;
 		this.started = true;
 		this.toJSON = toJSON;
 		taskStore.createTask(this, function(err) {
@@ -126,18 +157,13 @@ Task.prototype = {
 			if (err) {
 				writeError(500, res, err.toString());
 			} else {
-				var resp = JSON.stringify(toJSON(this, true));
-				api.writeResponse(202, res, {
-					'Content-Type': 'application/json',
-					'Content-Length': resp.length
-				}, resp, null, true);
+				api.writeResponse(202, res, null, toJSON(this, true), true);
 			}
 		}.bind(this));
 	},
 	done: function(result) {
 		if (this.result) return;
 		this.result = result;
-		taskCount--;
 
 		switch (result.Severity) {
 			case "Ok":
@@ -157,6 +183,7 @@ Task.prototype = {
 				delete this.timeout;
 			}
 			taskStore.updateTask(this, function(err) {
+				this.doneFulfill();
 				var res = this.res;
 				if (res.finished) {
 					return;
@@ -166,11 +193,7 @@ Task.prototype = {
 				} else {
 					if (this.result.JsonData) {
 						res.statusCode = this.result.HttpCode;
-						var resp = JSON.stringify(api.encodeLocation(this.result.JsonData));
-						api.writeResponse(this.result.HttpCode, res, {
-							'Content-Type': 'application/json',
-							'Content-Length': resp.length
-						}, resp, null, true);
+						api.writeResponse(this.result.HttpCode, res, null, this.result.JsonData, true);
 					} else if (this.type === "error") {
 						api.writeError(this.result.HttpCode, res, this.result.Message || "");
 					}
@@ -178,10 +201,11 @@ Task.prototype = {
 			}.bind(this));
 		} else {
 			taskStore.updateTask(this, function(err) {
+				this.doneFulfill();
 				if (err) {
 					logger.error(err.toString());
 				}
-			});
+			}.bind(this));
 		}
 	},
 	isRunning: function() {
@@ -273,7 +297,7 @@ function cancelOperation(req, res){
 			if (err) {
 				writeError(500, res, err.toString());
 			}
-			writeResponse(200, res)
+			writeResponse(200, res);
 		});
 	});
 }

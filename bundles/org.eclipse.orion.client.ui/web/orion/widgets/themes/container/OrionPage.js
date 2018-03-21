@@ -41,7 +41,7 @@ define({
 				"box-shadow": "0 1px 2px 0 rgb(16,106,91)",
 				"color": "#FFFFFF"
 			},
-			".commandButton:not(.primaryButton):hover": {
+			".commandButton:not(.primaryButton):not([disabled]):hover": {
 				"background": "rgba(16,106,91,0.50)",
 				"box-shadow": "0 1px 2px 0 rgb(16,106,91)",
 				"color": "#FFFFFF"
@@ -80,7 +80,7 @@ define({
 			"box-shadow": "0 1px 2px 0 rgb(16,106,91)",
 			"color": "black"
 		},
-		".commandButton:not(.primaryButton):hover": {
+		".commandButton:not(.primaryButton):not([disabled]):hover": {
 			"background-color": "rgba(16,106,91,0.25)",
 			"box-shadow": "0 1px 2px 0 rgb(16,106,91)",
 			"color": "black"
@@ -112,6 +112,9 @@ define({
 		},
 		".dropdownTrigger:not(.dropdownDefaultButton)": {
 			"color": "#FFFFFF !important"
+		},
+		".dropdownSelection.dropdownTriggerOpen": {
+			"background-color": "#C3DAD6 !important"
 		},
 		".editorViewerHeader": {
 			"background": "#3B4B54 !important",
@@ -223,7 +226,7 @@ define({
 			".commandButton:not(.primaryButton):focus": {
 				"color": "#FFFFFF"
 			},
-			".commandButton:not(.primaryButton):hover": {
+			".commandButton:not(.primaryButton):not([disabled]):hover": {
 				"color": "#FFFFFF"
 			}
 		},
@@ -252,11 +255,9 @@ define({
 			"border-radius": "0 !important",
 			"color": "#FFFFFF !important"
 		},
-		".primaryButton:hover,": {
-			".primaryButton:focus": {
-				"background": "rgb(60, 113, 179)",
-				"border-color": "rgb(60, 113, 179)"
-			}
+		".primaryButton.disabled": {
+			"background-color": "rgba(16,106,91,0.25) !important",
+			"border-color": "white !important"
 		},
 		".projectNavColumn": {
 			"color": "#FFFFFF"
@@ -380,14 +381,14 @@ define({
 			},
 			"color": "#FFFFFF",
 			"background-color": "rgb(16,106,91)",
-			".commandButton:not(.primaryButton):hover":{
-				"color": "white",
-    			"background-color": "rgba(59, 75, 84, 0.5)"
-			},
 			".commandButton:not(.primaryButton):focus":{
 				"color": "white",
     			"background-color": "rgba(59, 75, 84, 0.5)"			
-    		}
+    		},
+			".commandButton:not(.primaryButton):not([disabled]):hover":{
+				"color": "white",
+    			"background-color": "rgba(59, 75, 84, 0.5)"
+			}
 		},
 		".titleActionContainer": {
 			"background": "#3B4B54 !important",
@@ -468,12 +469,6 @@ define({
 		".pageToolbar": {
 			".dropdownTrigger:not(.dropdownDefaultButton)": {
 				"color": "#3B4B54"
-			}
-		},
-		".primaryButton:hover": {
-			".primaryButton:focus": {
-				"background": "#106A5B",
-				"border-color": "#106A5B"
 			}
 		},
 		".editorTabCloseButton:hover": {

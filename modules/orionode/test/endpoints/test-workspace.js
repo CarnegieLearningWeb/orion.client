@@ -100,6 +100,7 @@ describe("Workspace endpoint", function() {
 			request()
 				.post(ws.Location)
 				.set('Slug', 'testMoveFolderToProjectSrc')
+				.send({Location: 'testMoveFolderToProjectSrc', Directory: true})
 				.expect(201)
 				.end(function(err, res) {
 					testHelper.throwIfError(err);
@@ -185,6 +186,7 @@ describe("Workspace endpoint", function() {
 			request()
 				.post(ws.Location)
 				.set('Slug', 'testMoveProjectToFolderSrc')
+				.send({Location: 'testMoveProjectToFolderSrc', Directory: true})
 				.expect(201)
 				.end(function(err, res) {
 					testHelper.throwIfError(err);
@@ -192,6 +194,7 @@ describe("Workspace endpoint", function() {
 					request()
 						.post(ws.Location)
 						.set('Slug', 'someFolder')
+						.send({Location: 'someFolder', Directory: true})
 						.expect(201)
 						.end(function(err, res) {
 							testHelper.throwIfError(err);
@@ -201,7 +204,7 @@ describe("Workspace endpoint", function() {
 								.set('X-Create-Options', "move")
 								.set('Slug', 'someFolder')
 								.send({Location: pLoc})
-								.expect(500)
+								.expect(200)
 								.end(done);
 						});
 				});
@@ -215,6 +218,7 @@ describe("Workspace endpoint", function() {
 				request()
 					.post(wLoc)
 					.set('Slug', 'testMoveProjectToFolderSrc') // create the project to move
+					.send({Location: 'testMoveProjectToFolderSrc', Directory: true})
 					.expect(201)
 					.end(function(err, res) {
 						testHelper.throwIfError(err);
@@ -222,6 +226,7 @@ describe("Workspace endpoint", function() {
 						request()
 							.post(wLoc)
 							.set('Slug', 'someOtherProject') //create the other project to move to 
+							.send({Location: 'someOtherProject', Directory: true})
 							.expect(201)
 							.end(function(err, res) {
 								testHelper.throwIfError(err);
@@ -387,6 +392,7 @@ describe("Workspace endpoint", function() {
 			request()
 				.post(ws.Location)
 				.set('Slug', 'testGetProjectMetadata')
+				.send({Location: 'testGetProjectMetadata', Directory: true})
 				.expect(201)
 				.end(function(err, res) {
 					testHelper.throwIfError(err);
@@ -453,7 +459,7 @@ describe("Workspace endpoint", function() {
 				assert.equal(res.body.Workspaces.length, 1);
 				assert.ok(res.body.Workspaces[0].Id);
 				assert.ok(res.body.Workspaces[0].Location);
-				assert.equal(res.body.Workspaces[0].Location, PREFIX + "/anonymous-OrionContent");
+				assert.equal(res.body.Workspaces[0].Location, PREFIX + '/' + WORKSPACE_ID);
 				assert.equal(res.body.Workspaces[0].Name, TEST_WORKSPACE_NAME);
 				done();
 			});

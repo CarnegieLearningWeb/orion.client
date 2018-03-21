@@ -279,12 +279,27 @@ define(["orion/util"], function(util) {
 			if (matches && matches.length > 1) {
 				replace(node, matches);
 			}
+		} else if (node.nodeType === 1) { // ELEMENT_NODE
+			processElementNode(node, replace, "alt"); //$NON-NLS-0$
+			//processElementNode(node, replace, "title"); //$NON-NLS-0$
+			//processElementNode(node, replace, "placeholder"); //$NON-NLS-0$
+			processElementNode(node, replace, "aria-label"); //$NON-NLS-0$
 		}
 		if (node.hasChildNodes()) {
 			for (var i=0; i<node.childNodes.length; i++) {
 				processNodes(node.childNodes[i], replace);
 			}
 		}
+	}
+	
+	function processElementNode(node, replace, attribute) {
+		var value = node.getAttribute(attribute);
+		if (value) {
+			var matches = variableRegEx.exec(value);
+			if (matches && matches.length > 1) {
+				replace(node, matches, attribute);
+			}
+		}		
 	}
 
 	/**
@@ -329,9 +344,13 @@ define(["orion/util"], function(util) {
 	 * @param {String[]} messages The replacement strings.
 	 */
 	function processTextNodes(node, messages) {
-		processNodes(node, function(targetNode, matches) {
+		processNodes(node, function(targetNode, matches, attribute) {
 			var replaceText = messages[matches[1]] || matches[1];
-			targetNode.parentNode.replaceChild(document.createTextNode(replaceText), targetNode);
+			if (targetNode.nodeType === 3) { // TEXT_NODE
+				targetNode.parentNode.replaceChild(document.createTextNode(replaceText), targetNode);
+			} else if (targetNode.nodeType === 1 && attribute) { // ELEMENT_NODE
+				targetNode.setAttribute(attribute, replaceText); //$NON-NLS-0$
+			}
 		});
 	}
 
@@ -478,6 +497,20 @@ define(["orion/util"], function(util) {
 			frames[i].parentNode.style.pointerEvents = enable ? "" : "none"; //$NON-NLS-0$
 		}
 	}
+	
+	/**
+	 * Given a non-empty string, returns a string with no spaces in it (valid HTML5 id attribute).
+	 * Also removes any punctuation except for '_', '-', and '.' for compatibility with HTML4.
+	 * @name orion.webui.littlelib.validId
+	 * @function
+	 * @static
+	 * @param {String} str	A non-empty string
+	 * @returns A valid html id string
+	 */
+	function validId(str) {
+		return str.replace(/\s/, '-').replace(/[^A-Za-z0-9_.-]/, '.');
+	}
+	
 	/**
 	 * Maps a <code>keyCode</code> to <tt>KEY</tt> name. This is the inverse of {@link orion.webui.littlelib.KEY}.
 	 * @private
@@ -542,6 +575,7 @@ define(["orion/util"], function(util) {
 		processDOMNodes: processDOMNodes,
 		addAutoDismiss: addAutoDismiss,
 		setFramesEnabled: setFramesEnabled,
+		validId: validId,
 		getOffsetParent: getOffsetParent,
 		removeAutoDismiss: removeAutoDismiss,
 		keyName: keyName,

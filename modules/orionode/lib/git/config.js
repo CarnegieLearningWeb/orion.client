@@ -14,7 +14,6 @@ var api = require('../api'), writeError = api.writeError, writeResponse = api.wr
 	args = require('../args'),
 	clone = require('./clone'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	gitUtil = require('./util'),
 	git = require('nodegit'),
 	log4js = require('log4js'),
@@ -29,7 +28,7 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 	
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 	
 	function checkUserAccess(req, res, next){
@@ -46,7 +45,6 @@ module.exports.router = function(options) {
 	}
 	
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiConfig-Response-Time", suffix: true}))
 	.use(checkUserAccess) // Use specified checkUserAceess implementation instead of the common one from options
 	.get('/clone'+ fileRoot + '*', getConfig)
@@ -65,9 +63,11 @@ function configJSON(key, value, fileDir) {
 }
 
 function getAConfig(req, res) {
+	var theRepo;
 	var key = api.decodeURIComponent(req.params.key);
 	clone.getRepo(req)
 	.then(function(repo) {
+		theRepo = repo;
 		var fileDir = clone.getfileDir(repo,req);
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
@@ -93,21 +93,27 @@ function getAConfig(req, res) {
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
-	});	
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
+	});
 }
 
 function getConfig(req, res) {
+	var theRepo;
 	var filter = req.query.filter;
 	clone.getRepo(req)
 	.then(function(repo) {
+		theRepo = repo;
 		var fileDir = clone.getfileDir(repo,req);
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
 			if (err) {
 				return writeError(400, res, err.message);
 			}
+			var needsWrite = false;
 			var waitFor = Promise.resolve();
-			if(options && options.configParams["orion.single.user"]){
+			if(options && options.configParams.get("orion.single.user")) {
 				var user = config.user || (config.user = {});
 				if(!user.name){
 					waitFor = git.Config.openDefault().then(function(defaultConfig){
@@ -119,17 +125,19 @@ function getConfig(req, res) {
 						});
 						return Promise.all([fillUserName,fillUserEmail]);
 					}).then(function(){
-						gitUtil.verifyConfigRemoteUrl(config);
-						args.writeConfigFile(configFile, config, function(err) {});
-					}).catch(function(err){
-						if(err.message.indexOf("was not found") !== -1){
-							return Promise.resolve();
-						}
+						needsWrite = true;
+					}).catch(function(){
+						return Promise.resolve();
 					});
 				}
 			}
 			return waitFor.then(function(){
 				configs = [];
+				
+				needsWrite |= gitUtil.verifyConfigRemoteUrl(config);
+				if (needsWrite) {
+					args.writeConfigFile(configFile, config, function() {});
+				}
 				
 				getFullPath(config, "");
 				
@@ -162,13 +170,17 @@ function getConfig(req, res) {
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 	
 function updateConfig(req, res, key, value, callback) {
-	var fileDir;
+	var fileDir, theRepo;
 	clone.getRepo(req)
 	.then(function(repo) {
+		theRepo = repo;
 		fileDir = clone.getfileDir(repo,req);
 		var configFile = api.join(repo.path(), "config");
 		args.readConfigFile(configFile, function(err, config) {
@@ -203,10 +215,16 @@ function updateConfig(req, res, key, value, callback) {
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 
 function postConfig(req, res) {
+	if (!req.body.Key) {
+		return writeError(400, res, "Config entry key must be provided");
+	}
 	updateConfig(req, res, req.body.Key, req.body.Value, function(config, section, subsection, name, value) {
 		var bucket;
 		if (!config[section]) config[section] = {};
@@ -229,9 +247,8 @@ function postConfig(req, res) {
 }
 
 function putConfig(req, res) {
-	var value = req.body.Value;
-	if (!value) {
-		return writeError(400, res, "Config entry value must be provided");
+	if (!req.params.key || !req.body.Value) {
+		return writeError(400, res, "Config entry key and value must be provided");
 	}
 	updateConfig(req, res, req.params.key, req.body.Value, function(config, section, subsection, name, value) {
 		var bucket;
@@ -248,6 +265,9 @@ function putConfig(req, res) {
 }
 
 function deleteConfig(req, res) {
+	if (!req.params.key) {
+		return writeError(400, res, "Config entry key must be provided");
+	}
 	updateConfig(req, res, req.params.key, null, function(config, section, subsection, name) {
 		var bucket;
 		if (config[section]) {

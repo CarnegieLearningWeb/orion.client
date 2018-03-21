@@ -1,4 +1,4 @@
-/* Stanard focus handling */
+/* Standard focus handling */
 :-moz-focusring {
    outline: none;
    box-shadow: 0 0 4px #5b9dd9;
@@ -49,8 +49,7 @@
 }
 .lightPage .statusLight.statusLightProgress {
 	background: transparent;
-	border-color: lightgray;
-	border-top-color: transparent;
+	border-color: transparent lightgray lightgray lightgray;
 }
 
 .lightPage .split {
@@ -202,9 +201,8 @@
 	border-radius: 0 !important;
 }
 
-.lightPage .primaryButton:hover, .primaryButton:focus {
-	background: rgb(60, 113, 179);
-	border-color: rgb(60, 113, 179);
+.lightPage .primaryButton:not([disabled]):hover, .primaryButton:focus {
+	box-shadow: 0 1px 2px 0 #5b9dd9;
 }
 
 .lightPage .checkedRow .commandButton {
@@ -238,14 +236,14 @@
 	margin-bottom: 2px;
 }
 
-.lightPage .commandButton:not(.primaryButton):hover,
+.lightPage .commandButton:not(.primaryButton):not([disabled]):hover,
 .lightPage .commandButton:not(.primaryButton):focus {
 	color: black;
 	background-color: rgba(60, 113, 179, 0.25);
 	box-shadow: 0 1px 2px 0 rgb(60, 113, 179);
 }
 
-.lightPage .checkedRow .commandButton:not(.primaryButton):hover,
+.lightPage .checkedRow .commandButton:not(.primaryButton):not([disabled]):hover,
 .lightPage .checkedRow .commandButton:not(.primaryButton):focus {
 	color: black;
 	background: rgba(255, 255, 255, 0.50);

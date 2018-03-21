@@ -404,7 +404,9 @@ define([
 			var elementNode;
 			// Special case in electron, or when create file at root enabled.
 			// Need to find the workspace element to create file at workspace level.
-			if (loc === "/file") {
+			if (this.treeRoot && loc === this.treeRoot.Location) {
+				elementNode = this.treeRoot;
+			} else if (loc === "/file") {
 				if (util.isElectron || this._isFileCreationAtRootEnabled()) {
 					elementNode = this.model.root;
 				}
@@ -428,6 +430,9 @@ define([
 			}
 			if (evt && evt.created) {
 				return this._handleResourceCreate(evt);
+			}
+			if (evt && evt.refresh) {
+				return this._handleResourceRefresh(evt);
 			}
 			return new Deferred().resolve();
 		},
@@ -464,6 +469,24 @@ define([
 			return this.onModelDelete(newEvent).then(function( /*result*/ ) {
 				return items[0];
 			});
+		},
+		_handleResourceRefresh: function(evt) {
+			// Get previous selection to display after refresh.
+			var selected = this.selection && this.selection.getSelection() ? this.selection.getSelection() : null;
+			// If no item is selected, default to the item in the current window hash
+			if (!selected) {
+				selected = {Location: window.location.href.split("#")[1]};
+			}
+			var selectedItem = this._getUIModel(selected.Location);
+			var promises = evt.refresh.map(function(refreshItem) {
+				var item = refreshItem && refreshItem.Location ? refreshItem : this.model.root;
+				return new Deferred().resolve(this.changedItem(item, item === this.model.root));
+			}.bind(this));
+			return Deferred.all(promises).then(function() {
+				if (selectedItem) {
+					this.reveal(selectedItem, true);
+				}
+			}.bind(this));
 		},
 		_handleResourceMoveOrCopy: function(evt) {
 			//Convert the item array( {source, target, result} ) to an array of {newValue, oldValue, parent}
@@ -570,7 +593,7 @@ define([
 					return false;
 				}
 				if (item.oldValue.Location === (treeRoot.Location || treeRoot.ContentLocation)) {
-					if (item.oldValue.Location !== (item.parent.Location || item.parent.ContentLocation)) {
+					if (item.parent && item.oldValue.Location !== (item.parent.Location || item.parent.ContentLocation)) {
 						newRoot = item.parent;
 					}
 					return true;

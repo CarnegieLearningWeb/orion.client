@@ -12,7 +12,6 @@
 var api = require('../api'),
 	git = require('nodegit'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	clone = require('./clone'),
 	commitm = require('./commit'),
 	responseTime = require('response-time');
@@ -25,11 +24,10 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 	
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiBlame-Response-Time", suffix: true}))
 	.use(options.checkUserAccess)
 	.get('/:refName'+ fileRoot + "/*", getBlame);
@@ -64,6 +62,9 @@ function getBlame(req, res) {
 		});
 	}).catch(function(err){
 		api.writeError(403, res, err);
+	})
+	.finally(function() {
+		clone.freeRepo(blamerepo);
 	});
 }
 

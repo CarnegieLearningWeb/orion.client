@@ -13,7 +13,6 @@
 var api = require('./api'),
 	fileUtil = require('./fileUtil'),
  	writeResponse = api.writeResponse,
-    bodyParser = require('body-parser'),
     express = require('express'),
     nodePath = require('path'),
     nodeUrl = require('url'),
@@ -36,8 +35,8 @@ var MODEL;
 var PREF_FILENAME = PREF_FILENAME='user.json';
 
 module.exports.router = function(options) {
-	options.configParams = options.configParams || {};
-	if (!options.configParams["orion.single.user"] && options.configParams["orion.metastore.useMongo"] !== false) {
+	options.configParams = options.configParams || require("nconf");
+	if (!options.configParams.get("orion.single.user") && options.configParams.get("orion.metastore.useMongo") !== false) {
 		MODEL = Preference;
 	} else {
 		MODEL = Long_Key_Prefs;
@@ -46,8 +45,6 @@ module.exports.router = function(options) {
 	NOT_EXIST = MODEL.NOT_EXIST;
 
 	return express.Router()
-	.use(bodyParser.json())
-	.use(bodyParser.urlencoded({ extended: false }))
 	.use(responseTime({digits: 2, header: "X-Prefs-Response-Time", suffix: true}))
 	.get('*', handleGet)
 	.put('*', handlePut)
@@ -241,8 +238,8 @@ function getElectronPrefsFileName(){
 	return nodePath.join(os.homedir(), '.orion', PREF_FILENAME);
 }
 function readPrefNode(options, path, properties) {
-	options.configParams = options.configParams || {};
-	if (!options.configParams["orion.single.user"] && options.configParams["orion.metastore.useMongo"] !== false) {
+	options.configParams = options.configParams || require("nconf");
+	if (!options.configParams.get("orion.single.user") && options.configParams.get("orion.metastore.useMongo") !== false) {
 		MODEL = Preference;
 	} else {
 		MODEL = Long_Key_Prefs;

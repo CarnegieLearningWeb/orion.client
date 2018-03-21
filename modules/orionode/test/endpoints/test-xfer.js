@@ -73,7 +73,17 @@ describe("XFER endpoint", function() {
 								request()
 									.get(EXPORT_PATH + '/' + WORKSPACE_ID + '/project/exportSample.zip')
 									.expect(200)
-									.end(done)
+									.end(function(err,res){
+										testHelper.throwIfError(err);
+										request()
+										.get(EXPORT_PATH + '/' + WORKSPACE_ID + '/project/exportSample/')
+										.expect(400)
+										.end(function(err, res){
+											testHelper.throwIfError(err);
+											assert.equal(JSON.parse(res.error.text).Message, "Export is not a zip")
+											done()
+										})
+									})
 								//TODO extract and confirm zip?
 							})
 					});
@@ -91,7 +101,8 @@ describe("XFER endpoint", function() {
 					.end(function(err, res) {
 						testHelper.throwIfError(err);
 						assert(res.header.location, "There was no location in the response");
-						assert.equal(res.header.location, PREFIX + '/project/importFromUrlRaw', "The file location is not correct");
+						//TODO update after we decide if the location should be returned encoded
+						assert.equal(decodeURIComponent(res.header.location), PREFIX + '/project/importFromUrlRaw', "The file location is not correct");
 						done();
 					});
 			});
@@ -110,7 +121,8 @@ describe("XFER endpoint", function() {
 					.end(function(err, res) {
 						testHelper.throwIfError(err);
 						assert(res.header.location, "There was no location in the response");
-						assert.equal(res.header.location, PREFIX + '/project/importFromUrlNoHeader', "The file location is not correct");
+						//TODO update after we decide if the location should be returned encoded
+						assert.equal(decodeURIComponent(res.header.location), PREFIX + '/project/importFromUrlNoHeader', "The file location is not correct");
 						done();
 					});
 			});
@@ -127,7 +139,8 @@ describe("XFER endpoint", function() {
 					.end(function(err, res) {
 						testHelper.throwIfError(err);
 						assert(res.header.location, "There was no location in the response");
-						assert.equal(res.header.location, PREFIX + '/project/importFromUrlAutoExtracted', "The file location is not correct");
+						//TODO update after we decide if the location should be returned encoded
+						assert.equal(decodeURIComponent(res.header.location), PREFIX + '/project/importFromUrlAutoExtracted', "The file location is not correct");
 						done();
 					});
 			});

@@ -234,7 +234,7 @@
 }
 
 .searchMainOptionBlock {
-	margin: 5px 10px 0 10px;
+	margin: 5px 10px 5px 10px;
 	display: flex;
 	flex-direction: column;
 	flex-wrap: nowrap;
@@ -646,11 +646,17 @@
     position: relative;
 }
 .searchOptionControlButton.advSearchRegEx:after{
-	content: "*";
+	content: ".*";
     font-size: 17px;
     line-height: 2px;
     position: relative;
     top: 2px;
+}
+
+.searchOptionControlButton:hover {
+	background-color:#7fa4c0;
+	border-color: #3C71B3;
+	color:rgb(255, 255, 255);
 }
 
 .locationElementWrapper {
@@ -705,6 +711,7 @@
     left: -7px;
 }
 .checkedSearchOptionButton{
-	background-color:#3C71B3;
+	background-color:#7fa4c0;
+	border-color: #3C71B3;
 	color:rgb(255, 255, 255);
 }

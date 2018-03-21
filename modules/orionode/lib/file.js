@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2017 IBM Corporation and others.
+ * Copyright (c) 2012, 2018 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -10,7 +10,6 @@
  *******************************************************************************/
 /*eslint-env node*/
 var express = require('express'),
-	bodyParser = require('body-parser'),
 	ETag = require('./util/etag'),
 	fs = require('fs'),
 	mkdirp = require('mkdirp'),
@@ -23,22 +22,21 @@ var express = require('express'),
 	logger = log4js.getLogger("file"),
 	responseTime = require('response-time');
 
-module.exports = function(options) {
+module.exports.router = function router(options) {
 	var fileRoot = options.fileRoot;
 	var workspaceRoot = options.workspaceRoot;
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!workspaceRoot) { throw new Error('options.workspaceRoot is required'); }
 	
 	var router = express.Router({mergeParams: true});
-	var jsonParser = bodyParser.json({"limit":"10mb"});
 	router.use(responseTime({digits: 2, header: "X-File-Response-Time", suffix: true}));
-	router.get('*', jsonParser, getFile);
+	router.get('*', getFile);
 	router.put('*', putFile);
-	router.post('*', jsonParser, postFile);
+	router.post('*', postFile);
 	router.delete('*', deleteFile);
 
 	fileUtil.addFileModificationListener("fileEndpoint", {handleFileModficationEvent: function(eventData){
-		if(typeof eventData.type === "string" && eventData.type !== fileUtil.ChangeType.ZIPADD){
+		if(typeof eventData.type === "string"){
 			api.logAccess(logger, eventData.req.user.username);
 		}
 	}});
@@ -194,7 +192,7 @@ module.exports = function(options) {
 			});
 			var parentFileRoot = api.join(fileRoot, file.workspaceId);
 			var parentWorkspaceRoot = api.join(workspaceRoot, file.workspaceId);
-			return fileUtil.getProject(parentFileRoot, parentWorkspaceRoot, file, {names: names}).then(function(project) {
+			return fileUtil.getProject(fileUtil.getMetastore(req), parentFileRoot, parentWorkspaceRoot, file, {names: names}).then(function(project) {
 				return fileUtil.withStatsAndETag(project, function(error, stats, etag) {
 					if (error && error.code === 'ENOENT') {
 						api.sendStatus(204, res);
@@ -210,14 +208,20 @@ module.exports = function(options) {
 			});
 		}
 		return fileUtil.withStatsAndETag(file.path, function(error, stats, etag) {
-			if (error && error.code === 'ENOENT') {
-				if(typeof readIfExists === 'boolean' && readIfExists) {
-					api.sendStatus(204, res);
+			if (error) {
+				if(error.code === 'ENOENT') {
+					if(typeof readIfExists === 'boolean' && readIfExists) {
+						api.sendStatus(204, res);
+					} else {
+						writeError(404, res, 'File not found: ' + rest);
+					}
+				} else if(error.code === 'ENAMETOOLONG') {
+					writeError(400, res, 'The given file path is too long: '+file.path);
+				} else if(error.code === 'ENOTDIR') {
+					writeError(400, res, 'Resource is not a folder: '+file.path);
 				} else {
-					writeError(404, res, 'File not found: ' + rest);
+					writeError(500, res, error);
 				}
-			} else if (error) {
-				writeError(500, res, error);
 			} else if (stats.isFile() && getParam(req, 'parts') !== 'meta') {
 				// GET file contents
 				writeFileContents(res, file.path, stats, etag);
@@ -249,7 +253,7 @@ module.exports = function(options) {
 					return writeError(500, res, err);
 				}
 				var ws = fs.createWriteStream(file.path);
-				ws.on('finish', function() {
+				ws.on('close', function() {
 					fileUtil.withStatsAndETag(file.path, function(error, stats, etag) {
 						if (error && error.code === 'ENOENT') {
 							api.writeResponse(404, res);
@@ -271,6 +275,9 @@ module.exports = function(options) {
 			});
 		}
 		return fileUtil.withStatsAndETag(file.path, function(error, stats, etag) {
+			if(error && (error.code === 'ENAMETOOLONG' || error.code === 'ENOTDIR')) {
+				return api.writeError(400, res);
+			}
 			if(stats && stats.isDirectory()) {
 				return api.writeError(400, res, "Cannot write contents to a folder: "+file.path);
 			}
@@ -279,8 +286,12 @@ module.exports = function(options) {
 				return write();
 			} else if (ifMatchHeader !== etag) {
 				return api.writeResponse(412, res);
-			} else if (error && error.code === 'ENOENT') {
-				return api.writeResponse(404, res);
+			} else if (error) {
+				if(error.code === 'ENOENT') {
+					return api.writeResponse(404, res);
+				} else if(error.code === 'ENOTDIR') {
+					return api.writeResponse(400, res);
+				}
 			}
 			write();
 		});
@@ -306,53 +317,12 @@ module.exports = function(options) {
 	function deleteFile(req, res) {
 		var rest = req.params["0"].substring(1);
 		var file = fileUtil.getFile(req, rest);
-		fileUtil.withStatsAndETag(file.path, function(error, stats, etag) {
-			var store = fileUtil.getMetastore(req);
-			function done(error) {
-				if (error) {
-					writeError(500, res, error);
-					return;
-				}
-				api.sendStatus(204, res);
+		fileUtil.deleteFile(req, file, req.headers['if-match'], function(error) {
+			if (error) {
+				writeError(error.code || 500, res, error);
+				return;
 			}
-			function checkWorkspace(error) {
-				if (!error && file.path === file.workspaceDir) {
-					return store.deleteWorkspace(file.workspaceId, done);
-				}
-				done(error);
-			}
-			var ifMatchHeader = req.headers['if-match'];
-			if (error && error.code === 'ENOENT') {
-				return checkWorkspace();
-			} else if (ifMatchHeader && ifMatchHeader !== etag) {
-				return api.sendStatus(412, res);
-			}
-			if (stats.isDirectory()) {
-				fileUtil.rumRuff(file.path, function(err){
-					if (err) {
-						logger.error(err);
-						return done(err);
-					}
-					if (store.createRenameDeleteProject) {
-						var relativePath = file.path.substr(file.workspaceDir.length);
-						if(relativePath.lastIndexOf("/") === relativePath.length - 1){
-							relativePath = relativePath.substr(0, relativePath.length - 1);
-						}
-						if(relativePath.split("/").length === 2){
-							// Meaning this folder is a project level folder
-							return store.createRenameDeleteProject(file.workspaceId, {originalPath: req.baseUrl})
-							.then(done, done);
-						}
-					}
-					checkWorkspace();
-				});
-				var eventData = { type: fileUtil.ChangeType.DELETE, file: file, req: req };
-				fileUtil.fireFileModificationEvent(eventData);
-			} else {
-				fs.unlink(file.path, checkWorkspace);
-				var eventData = { type: fileUtil.ChangeType.DELETE, file: file, req: req };
-				fileUtil.fireFileModificationEvent(eventData);
-			}
+			api.sendStatus(204, res);
 		});
 	}
 };

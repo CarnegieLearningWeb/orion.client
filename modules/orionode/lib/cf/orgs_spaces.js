@@ -10,37 +10,44 @@
  *******************************************************************************/
 /*eslint-env node */
 var express = require("express");
-var bodyParser = require("body-parser");
 var tasks = require("../tasks");
 var target = require("./target");
 var async = require("async");
-var LRU = require("lru-cache");
+var log4js = require('log4js');
+var logger = log4js.getLogger("orgs");
+var LRU = require("lru-cache-for-clusters-as-promised");
 
 // Caching for already located targets
-var orgsCache = LRU({max: 1000, maxAge: 300000 });
+var orgsCache = new LRU({max: 1000, maxAge: 300000, namespace: "orgs_spaces"});
 
 module.exports.router = function() {
 	
 	module.exports.getOrgsRequest = getOrgsRequest;
 
 	return express.Router()
-	.use(bodyParser.json())
 	.get("*", getOrgs);
 		
 function getOrgs(req, res){
 	var task = new tasks.Task(res,false,false,0,false);
-	var resp = {};
 	var targetRequest = JSON.parse(req.query.Target);
 	getOrgsRequest(req.user.username, target.fullTarget(req,targetRequest))
-	.then(function(orgsArray){
-		resp = {
-			"Orgs" : orgsArray.simpleorgsArray
-		};
+	.then(function(orgs){
+		var result = [];
+		orgs.forEach(function(org) {
+			var o = resourceJson(org, "Org");
+			o.Spaces = [];
+			org.spaces.forEach(function(space) {
+				o.Spaces.push(resourceJson(space));
+			})
+			result.push(o);
+		});
 		task.done({
 			HttpCode: 200,
 			Code: 0,
 			DetailedMessage: "OK",
-			JsonData: resp,
+			JsonData: {
+				"Orgs" : result
+			},
 			Message: "OK",
 			Severity: "Ok"
 		});
@@ -51,35 +58,21 @@ function getOrgs(req, res){
 
 function getOrgsRequest(userId, targetRequest){
 	var cacheKey = userId + targetRequest.Url;
-	if (orgsCache.get(cacheKey)) {
-		return Promise.resolve(orgsCache.get(cacheKey));
-	}
-	
-	var completeOrgsArray = [];
-	var simpleorgsArray = [];
-	return target.cfRequest("GET", userId, targetRequest.Url + "/v2/organizations", {"inline-relations-depth":"1"}, null, null, null, targetRequest)
-	// TODO In Java code, there is a case that Region is needed, but that value was always assigned as null.
-	.then(function(result){
-		completeOrgsArray = result.resources;
-		return new Promise(function(fulfill,reject){
-			if(completeOrgsArray){
-				async.each(completeOrgsArray, function(resource, cb) {
-					return target.cfRequest("GET", userId, targetRequest.Url + resource.entity.spaces_url, {"inline-relations-depth":"1"}, null, null, null, targetRequest)
-					.then(function(spaceJson){	
-						var spaces = [];
-						var spaceResources = spaceJson && spaceJson.resources || [];
-						for(var k = 0; k < spaceResources.length ; k++ ){
-							spaces.push(resourceJson(spaceResources[k],"Space"));
-						}
-						var orgWithSpace = {};
-						orgWithSpace = resourceJson(resource,"Org");
-						orgWithSpace.Spaces = spaces;
-						resource.Spaces = spaceResources;
-						if(orgWithSpace.Spaces){
-							simpleorgsArray.unshift(orgWithSpace);
-						}else{
-							simpleorgsArray.push(orgWithSpace);
-						}
+	var time = Date.now();
+	return orgsCache.get(cacheKey)
+	.then(function(value) {
+		logger.info("time to get orgs cache=" + (Date.now() - time));
+		if (value) {
+			return value;
+		}
+		return target.cfRequest("GET", userId, targetRequest.Url + "/v2/organizations", {"inline-relations-depth":"1"}, null, null, null, targetRequest)
+		.then(function(result){
+			var orgs = result.resources || [];
+			return new Promise(function(fulfill,reject){
+				async.each(orgs, function(org, cb) {
+					return target.cfRequest("GET", userId, targetRequest.Url + org.entity.spaces_url, {"inline-relations-depth":"1"}, null, null, null, targetRequest)
+					.then(function(result){	
+						org.spaces = result && result.resources || [];
 						cb();
 					}).catch(function(err){
 						cb(err);
@@ -88,11 +81,14 @@ function getOrgsRequest(userId, targetRequest){
 					if(err){
 						return reject(err);
 					}
-					var theOrgs = {"simpleorgsArray":simpleorgsArray,"completeOrgsArray":completeOrgsArray};
-					orgsCache.set(cacheKey, theOrgs);
-					fulfill(theOrgs);
+					time = Date.now();
+					orgsCache.set(cacheKey, orgs)
+					.then(function() {
+						logger.info("time to set orgs cache=" + (Date.now() - time));
+						fulfill(orgs);
+					});
 				});
-			}
+			});
 		});
 	});
 }

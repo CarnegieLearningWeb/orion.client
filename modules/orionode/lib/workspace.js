@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2017 IBM Corporation and others.
+ * Copyright (c) 2012, 2018 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -10,7 +10,6 @@
  *******************************************************************************/
 /*eslint-env node*/
 var express = require('express'),
-	bodyParser = require('body-parser'),
 	log4js = require('log4js'),
 	logger = log4js.getLogger('workspace'),
 	api = require('./api'),
@@ -21,16 +20,15 @@ var express = require('express'),
 var writeError = api.writeError, 
 	writeResponse = api.writeResponse;
 
-module.exports = function(options) {
+module.exports.router = function router(options) {
 	var fileRoot = options.fileRoot;
 	var workspaceRoot = options.workspaceRoot;
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!workspaceRoot) { throw new Error('options.workspaceRoot is required'); }
 	
-	var singleUser = options.configParams["orion.single.user"];
+	var singleUser = options.configParams.get("orion.single.user");
 	
 	var router = express.Router({mergeParams: true});
-	router.use(bodyParser.json());
 	router.use(responseTime({digits: 2, header: "X-Workspace-Response-Time", suffix: true}))
 	router.get('*', getWorkspace);
 	router.post('*', postWorkspace);
@@ -42,8 +40,9 @@ module.exports = function(options) {
 		var workspaceJson;
 		var workspaceLocation = api.join(workspaceRoot, workspace.id);
 		var parentFileLocation = api.join(fileRoot, workspace.id);
-		var workspaceDir = fileUtil.getMetastore(req).getWorkspaceDir(workspace.id);
-		return fileUtil.getChildren(parentFileLocation, workspaceLocation, workspaceDir, workspaceDir, 1)
+		var store = fileUtil.getMetastore(req);
+		var workspaceDir = store.getWorkspaceDir(workspace.id);
+		return fileUtil.getChildren(store, parentFileLocation, workspaceLocation, workspaceDir, workspaceDir, 1)
 		.then(function(children) {
 			children.forEach(function(child) {
 				child.Id = child.Name;
@@ -62,7 +61,7 @@ module.exports = function(options) {
 				Name: workspace.name,
 				Location: workspaceLocation,
 				ChildrenLocation: workspaceLocation,
-				ContentLocation: parentFileLocation,
+				ContentLocation: parentFileLocation + "/" ,
 				Children: children,
 				Projects: projects
 			};
@@ -149,20 +148,6 @@ module.exports = function(options) {
 				// Create/Move/Rename a project
 				var projectLocation = api.join(fileRoot, workspace.id, projectName);
 				var file = fileUtil.getFile(req, api.join(workspace.id, projectName));
-				req.body.Directory = true;
-				
-				if(store.createRenameDeleteProject) {
-					return store.createRenameDeleteProject(workspace.id, {projectName:projectName, contentLocation:file.path, originalPath: req.body.Location})
-						.then(function(){
-							return fileUtil.handleFilePOST(workspaceRoot, fileRoot, req, res, file, {
-								Id: projectName,
-								ContentLocation: projectLocation,
-								Location: projectLocation
-							});
-						}).catch(function(err){
-							writeError(err.code || 500, res, err);
-						});
-				}
 				return fileUtil.handleFilePOST(workspaceRoot, fileRoot, req, res, file, {
 					Id: projectName,
 					ContentLocation: projectLocation,

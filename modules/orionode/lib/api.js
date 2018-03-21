@@ -89,6 +89,9 @@ function sendStatus(code, res){
  */
 function writeResponse(code, res, headers, body, needEncodeLocation, noCachedStringRes) {
 	try{
+		if (res.headerSent) {
+			logger.error("header Sent:", res.req.method, res.req.originalUrl);
+		}
 		if (typeof code === 'number') {
 			if (httpCodeMapping) {
 				code = mapHttpStatusCode(code);
@@ -128,6 +131,9 @@ function writeResponse(code, res, headers, body, needEncodeLocation, noCachedStr
  */
 function writeError(code, res, msg) {
 	try{
+		if (res.headerSent) {
+			logger.error("header Sent:", res.req.method, res.req.originalUrl);
+		}
 		if (httpCodeMapping) {
 			code = mapHttpStatusCode(code);
 		}
@@ -137,10 +143,10 @@ function writeError(code, res, msg) {
 			var err = JSON.stringify({Severity: "Error", Message: msg});
 			res.setHeader('Content-Type', 'application/json');
 			res.setHeader('Content-Length', err.length);
-			res.writeHead(code, msg);
+			res.writeHead(code);
 			res.end(err);
 		} else {
-			res.writeHead(code, msg);
+			res.writeHead(code);
 			res.end();
 		}
 	}catch(err){
@@ -177,8 +183,13 @@ function setHttpCodeMapping(mapping) {
 }
 
 var LocationRegex = /Location$/;
-var PercentReplaceRegex = /\%/g;
-var CommaReplaceRegex = /,/g;
+
+/**
+ * @name encodeLocation
+ * @description Encode object's location string's persentage and comma
+ * @param obj
+ * @returns returns special encoded object
+ */
 function encodeLocation(obj) {
 	for (var p in obj) {
 		if (p.match(LocationRegex)) {
@@ -188,17 +199,37 @@ function encodeLocation(obj) {
 				});
 			} else if (typeof obj[p] === "object") {
 				if(obj[p].pathname){
-					obj[p].pathname = obj[p].pathname.replace(PercentReplaceRegex, "%25").replace(CommaReplaceRegex, "%2C");
+					obj[p].pathname = encodeStringLocation(obj[p].pathname);
 				}
 				obj[p] = url.format(obj[p]);
 			} else if (obj[p]) {
-				obj[p] = url.format({pathname: obj[p].replace(PercentReplaceRegex, "%25").replace(CommaReplaceRegex, "%2C")});
+				obj[p] = url.format({pathname: encodeStringLocation(obj[p])});
 			}
 		} else if (typeof obj[p] === "object") {
 			encodeLocation(obj[p]);
 		}
 	}
 	return obj;
+}
+
+/**
+ * @name encodeStringLocation
+ * @description encode persentage and comma only
+ * @param string
+ * @returns returns encoded version
+ */
+function encodeStringLocation(string){
+	return string.replace(/\%/g, "%25").replace(/,/g, "%2C");
+}
+
+/**
+ * @name decodeStringLocation
+ * @description decode comma and persentage
+ * @param string
+ * @returns returns encoded version
+ */
+function decodeStringLocation(string){
+	return string.replace(/%2C/g, ",").replace(/%25/g, "%");
 }
 
 /**
@@ -210,13 +241,36 @@ function encodeLocation(obj) {
  */
 function isValidProjectName(fileName) {
 	var result;
-	result = ['',' ','/'].some(function(value){
+	result = ['',' ','/','user'].some(function(value){
 		return value === fileName;
 	});
 	result |= ['/','\\'].some(function(value){
 		return fileName.indexOf(value) > -1;
 	});
 	return !result;
+}
+const ILOD_UNICODE_REGEX = /[^\u{0000}-\u{001F}\u{2000}-\u{206F}]/u;
+/**
+ * Checks if the given character if a letter or a digit.
+ * Any letter of digit from ASCII is true, and any character that is not part of the follow tables is true:
+ * - General Punctuation
+ * - Control Character
+ * @param {string} char The character to check
+ * @returns {bool} True if the char is a letter or digit, as defined above
+ * @since 18.0
+ */
+exports.isLetterOrDigit = function isLetterOrDigit(char) {
+	const code = char.charCodeAt(0);
+	if(code < 48 || (code > 57 && code < 65) || (code > 90 && code < 97) || (code > 122 && code < 128)) {
+		return false;
+	}
+	if(code <= 255) { // extended ascii
+		return true;
+	}
+	if(ILOD_UNICODE_REGEX.test(char)) { //unicode
+		return true;
+	}
+	return false;
 }
 
 /**
@@ -247,7 +301,7 @@ exports.decodeURIComponent = function(path) {
 	return result;
 };
 exports.encodeURIComponent = function(path) {
-	return encodeURIComponent(encodeURIComponent(path));
+	return encodeURIComponent(path);
 };
 
 /**
@@ -291,6 +345,8 @@ exports.join = join;
 exports.writeError = writeError;
 exports.writeResponse = writeResponse;
 exports.encodeLocation = encodeLocation;
+exports.encodeStringLocation = encodeStringLocation;
+exports.decodeStringLocation = decodeStringLocation;
 exports.setResponseNoCache = setResponseNoCache;
 exports.isValidProjectName = isValidProjectName;
 exports.sendStatus = sendStatus;

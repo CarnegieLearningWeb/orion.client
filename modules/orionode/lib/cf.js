@@ -8,7 +8,7 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-var express = require('express'),
+let express = require('express'),
 	apps = require('./cf/apps'),
 	domains = require('./cf/domains'),
 	logz = require('./cf/logz'),
@@ -40,7 +40,7 @@ class CloudFoundry {
 			throw new Error('options.fileRoot is required'); 
 		}
 		let router = express.Router();
-		router.use(responseTime({digits: 2, header: "X-CFapi-Response-Time", suffix: true}))
+		router.use(responseTime({digits: 2, header: "X-CFapi-Response-Time", suffix: true}));
 		router.use("/apps", apps.router(options));
 		router.use("/domains", domains.router(options));
 		router.use("/logz", logz.router(options));
@@ -54,4 +54,11 @@ class CloudFoundry {
 	}
 }
 
-module.exports.CloudFoundry = CloudFoundry;
+/**
+ * API callback to load the endpoint
+ * @param {{?}} options 
+ */
+module.exports.router = function router(options) {
+	let cf = new CloudFoundry();
+	return cf.createRouter(options);
+};

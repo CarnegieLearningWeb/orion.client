@@ -13,7 +13,6 @@ var git = require('nodegit'),
 	api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
 	args = require('../args'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	clone = require('./clone'),
 	tasks = require('../tasks'),
 	fileUtil = require('../fileUtil'),
@@ -25,11 +24,10 @@ module.exports.router = function(options) {
 	var fileRoot = options.fileRoot;
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiSubmodule-Response-Time", suffix: true}))
 	.use(options.checkUserAccess)
 	.put(fileRoot + '*', putSubmodule)
@@ -37,8 +35,10 @@ module.exports.router = function(options) {
 	.delete(fileRoot + '*', deleteSubmodule);
 
 function putSubmodule(req, res) {
+	var theRepo;
 	return clone.getRepo(req)
 	.then(function(repo) {
+		theRepo = repo;
 		return clone.foreachSubmodule(repo, req.body.Operation, false); // this foreachSubmodule doesn't need authentication, fix me if it's not right.
 	})
 	.then(function() {
@@ -46,6 +46,9 @@ function putSubmodule(req, res) {
 	})
 	.catch(function(err) {
 		return writeError(400, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 function postSubmodule(req, res) {
@@ -109,6 +112,9 @@ function postSubmodule(req, res) {
 		}).catch(function(){
 			clone.handleRemoteError(task, err, url);
 		});
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
@@ -121,6 +127,7 @@ function postSubmodule(req, res) {
  * @since 17.0
  */
 function deleteSubmoduleFromRepo(subrepo, repo) {
+	if (!subrepo) return;
 	var submodulePath = subrepo.workdir().substring(repo.workdir().length).slice(0, -1);
 	var configFile = api.join(repo.path(), "config");
 	return new Promise(function(fulfill, reject) {
@@ -173,7 +180,7 @@ function deleteSubmoduleFromRepo(subrepo, repo) {
 	});
 }
 function deleteSubmodule(req, res) {
-	var subrepo;
+	var subrepo, theRepo;
 	return clone.getRepo(req)
 	.then(function(_subrepo) {
 		subrepo = _subrepo;
@@ -183,6 +190,7 @@ function deleteSubmodule(req, res) {
 		});
 	})
 	.then(function(repo) {
+		theRepo = repo;
 		return deleteSubmoduleFromRepo(subrepo, repo);
 	})
 	.then(function() {
@@ -190,6 +198,10 @@ function deleteSubmodule(req, res) {
 	})
 	.catch(function(err) {
 		return writeError(400, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(subrepo);
+		clone.freeRepo(theRepo);
 	});
 }
 };

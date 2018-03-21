@@ -53,7 +53,7 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 				document.getElementById("orionInfoArea").className = "orion-info";
 				document.getElementById("orionInfoMessage").textContent = messages[0].title;
 			}
-		}, function(error) {
+		}, function() {
 		});
 	}
 

@@ -34,6 +34,7 @@ define([
 	'javascript/outliner',
 	'javascript/astOutliner',
 	'javascript/cuProvider',
+	'orion/urlModifier',
 	'orion/util',
 	'javascript/logger',
 	'javascript/commands/generateDocCommand',
@@ -49,7 +50,7 @@ define([
 	'orion/i18nUtil',
 	'orion/URL-shim'
 ], function(PluginProvider, mServiceRegistry, Deferred, ScriptResolver, ASTManager, QuickFixes, JavaScriptFormatter, JavaScriptProject, TernAssist,
-	JsonAstManager, TernProjectSupport, PackageJsonSupport, ESLintSupport, EslintValidator, Occurrences, Hover, Outliner, AstOutliner, CUProvider, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
+	JsonAstManager, TernProjectSupport, PackageJsonSupport, ESLintSupport, EslintValidator, Occurrences, Hover, Outliner, AstOutliner, CUProvider, urlModifier, Util, Logger, GenerateDocCommand, OpenDeclCommand, OpenImplCommand,
 	RenameCommand, RefsCommand, mJS, mJSON, mJSONSchema, mEJS, javascriptMessages, i18nUtil) {
 
 	var serviceRegistry = new mServiceRegistry.ServiceRegistry();
@@ -92,6 +93,9 @@ define([
 	provider.registerService("orion.edit.model", //$NON-NLS-1$
 		{
 			onModelChanged: function fileMapOnModelChanged(evnt) {
+				delete fileMap[evnt.file.location];
+			},
+			onInputChanged: function onInputChanged(evnt) {
 				delete fileMap[evnt.file.location];
 			}
 		},
@@ -137,6 +141,7 @@ define([
 	 */
 	function WrappedWorker(script, onMessage, onError) {
 		var wUrl = new URL(script, window.location.href);
+		wUrl = new URL(urlModifier(wUrl.href));
 		wUrl.query.set("worker-language",  ((navigator.languages && navigator.languages[0]) ||
 			navigator.language || navigator.userLanguage || 'root').toLowerCase()); //$NON-NLS-1$
 		this.worker = new Worker(wUrl.href);
@@ -689,61 +694,23 @@ define([
 		}
 	);
 
-	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
-		new OpenDeclCommand.OpenDeclarationCommand(ternWorker, "replace"), //$NON-NLS-1$
-		{
-			name: javascriptMessages["openDeclName"],
-			tooltip: javascriptMessages['openDeclTooltip'],
-			id: "open.js.decl", //$NON-NLS-1$
-			key: [114, false, false, false, false],
-			contentType: ['application/javascript', 'text/html'] //$NON-NLS-1$ //$NON-NLS-2$
+	provider.registerServiceProvider("orion.edit.open.declaration",
+		new OpenDeclCommand.OpenDeclarationCommand(ternWorker, "replace"), {
+			contentType: ["application/javascript", "text/html"],
+			id: "orion.open.declaration.js"
 		}
 	);
 
-	provider.registerServiceProvider("orion.edit.command.category", //$NON-NLS-1$
-		{},
-		{
-			id: "js.references", //$NON-NLS-1$
-			name: javascriptMessages['referencesMenuName'],
-			tooltip: javascriptMessages['referencesMenuTooltip']
-		});
 	var refscommand = new RefsCommand(ternWorker,
 		astManager,
 		scriptresolver,
 		CUProvider,
 		serviceRegistry);
-	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
-		{
-			/** @callback */
-			execute: function(editorContext, options) {
-				options.kind = 'project'; //$NON-NLS-1$
-				return refscommand.execute(editorContext, options);
-			}
-		},
-		{
-			name: javascriptMessages["projectRefsName"],
-			tooltip: javascriptMessages['projectRefsTooltip'],
-			parentPath: "js.references", //$NON-NLS-1$
-			id: "project.js.refs", //$NON-NLS-1$
-			key: ["y", true, true, false, false], //$NON-NLS-1$
-			contentType: ['application/javascript', 'text/html'] //$NON-NLS-1$ //$NON-NLS-2$
-		}
-	);
-	provider.registerServiceProvider("orion.edit.command", //$NON-NLS-1$
-		{
-			/** @callback */
-			execute: function(editorContext, options) {
-				options.kind = 'workspace'; //$NON-NLS-1$
-				return refscommand.execute(editorContext, options);
-			}
-		},
-		{
-			name: javascriptMessages["workspaceRefsName"],
-			tooltip: javascriptMessages['workspaceRefsTooltip'],
-			parentPath: "js.references", //$NON-NLS-1$
-			id: "workspace.js.refs", //$NON-NLS-1$
-			//key : [ "g", true, true, false, false],
-			contentType: ['application/javascript', 'text/html'] //$NON-NLS-1$ //$NON-NLS-2$
+	
+	provider.registerServiceProvider("orion.edit.references",
+		refscommand, {
+			contentType: ["application/javascript", "text/html"],
+			id: "orion.references.js"
 		}
 	);
 

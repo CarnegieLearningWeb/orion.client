@@ -8,10 +8,9 @@
  * Contributors:
  *     IBM Corporation - initial API and implementation
  *******************************************************************************/
-/*eslint-env node, express, body-parser*/
+/*eslint-env node, express */
 var express = require("express");
-var bodyParser = require("body-parser");
-var api = require("../api"), writeError = api.writeError, writeResponse = api.writeResponse;
+var api = require("../api"), writeResponse = api.writeResponse;
 var fileUtil = require("../fileUtil");
 var fs = require("fs");
 var path = require("path");
@@ -41,8 +40,7 @@ class ManifestRouter {
 			throw new Error('options.fileRoot is required'); 
 		}
 		return express.Router()
-			.use(bodyParser.json())
-			.get(this.fileRoot + "*", this.getManifests)
+			.get(options.fileRoot + "*", this.getManifests)
 			.get("*", this.getManifests);
 	}
 	
@@ -84,7 +82,7 @@ var retrieveManifestFile = module.exports.retrieveManifestFile = function retrie
 			//if strict only try to parse the manifest given, if not, try to find a 'manifest.yml' in the parent dir if the file does not exist
 			var isStrict = req.query && Boolean(req.query.Strict);
 			return fs.readFile(filePath, "utf8", function(err, fileContent) {
-				if(err && err.code === "ENOENT") {
+				if(err && (err.code === "ENOENT" || err.code === "EISDIR")) {
 					if(isStrict) {
 						var errorStatus = new Error(err.message);
 						errorStatus.code = 404;
@@ -92,7 +90,7 @@ var retrieveManifestFile = module.exports.retrieveManifestFile = function retrie
 					}
 					var base = path.basename(filePath);
 					if(typeof base === 'string') {
-						filePath = path.join(base, 'manifest.yml');
+						filePath = path.join(filePath, 'manifest.yml');
 						return fs.readFile(filePath, "utf8", function(err, fileContent) {
 							if(err && err.code !== 'ENOENT') {
 								var errorStatus = new Error(err.message);
@@ -196,7 +194,7 @@ function setDefaultManifestProperties(req, manifest) {
 		Object.keys(MUST_HAVE_PROPERTIES).forEach(function(key){
 			if(!manifest.applications[0].hasOwnProperty(key)){
 				manifest.applications[0][key] = MUST_HAVE_PROPERTIES[key];
-			}					
+			}
 		});
 	}
 	return manifest;

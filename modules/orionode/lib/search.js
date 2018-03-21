@@ -92,9 +92,9 @@ function buildSearchOptions(searchOpts) {
 	}
 }
 
-module.exports = function(options) {
+module.exports.router = function router(options) {
 	var search;
-	var USE_WORKERS = options.configParams.isElectron;
+	var USE_WORKERS = options.configParams.get("isElectron");
 	if (USE_WORKERS) {
 		var requests = {};
 		var WORKER_COUNT = 1;
@@ -136,6 +136,9 @@ module.exports = function(options) {
 		var searchOpts = new SearchOptions(req.originalUrl, req.contextPath);
 		buildSearchOptions(searchOpts);
 
+		if(!searchOpts.location) {
+			return api.writeError(400, res);
+		}
 		var loc = searchOpts.location;
 		loc = loc.replace(/^\/file/, "");
 		loc = loc.replace(/^\/workspace/, "");

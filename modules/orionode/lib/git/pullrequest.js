@@ -12,7 +12,6 @@
 var clone = require('./clone'),
 	express = require('express'),
 	request = require('request'),
-	bodyParser = require('body-parser'),
 	url = require("url"),
 	tasks = require('../tasks'),
 	responseTime = require('response-time');
@@ -25,11 +24,10 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiPullrequest-Response-Time", suffix: true}))
 	.use(options.checkUserAccess)
 	.post(fileRoot + '*', getPullRequest);
@@ -65,14 +63,14 @@ function getPullRequest(req, res) {
 	
 	var clientID,clientSecret;
 	if(options.configParams){
-		clientID =  options.configParams["orion.oauth.github.client"];
-		clientSecret =  options.configParams["orion.oauth.github.secret"];
+		clientID =  options.configParams.get("orion.oauth.github.client");
+		clientSecret =  options.configParams.get("orion.oauth.github.secret");
 	}
     
 	var task = new tasks.Task(res, false, true, 0, false);
 	if(gitUrl){
 		var isSsh = false;
-		if (gitUrl.indexOf("@") < gitUrl.indexOf(":")){
+		if (gitUrl.indexOf("@") < gitUrl.indexOf(":") && gitUrl.indexOf("https://") === -1){
 			gitUrl = "ssh://" + gitUrl;
 			isSsh = true;
 		}
@@ -90,7 +88,7 @@ function getPullRequest(req, res) {
 		headers: authHeader ? {'User-Agent': 'request',	'Authorization': authHeader} : {'User-Agent': 'request'}
 	};
 	
-	var fileDir, cloneDir, remoteDir,bodyJson;
+	var fileDir, cloneDir, remoteDir,bodyJson, theRepo;
 	clone.getRepo(req)
 	.then(function(repo) {
 		fileDir = clone.getfileDir(repo,req); 
@@ -143,6 +141,9 @@ function getPullRequest(req, res) {
 			});
 	}).catch(function(err){
 		clone.handleRemoteError(task, err, gitRoot + "/clone" + fileDir);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 	function toBase64 (str) {
 		return (new Buffer(str || '', 'utf8')).toString('base64');

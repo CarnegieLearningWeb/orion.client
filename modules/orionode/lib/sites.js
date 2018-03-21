@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2012, 2016 IBM Corporation and others.
+ * Copyright (c) 2012, 2018 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -14,7 +14,6 @@ var api = require('./api'),
 	writeResponse = api.writeResponse,
 	fileUtil = require('./fileUtil'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	fs = require('fs'),
 	url = require('url'),
 	mPath = require('path'),
@@ -24,10 +23,10 @@ var RUNNING_SITES_FILENAME = "runningSites.json";
 var hosts = {};
 var vhosts = [];
 
-module.exports = function(options) {
+module.exports.router = function router(options) {
 	loadRunningSites();
 	
-	vhosts = (options.configParams["orion.site.virtualHosts"] || "").split(",");
+	vhosts = (options.configParams.get("orion.site.virtualHosts") || "").split(",");
 
 	vhosts.forEach(function(host) {
 		if (host === "") {
@@ -37,7 +36,6 @@ module.exports = function(options) {
 	});
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-Sites-Response-Time", suffix: true}))
 	.get('/:site', getSite)
 	.get('/', getSites)
@@ -74,7 +72,7 @@ function virtualHost(vhost, req, res, next) {
 				}
 				var relative  = urlPath.substring(mapping.Source.length);
 				var path;
-				if (options.configParams["orion.single.user"]) {
+				if (options.configParams.get("orion.single.user")) {
 					path = mPath.join(options.workspaceDir, mapping.Target, relative);
 				} else {
 					var file = fileUtil.getFile(req, mapping.Target);
@@ -127,14 +125,14 @@ function siteJSON(site, req) {
 }
 
 function loadRunningSites() {
-	if (!options.configParams["orion.sites.save.running"]) return;
+	if (!options.configParams.get("orion.sites.save.running")) return;
 	try {
 		hosts = JSON.parse(fs.readFileSync(mPath.join(options.workspaceDir, RUNNING_SITES_FILENAME), "utf8"));
 	} catch (e) {}
 }
 
 function saveRunningSites() {
-	if (!options.configParams["orion.sites.save.running"]) return;
+	if (!options.configParams.get("orion.sites.save.running")) return;
 	fs.writeFile(mPath.join(options.workspaceDir, RUNNING_SITES_FILENAME), JSON.stringify(hosts), "utf8");
 }
 

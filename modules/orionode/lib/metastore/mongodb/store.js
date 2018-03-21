@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016 IBM Corporation and others.
+ * Copyright (c) 2016, 2018 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -19,6 +19,8 @@ var expressSession = require('express-session'),
 	log4js = require('log4js'),
 	mkdirp = require('mkdirp'),
 	metaUtil = require('../util/metaUtil'),
+	rimraf = require('rimraf'),
+	fs = require('fs'),
 	accessRights = require('../../accessRights'),
 	logger = log4js.getLogger("mongo-store");
 
@@ -38,7 +40,7 @@ var workspaceSchema = new mongoose.Schema({
 	properties: {
 		type: mongoose.Schema.Types.Mixed
 	}
-});
+}, { usePushEach: true });
 var orionAccountSchema = new mongoose.Schema({
 	username: {
 		type: String,
@@ -75,7 +77,7 @@ var orionAccountSchema = new mongoose.Schema({
 		type: Date,
 		"default": Date.now
 	}
-});
+}, { usePushEach: true });
 orionAccountSchema.plugin(passportLocalMongooseEmail);
 var orionAccount = mongoose.model('orionAccount', orionAccountSchema);
 
@@ -109,7 +111,7 @@ var taskSchema = new mongoose.Schema({
 	expires: Number,
 	cancelable: Boolean
 	// uriUnqualStrategy: String // TODO needed?
-});
+}, { usePushEach: true });
 var orionTask = mongoose.model("orionTask", taskSchema);
 
 // If `user` has already been fetched from DB, use it, otherwise obtain from findByUsername
@@ -123,7 +125,7 @@ function findUser(id, user, callback) {
 
 function MongoDbMetastore(options) {
 	this.options = options;
-	if (options.configParams["orion.mongodb.cf"]) {
+	if (options.configParams.get("orion.mongodb.cf")) {
 		var cfenv = require('cfenv');
 		var appenv = cfenv.getAppEnv();
 		var services = appenv.services;
@@ -142,8 +144,8 @@ function MongoDbMetastore(options) {
 					}
 				});
 			}
-	} else if (options.configParams["orion.mongodb.url"]) {
-		mongoose.connect(options.configParams["orion.mongodb.url"], {
+	} else if (options.configParams.get("orion.mongodb.url")) {
+		mongoose.connect(options.configParams.get("orion.mongodb.url"), {
 			useMongoClient: true
 		});
 	} else {
@@ -163,6 +165,7 @@ MongoDbMetastore.prototype.setup = function(options) {
 	passport.use(orionAccount.createStrategy());
 	passport.serializeUser(orionAccount.serializeUser());
 	passport.deserializeUser(orionAccount.deserializeUser());
+	metaUtil.initializeAdminUser(options, this);
 };
 
 Object.assign(MongoDbMetastore.prototype, {
@@ -178,7 +181,7 @@ Object.assign(MongoDbMetastore.prototype, {
 			user.workspaces.push(w);
 			var workspaceUserRights = accessRights.createWorkspaceAccess(w.id);
 			var parsedProperties = JSON.parse(user.properties);
-			parsedProperties["UserRights"] = parsedProperties["UserRights"].concat(workspaceUserRights);
+			parsedProperties.UserRights = (parsedProperties.UserRights || accessRights.createUserAccess(userId)).concat(workspaceUserRights);
 			user.properties = JSON.stringify(parsedProperties, null, 2);
 			user.save(function(err) {
 				if (err) {
@@ -281,7 +284,6 @@ Object.assign(MongoDbMetastore.prototype, {
 			// userData.properties contains all the properties, not only the ones that are changed, 
 			// because of locking, it's safe to say the properties hasn't been changed by other operations
 			Object.assign(user, userData);
-
 			// Setting password and authToken are special cases handled by specific methods
 			if (typeof userData.password !== 'undefined') {
 				user.setPassword(userData.password, function(err, user) {
@@ -304,10 +306,32 @@ Object.assign(MongoDbMetastore.prototype, {
 			}
 		});
 	},
-	deleteUser: function(id, callback) {
-		orionAccount.remove({username: id}, callback);
+	/**
+	 * Delete the user from the store with the given user ID
+	 * @param {string} id The user identifier to delete
+	 * @param {fn(Error: err)} callback The callback to call when complete
+	 */
+	deleteUser: function deleteUser(id, callback) {
+		orionAccount.findByUsername(id, function(err, user) {
+			if(err) {
+				callback(err);
+			}
+			const userPath = path.join(this.options.workspaceDir, id.substring(0,2));
+			fs.access(userPath, (err) => {
+				if(err) {
+					callback(err);
+				}
+				//TODO should a delete failure prevent the user delete?
+				return rimraf(userPath, (err) => {
+					if(err) {
+						callback(err);
+					}
+					orionAccount.remove({username: id}, callback);
+				});
+			});
+		}.bind(this));
 	},
-	confirmEmail: function(authToken, callback) {
+	confirmEmail: function(user, authToken, callback) {
 		orionAccount.verifyEmail(authToken, callback);
 	},
 	createTask: function(taskObj, callback) {

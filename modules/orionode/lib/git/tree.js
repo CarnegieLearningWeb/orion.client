@@ -27,7 +27,7 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 	
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 	
 	return express.Router()
@@ -201,6 +201,9 @@ function getTree(req, res) {
 		}else{
 			writeError(404, res, err.message);
 		}
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 

@@ -10,7 +10,6 @@
  *******************************************************************************/
 /*eslint-env node */
 var api = require('../api'), writeError = api.writeError, writeResponse = api.writeResponse,
-	path = require('path'),
 	diff = require("./diff"),
 	mTags = require("./tags"),
 	clone = require("./clone"),
@@ -19,7 +18,6 @@ var api = require('../api'), writeError = api.writeError, writeResponse = api.wr
 	crypto = require('crypto'),
 	async = require('async'),
 	express = require('express'),
-	bodyParser = require('body-parser'),
 	remotes = require('./remotes'),
 	branches = require('./branches'),
 	tasks = require('../tasks'),
@@ -33,7 +31,7 @@ module.exports.router = function(options) {
 	if (!fileRoot) { throw new Error('options.fileRoot is required'); }
 	if (!gitRoot) { throw new Error('options.gitRoot is required'); }
 	
-	var contextPath = options && options.configParams["orion.context.path"] || "";
+	var contextPath = options && options.configParams.get("orion.context.path") || "";
 	fileRoot = fileRoot.substring(contextPath.length);
 	
 	module.exports.commitJSON = commitJSON;
@@ -41,7 +39,6 @@ module.exports.router = function(options) {
 	module.exports.getCommitParents = getCommitParents;
 
 	return express.Router()
-	.use(bodyParser.json())
 	.use(responseTime({digits: 2, header: "X-GitapiCommit-Response-Time", suffix: true}))
 	.use(options.checkUserAccess)
 	.get('/:scope'+ fileRoot + '*', getCommit)
@@ -94,7 +91,7 @@ function getCommitLog(req, res) {
 	var sha1Filter = query.sha1;
 	var fromDateFilter = query.fromDate ? parseInt(query.fromDate, 10) : 0;
 	var toDateFilter = query.toDate ? parseInt(query.toDate, 10) : 0;
-	var filterPath;
+	var filterPath, repo;
 	var behindCount = 0, aheadCount= 0;
 	function filterCommit(commit) {
 		if (sha1Filter && commit.sha() !== sha1Filter) return true;
@@ -235,7 +232,7 @@ function getCommitLog(req, res) {
 			throw err;
 		});
 	}
-	var commits = []	, repo;
+	var commits = [];
 	function sendResponse(over) {
 		var refs = scope.split("..");
 		var toRef, fromRef; 
@@ -261,16 +258,16 @@ function getCommitLog(req, res) {
 		if (page && !over) {
 			var nextLocation = url.parse(req.originalUrl, true);
 			nextLocation.query.page = page + 1 + "";
+			nextLocation.pathname = api.decodeStringLocation(nextLocation.pathname);
 			nextLocation.search = null; //So that query object will be used for format
-			nextLocation = url.format(nextLocation);
 			resp['NextLocation'] = nextLocation;
 		}
 
 		if (page && page > 1) {
 			var prevLocation = url.parse(req.originalUrl, true);
 			prevLocation.query.page = page - 1 + "";
+			prevLocation.pathname = api.decodeStringLocation(prevLocation.pathname);
 			prevLocation.search = null;
-			prevLocation = url.format(prevLocation);
 			resp['PreviousLocation'] = prevLocation;
 		}
 		
@@ -330,6 +327,7 @@ function getCommitLog(req, res) {
 			}
 		})
 		.then(function() {
+			clone.freeRepo(repo);
 			task.done({
 				HttpCode: 200,
 				Code: 0,
@@ -450,6 +448,7 @@ function getCommitLog(req, res) {
 				if (error.errno === git.Error.CODE.ITEROVER) {
 					sendResponse(true);
 				} else {
+					clone.freeRepo(repo);
 					task.done({
 						HttpCode: 404,
 						Code: 0,
@@ -503,6 +502,7 @@ function getCommitLog(req, res) {
 				if (error.errno === git.Error.CODE.ITEROVER) {
 					sendResponse(true);
 				} else {
+					clone.freeRepo(repo);
 					task.done({
 						HttpCode: 404,
 						Code: 0,
@@ -574,6 +574,7 @@ function getCommitLog(req, res) {
 			log(repo, scope);
 		}
 	}).catch(function(err) {
+		clone.freeRepo(repo);
 		task.done({
 			HttpCode: 400,
 			Code: 0,
@@ -743,6 +744,9 @@ function getCommitBody(req, res) {
 		writeResponse(200, res, {'Content-Type':'application/octect-stream','Content-Length': resp.length}, resp, false, true);
 	}).catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 
@@ -750,7 +754,7 @@ function identifyNewCommitResource(req, res, newCommit) {
 	var originalUrl = url.parse(req.originalUrl, true);
 	var segments = originalUrl.pathname.split("/");
 	var contextPathSegCount = req.contextPath.split("/").length - 1;
-	segments[3 + contextPathSegCount] = segments[3 + contextPathSegCount] + ".." + api.encodeURIComponent(newCommit);
+	segments[3 + contextPathSegCount] = segments[3 + contextPathSegCount] + ".." + api.encodeStringLocation(api.encodeURIComponent(newCommit));
 	var location = url.format({pathname: segments.join("/"), query: originalUrl.query});
 	writeResponse(200, res, null, {
 		"Location": location
@@ -789,6 +793,9 @@ function revert(req, res, commitToRevert) {
 	})
 	.catch(function(err) {
 		writeError(404, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 
@@ -838,6 +845,9 @@ function cherryPick(req, res, commitToCherrypick) {
 		}else{
 			writeError(400, res, err.message);
 		}
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 
@@ -944,6 +954,9 @@ function rebase(req, res, commitToRebase, rebaseOperation) {
 	})
 	.catch(function(err) {
 		writeError(400, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 
 }
@@ -1053,6 +1066,9 @@ function merge(req, res, branchToMerge, squash) {
 	})
 	.catch(function(err) {
 		writeError(400, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(repo);
 	});
 }
 
@@ -1245,6 +1261,9 @@ function tag(req, res, commitId, name, isAnnotated, message) {
 	})
 	.catch(function(err) {
 		writeError(403, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 
@@ -1319,6 +1338,9 @@ function postCommit(req, res) {
 	})
 	.catch(function(err) {
 		writeError(403, res, err.message);
+	})
+	.finally(function() {
+		clone.freeRepo(theRepo);
 	});
 }
 

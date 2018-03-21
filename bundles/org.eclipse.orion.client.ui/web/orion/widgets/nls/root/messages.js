@@ -56,6 +56,7 @@ define({//Default message bundle
 	"About": "About",
 	"Check for Updates": "Check for Updates",
 	"Download": "Download",
+	"Open": "Open",
 	"Close": "Close",
 	"Version: ": "Version: ",
 	"Build ID: ": "Build ID: ",

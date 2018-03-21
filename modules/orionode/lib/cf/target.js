@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2016, 2017 IBM Corporation and others.
+ * Copyright (c) 2016, 2018 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -10,30 +10,43 @@
  *******************************************************************************/
 /*eslint-env node, es6*/
 var express = require("express");
-var bodyParser = require("body-parser");
 var tasks = require("../tasks");
 var request = require("request");
 var orgs = require("./orgs_spaces");
 var bearerTokenStore = require("./accessTokenStore");
-var LRU = require("lru-cache");
+var log4js = require('log4js');
+var logger = log4js.getLogger("target");
+var LRU = require("lru-cache-for-clusters-as-promised");
 
 // Caching for already located targets
-var targetCache = LRU({max: 10000, maxAge: 1800000 });
+var targetCache = new LRU({max: 10000, maxAge: 1800000, namespace: "target"});
+/**
+ * UTILITY
+ * @param {{?}} body The JSON body to parse
+ */
+function parsebody(body){
+	var result;
+	try {
+		result = typeof body === "string" ? JSON.parse(body): body;
+	} catch(err) {
+		result = body;
+	}
+	return result;
+}
+module.exports.parsebody = parsebody;
 
 module.exports.router = function(options) {
-	if(options.configParams["cf.bearer.token.store"]){
-		var getBearerToken = require(options.configParams["cf.bearer.token.store"]).getBearerTokenfromUserId;
+	if(options.configParams.get("cf.bearer.token.store")) {
+		var getBearerToken = require(options.configParams.get("cf.bearer.token.store")).getBearerTokenfromUserId;
 	}
 	
 	module.exports.getAccessToken = getAccessToken;
-	module.exports.parsebody = parsebody;
 	module.exports.computeTarget = computeTarget;
 	module.exports.cfRequest = cfRequest;
 	module.exports.caughtErrorHandler = caughtErrorHandler;
 	module.exports.fullTarget = fullTarget;
 
 	return express.Router()
-	.use(bodyParser.json())
 	.get("*", getTarget)
 	.post("*", postTarget);
 	
@@ -78,7 +91,7 @@ function tryLogin(url, Username, Password, userId){
 		url: url + "/v2/info",
 		headers: {"Accept": "application/json",	"Content-Type": "application/json"}
 	};
-	return cfRequest(null, null, null, null, null, null, infoHeader)
+	return cfRequest(null, null, null, null, null, null, infoHeader, {Url: url})
 	.then(function(response){
 		var authorizationEndpoint = response.authorization_endpoint;
 		return new Promise(function(fulfill, reject) {
@@ -110,43 +123,58 @@ function tryLogin(url, Username, Password, userId){
 }
 function computeTarget(userId, targetRequest){
 	if(targetRequest){
+		var cached;
 		if (userId && targetRequest.Url && targetRequest.Org && targetRequest.Space) {
 			var getKey = userId + targetRequest.Url + targetRequest.Org + targetRequest.Space;
-			if (targetCache.get(getKey)) {
-				return Promise.resolve(targetCache.get(getKey));
-			}
+			cached = targetCache.get(getKey);
+		} else {
+			cached = Promise.resolve(null);
 		}
-		return orgs.getOrgsRequest(userId, targetRequest)
-		.then(function(OrgsArray){	
-			if(!targetRequest.Org){
-				var org = OrgsArray.completeOrgsArray[0];
-			}else{
-				var aimedOrg = OrgsArray.completeOrgsArray.find(function(org){
-					return org.entity.name === targetRequest.Org || org.metadata.guid === targetRequest.Org;
-				});
-				org = aimedOrg;
+		var time = Date.now();
+		return cached
+		.then(function(value) {
+			logger.info("time to get target cache=" + (Date.now() - time));
+			if (value) {
+				return value;
 			}
-			if(!targetRequest.Space){
-				var space = org.Spaces[0];
-			}else{
-				var aimedSpace = org.Spaces.find(function(space){
-					return space.entity.name === targetRequest.Space || space.metadata.guid === targetRequest.Space;
+			return orgs.getOrgsRequest(userId, targetRequest)
+			.then(function(orgs) {
+				var org, space;
+				if(!targetRequest.Org){
+					org = orgs[0];
+				} else {
+					org = orgs.find(function(org){
+						return org.entity.name === targetRequest.Org || org.metadata.guid === targetRequest.Org;
+					});
+				}
+				if (!org) {
+					return Promise.reject(new Error("Organization not found"));
+				}
+				if(!targetRequest.Space){
+					space = org.spaces[0];
+				} else {
+					space = org.spaces.find(function(space){
+						return space.entity.name === targetRequest.Space || space.metadata.guid === targetRequest.Space;
+					});
+				}
+				if (!space) {
+					return Promise.reject(new Error("Space not found"));
+				}
+				var target = {
+					"Type": "Target",
+					"Url": targetRequest.Url,
+					"Org": org,
+					"Space": space
+				};
+				var putKey = userId + targetRequest.Url + org.entity.name + space.entity.name;
+				time = Date.now();
+				return targetCache.set(putKey, target)
+				.then(function() {
+					logger.info("time to set target cache=" + (Date.now() - time));
+					return  target;
 				});
-				space = aimedSpace;
-			}
-			delete org.Spaces;
-			
-			var target = {
-				"Type": "Target",
-				"Url": targetRequest.Url,
-				"Org": org,
-				"Space":space
-			};
-			
-			var putKey = userId + targetRequest.Url + org.entity.name + space.entity.name;
-			targetCache.set(putKey, target);
-			
-			return  target;
+				
+			});
 		});
 	}
 	if(!targetRequest){
@@ -171,12 +199,14 @@ function caughtErrorHandler(task, err){
 		DetailedMessage: err.detailMessage || err.message,
 		JsonData: err.data || {},
 		Message: err.message,
-		Severity: "Error"
+		Severity: err.severity || "Error"
 	};
 	//properly handle parse errors from the YAML parser
 	if(err.name && err.name === 'YAMLException') {
-		errorResponse.JsonData = err.mark;
-		errorResponse.JsonData.Line = err.mark.line + 1;
+		if(err.mark){
+			errorResponse.JsonData = err.mark;
+			errorResponse.JsonData.Line = err.mark.line + 1;
+		}
 		errorResponse.JsonData.Message = err.message;
 	}
 	if(err.bundleid){
@@ -184,15 +214,7 @@ function caughtErrorHandler(task, err){
 	}
 	task.done(errorResponse);
 }
-function parsebody(body){
-	var result;
-	try{
-		result = typeof body === "string" ? JSON.parse(body): body;
-	}catch(err){
-		result = body;
-	}
-	return result;
-}
+
 function cfRequest (method, userId, url, query, body, headers, requestHeader, target) {
 	var waitFor;
 	if(!requestHeader){
@@ -200,13 +222,14 @@ function cfRequest (method, userId, url, query, body, headers, requestHeader, ta
 	}
 	return Promise.resolve(waitFor).then(function(cloudAccessToken){
 		if(!requestHeader){
-			if (!cloudAccessToken) {
+			if (!cloudAccessToken || cloudAccessToken instanceof Error) {
 				var errorStatus = new Error("Not authenticated");
 				errorStatus.code = 401;
 				errorStatus.data = {
 					"description": "Not authenticated",
 					"error_code": "CF-NotAuthenticated"
 				};
+				errorStatus.data = Object.assign(errorStatus.data, cloudAccessToken);
 				return Promise.reject(errorStatus);
 			}
 			headers = headers || {};
@@ -226,21 +249,40 @@ function cfRequest (method, userId, url, query, body, headers, requestHeader, ta
 				if (error) {
 					return reject(error);
 				}
-	//			if (response.status) {
-	//				return reject();
-	//			}
+				var code = response.statusCode;
+				if (code === 204) {
+					return fullfill();
+				}
 				if (body instanceof Uint8Array) {
-					fullfill(response);
+					return fullfill(response);
 				}
-				else {
-					fullfill(parsebody(body));
+				var result = parsebody(body);
+				var err;
+				if (code !== 200 && code !== 201) {
+					var description = result.description || result.message;
+					if (!description) {
+						var defaultDesc = "Could not connect to host. Error: " + code;
+						description = result || defaultDesc;
+						if (description.length > 1000) description = defaultDesc;
+					}
+					err = new Error(description);
+					err.code = code;
+					err.data = result;
+					return reject(err);
 				}
+				if (result.error_code) {
+					err = new Error(result.description);
+					err.code = 500;
+					err.data = result;
+					return reject(err);
+				}
+				fullfill(result);
 			});
-		})
+		});
 	});
 }
-function fullTarget(req,target){
-	if(req.headers['accept-language']){	
+function fullTarget(req, target){
+	if(req.headers['accept-language'] && target) {
 		target['accept-language'] = req.headers['accept-language'];
 	}
 	return target;

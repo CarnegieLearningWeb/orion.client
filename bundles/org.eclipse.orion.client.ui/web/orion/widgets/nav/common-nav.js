@@ -73,15 +73,11 @@ define([
 		this._sidebarContextMenuNode.id = this.parentId + "ContextMenu"; //$NON-NLS-0$
 
 		this._parentNode.parentNode.insertBefore(this._sidebarContextMenuNode, this._parentNode);
-		if(util.isElectron){
-			this._parentNode.parentNode.classList.add("desktopmode");
-		}else{
-			this.preferences.get("/general/settings").then(function (settings) {
-				if(typeof settings.generalSettings === 'undefined' || settings.generalSettings.desktopSelectionPolicy){
-					this._parentNode.parentNode.classList.add("desktopmode");
-				}
-			}.bind(this));
-		}
+		this.isDesktopSelectionMode().then(function (desktopMode) {
+			if(desktopMode){
+				this._parentNode.parentNode.classList.add("desktopmode");
+			}
+		}.bind(this));
 
 		this.contextMenuActionsScope = this._sidebarContextMenuNode.id + "commonNavContextMenu"; //$NON-NLS-0$
 
@@ -275,8 +271,6 @@ define([
 			commandRegistry.registerCommandContribution(editActionsScope, "eclipse.deleteFile", 4, "orion.menuBarEditGroup/orion.clipboardGroup", false, delBinding); //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(editActionsScope, "eclipse.compareWith", 5, "orion.menuBarEditGroup/orion.compareGroup");  //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(editActionsScope, "eclipse.compareWithEachOther", 6, "orion.menuBarEditGroup/orion.compareGroup");  //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution(editActionsScope, "eclipse.compareWith", 7, "orion.menuBarEditGroup/orion.compareGroup"); //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution(editActionsScope, "eclipse.compareWithEachOther", 8, "orion.menuBarEditGroup/orion.compareGroup"); //$NON-NLS-1$ //$NON-NLS-0$
 
 			commandRegistry.registerCommandContribution(editActionsScope, "eclipse.renameResource", 1, "orion.menuBarEditGroup/orion.edit.formatGroup", false, renameBinding); //$NON-NLS-1$ //$NON-NLS-0$
 			// View actions
@@ -306,13 +300,14 @@ define([
 			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.deleteFile", 4, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.renameResource", 5, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.duplicateFile", 6, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
-                        commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.nextLesson", 7, "orion.commonNavContextMenuGroup/orion.editGroup", false);
+            commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.nextLesson", 7, "orion.commonNavContextMenuGroup/orion.editGroup", false);
+			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.file.refresh", 8, "orion.commonNavContextMenuGroup/orion.editGroup", false); //$NON-NLS-1$ //$NON-NLS-0$
 
 			// Context Menu related actions
 			commandRegistry.addCommandGroup(contextMenuActionsScope, "orion.OpenWith", 1001, messages["OpenWith"], "orion.commonNavContextMenuGroup/orion.relatedActions", null, null, null, "dropdownSelection"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			commandRegistry.addCommandGroup(contextMenuActionsScope, "orion.Extensions", 1002, messages["OpenRelated"], "orion.commonNavContextMenuGroup/orion.relatedActions", null, null, null, "dropdownSelection"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.compareWith", 6, "orion.commonNavContextMenuGroup/orion.relatedActions"); //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.compareWithEachOther", 7, "orion.commonNavContextMenuGroup/orion.relatedActions"); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.compareWith", 9, "orion.commonNavContextMenuGroup/orion.relatedActions"); //$NON-NLS-1$ //$NON-NLS-0$
+			commandRegistry.registerCommandContribution(contextMenuActionsScope, "eclipse.compareWithEachOther", 10, "orion.commonNavContextMenuGroup/orion.relatedActions"); //$NON-NLS-1$ //$NON-NLS-0$
 
 			if (!util.isElectron) {
 				// Context Menu import/export actions

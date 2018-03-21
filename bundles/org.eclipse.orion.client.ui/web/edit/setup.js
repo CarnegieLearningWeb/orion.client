@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2017 IBM Corporation and others.
+ * Copyright (c) 2010, 2018 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -130,6 +130,7 @@ objects.mixin(MenuBar.prototype, {
 		var editMenuBar = document.createElement("ul"); //$NON-NLS-0$
 		var menuBarScope = editMenuBar.id = this.menuBarActionScope;
 		editMenuBar.setAttribute("role", "menubar");
+		editMenuBar.style.outline = "none";
 		var menuBar = new mMenuBar.MenuBar({
 			dropdown: editMenuBar,
 		});
@@ -1220,7 +1221,7 @@ objects.mixin(EditorViewer.prototype, {
 								inputManager.removeEventListener("InputChanged", this.loadComplete);
 								that.tabWidget.closeTab(metadata, false);
 							}.bind(this));
-							inputManager.setInput(newLocation || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(metadata.Location));
+							inputManager.setInput(uriTemplate.expand({resource: newLocation || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(metadata.Location)}));
 						} else {
 							that.tabWidget.closeTab(metadata, false);
 						}
@@ -1235,7 +1236,7 @@ objects.mixin(EditorViewer.prototype, {
 							inputManager.removeEventListener("InputChanged", this.loadComplete);
 							that.tabWidget.closeTab(metadata, false);
 						}.bind(this));
-						inputManager.setInput(item.result && item.result.Location || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(selectedMetadata.Location));
+						inputManager.setInput(uriTemplate.expand({resource: item.result && item.result.Location || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(selectedMetadata.Location)}));
 					} else if (that.tabWidget.editorTabs.hasOwnProperty(sourceLocation)) {
 						that.tabWidget.closeTab(metadata, false);
 					}
@@ -1498,7 +1499,7 @@ objects.mixin(EditorViewer.prototype, {
 		// Remove duplicate events
 		for (var i = 0; i < pendingEvents.length; i++) {
 			var duplicate = false;
-			for (var j = 0; j < i; i++) {
+			for (var j = 0; j < i; j++) {
 				if (pendingEvents[i].textModelChangedEvent === pendingEvents[j].textModelChangedEvent) {
 					duplicate = true;
 				}
@@ -1671,7 +1672,7 @@ objects.mixin(EditorSetup.prototype, {
 		this.statusService = new mStatus.StatusReportingService(serviceRegistry, this.operationsClient, "statusPane", "notifications", "notificationArea"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$ //$NON-NLS-3$
 		this.commandRegistry = new mCommandRegistry.CommandRegistry({selection: this.selection});
 		this.dialogService = new mDialogs.DialogService(serviceRegistry, this.commandRegistry);
-		this.progressService = new mProgress.ProgressService(serviceRegistry, this.operationsClient, this.commandRegistry);
+		this.progressService = new mProgress.ProgressService(serviceRegistry, this.operationsClient, this.commandRegistry, null, this.preferences);
 		this.getGeneralPreferences().then(function() {
 			if (this.generalPreferences.enableDebugger) {
 				this.nativeDeployService = new mNativeDeployService.NativeDeployService(serviceRegistry, this.commandRegistry);
@@ -1758,27 +1759,32 @@ objects.mixin(EditorSetup.prototype, {
 	createRunBar: function () {
 		var menuBar = this.menuBar;
 		var runBarParent = menuBar.runBarNode;
-		return mCustomGlobalCommands.createRunBar({
-			parentNode: runBarParent,
-			serviceRegistry: this.serviceRegistry,
-			commandRegistry: this.commandRegistry,
-			fileClient: this.fileClient,
-			projectCommands: ProjectCommands,
-			projectClient: this.serviceRegistry.getService("orion.project.client"),
-			progressService: this.progressService,
-			preferences: this.preferences,
-			editorInputManager: this.editorInputManager,
-			generalPreferences: this.generalPreferences
-		}).then(function(runBar){
-			if (runBar) {
-				this.preferences.get('/runBar').then(function(prefs){ //$NON-NLS-1$
+		return this.preferences.get('/runbar').then(function(prefs) {
+			if (Boolean(prefs) && prefs.disabled === true) {
+				var d = new Deferred();
+				d.resolve();
+				return d;
+			}
+			return mCustomGlobalCommands.createRunBar({
+				parentNode: runBarParent,
+				serviceRegistry: this.serviceRegistry,
+				commandRegistry: this.commandRegistry,
+				fileClient: this.fileClient,
+				projectCommands: ProjectCommands,
+				projectClient: this.serviceRegistry.getService("orion.project.client"),
+				progressService: this.progressService,
+				preferences: this.preferences,
+				editorInputManager: this.editorInputManager,
+				generalPreferences: this.generalPreferences
+			}).then(function(runBar){
+				if (runBar) {
 					this.runBar = runBar;
 					var displayRunBar = prefs.display === undefined  || prefs.display;
-					 if (!displayRunBar) {
-					 	lib.node("runBarWrapper").style.display = "none";
-					 }
-				}.bind(this));
-			}
+					if (!displayRunBar) {
+						lib.node("runBarWrapper").style.display = "none";
+					}
+				}
+			}.bind(this));
 		}.bind(this));
 	},
 	
@@ -1906,13 +1912,15 @@ objects.mixin(EditorSetup.prototype, {
 	 * 			'replace': replaces the current editor's content
 	 * 			    'tab': opens the file in a new tab
 	 * 			  'split': Splits the editor (if needed) and shows the new content in the non-active editor
+	 *   name - (string) Name used to determine the default editor to be used.
+	 *   forcePermanent - (boolean) If specified, and editor tabs are enabled, the newly created tab will be specified as non-transient.
 	 * splitHint - (string) If the mode is 'split' and the editor has not yet been split this determines the
 	 *             initial splitter mode. Can be one of 'horizontal', 'vertical' or 'picInPic'.
 	 * 
 	 * @since 9.0
 	 */
 	openEditor: function(loc, options) {
-		var href = this.computeNavigationHref({Location: loc}, {start: options.start, end: options.end});
+		var href = this.computeNavigationHref({Location: loc}, {start: options.start, end: options.end, line: options.line, offset: options.offset, length: options.length});
 		var openEditorPromise = new Deferred();
 
 		if (!href) {
@@ -1933,8 +1941,13 @@ objects.mixin(EditorSetup.prototype, {
 				}
 
 				var inputManager = this.activeEditorViewer.inputManager;
+				var activeEditorViewer = this.activeEditorViewer;
 				var inputChangeListener = function() {
 					inputManager.removeEventListener("InputChanged", inputChangeListener);
+					if (options.forcePermanent) {
+						activeEditorViewer.tabWidget.potentialTransientHref = href;
+						activeEditorViewer.tabWidget.transientToPermanent(href);
+					}
 					openEditorPromise.resolve();
 				};
 				inputManager.addEventListener("InputChanged", inputChangeListener);

@@ -21,13 +21,7 @@ define([
 	'orion/widgets/input/SettingsCheckbox',
 	'orion/widgets/input/SettingsSelect', //$NON-NLS-0$
 	'orion/webui/tooltip'
-], function(messages, mCommands, mSection, lib, objects, Subsection, SettingsTextfield, SettingsCheckbox, SettingsSelect, mTooltip) {
-	
-	var HOME_WIKIS = [
- 		{value: "", label: messages.Default},
- 		{value: "rtcwiki", label: "RTC Wiki name"}, //$NON-NLS-1$ //$NON-NLS-0$
- 		{value: "sandbox", label: "Sandbox Wiki"} //$NON-NLS-1$ //$NON-NLS-0$
- 	];
+], function(messages, mCommands, mSection, lib, objects, Subsection, SettingsTextfield, SettingsCheckbox, mTooltip) {
 
 	function UserSettings(options, node) {
 		objects.mixin(this, options);
@@ -42,7 +36,7 @@ define([
 						'<div class="sectionAnchor sectionTitle layoutLeft">${User Profile}</div>' +   //$NON-NLS-0$
 						'<div id="userCommands" class="layoutRight sectionActions"></div>' +  //$NON-NLS-0$
 					'</div>' + //$NON-NLS-2$ //$NON-NLS-0$
-					'<div class="sectionTable sections">' + //$NON-NLS-0$
+					'<div class="sectionTable sections userProfile">' + //$NON-NLS-0$
 					
 					'</div>', //$NON-NLS-0$
 
@@ -64,66 +58,48 @@ define([
 		},
 		
 		createSections: function(){
-			
-			var updateAccountFunction = this.updateAccount.bind(this);
-			var updatePasswordFunction = this.updatePassword.bind(this);
-			
-			var keys = HOME_WIKIS;
-			var options = [];
-			for( var i= 0; i < keys.length; i++ ){
-				var key = keys[i];
-				var set = {
-					value: key.value,
-					label: key.label
-				};
-				options.push(set);
+			if(this.pageOptions.showUserInfoFields || this.pageOptions.showUserInfoFields === undefined) {
+				var updateAccountFunction = this.updateAccount.bind(this);
+				/* - account ----------------------------------------------------- */
+				this.accountFields = [
+					new SettingsTextfield( {fieldlabel:messages['User Name'], editmode:'readonly'}),  //$NON-NLS-0$
+					new SettingsTextfield( {
+							fieldlabel:messages['Full Name'], 
+							editmode: this.pageOptions.readOnly ? 'readonly' : null,
+							postChange: updateAccountFunction}),
+					new SettingsTextfield( {
+							fieldlabel:messages['Email Address'], 
+							editmode: this.pageOptions.readOnly ? 'readonly' : null,
+							postChange: updateAccountFunction}),
+					new SettingsCheckbox( {fieldlabel: messages['Email Confirmed'], editmode:'readonly'})  //$NON-NLS-0$
+				];
+				var accountSubsection = new Subsection( {sectionName: messages['Account'], parentNode: this.sections, children: this.accountFields} );
+				accountSubsection.show();
 			}
-			
-			/* - account ----------------------------------------------------- */
-			this.accountFields = [
-				new SettingsTextfield( {fieldlabel:messages['User Name'], editmode:'readonly'}),  //$NON-NLS-0$
-				//Added by Jon, editmode='readonly'
-				new SettingsTextfield( {fieldlabel:messages['Full Name'],  postChange: updateAccountFunction}),
-				new SettingsTextfield( {fieldlabel:messages['Email Address'], editmode:'readonly', postChange: updateAccountFunction}),
-				//end edit
+			if(this.pageOptions.showPasswordFields || this.pageOptions.showPasswordFields === undefined) {
+				var updatePasswordFunction = this.updatePassword.bind(this);
+				/* - password ---------------------------------------------------- */
+				this.passwordFields = [
+					new SettingsTextfield( {fieldlabel:messages['Current Password'], inputType:'password', postChange: updatePasswordFunction} ), //$NON-NLS-1$  //$NON-NLS-0$
+					new SettingsTextfield( {fieldlabel:messages['New Password'], inputType:'password', postChange: updatePasswordFunction} ), //$NON-NLS-1$  //$NON-NLS-0$
+					new SettingsTextfield( {fieldlabel:messages['Verify Password'], inputType:'password', postChange: updatePasswordFunction} ) //$NON-NLS-1$  //$NON-NLS-0$
+				];
+				var passwordSection = new Subsection( {sectionName:messages['Password'], parentNode: this.sections, children: this.passwordFields } );
+				passwordSection.show();
 				
-				new SettingsCheckbox( {fieldlabel: messages['Email Confirmed'], editmode:'readonly'}),  //$NON-NLS-0$
-				
-				//Added by Jon, Home wiki field
-				new SettingsSelect(
-					{	
-						fieldlabel:messages["Home Wiki"], //$NON-NLS-0$
-						options:options,
-						postChange: updateAccountFunction
-					}
-				)
-			];
-			var accountSubsection = new Subsection( {sectionName: messages['Account'], parentNode: this.sections, children: this.accountFields} );
-			accountSubsection.show();
-
-			/* - password ---------------------------------------------------- */
-			this.passwordFields = [
-				new SettingsTextfield( {fieldlabel:messages['Current Password'], inputType:'password', postChange: updatePasswordFunction} ), //$NON-NLS-1$  //$NON-NLS-0$
-				new SettingsTextfield( {fieldlabel:messages['New Password'], inputType:'password', postChange: updatePasswordFunction} ), //$NON-NLS-1$  //$NON-NLS-0$
-				new SettingsTextfield( {fieldlabel:messages['Verify Password'], inputType:'password', postChange: updatePasswordFunction} ) //$NON-NLS-1$  //$NON-NLS-0$
-			];
-			var passwordSection = new Subsection( {sectionName:messages['Password'], parentNode: this.sections, children: this.passwordFields } );
-			passwordSection.show();
-			
-			this._passwordTooltip = new mTooltip.Tooltip({
-				node: this.passwordFields[1].textfield,
-				text: messages['UserSettings.PasswordRules'],
-				trigger: 'focus', //$NON-NLS-0$
-				position: ['right', 'above', 'below', 'left'] //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			});
-
-			this.username = "";
+				this._passwordTooltip = new mTooltip.Tooltip({
+					node: this.passwordFields[1].textfield,
+					text: messages['UserSettings.PasswordRules'],
+					trigger: 'focus', //$NON-NLS-0$
+					position: ['right', 'above', 'below', 'left'] //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+				});
+			}
 			var deleteCommand = new mCommands.Command({
 				name: messages["Delete"],
 				tooltip: messages["DeleteUser"],
 				id: "orion.deleteprofile",  //$NON-NLS-0$
-				callback: function(){
-					this.deleteUser();
+				callback: function(data){
+					this.deleteUser(data);
 				}
 			});
 			
@@ -132,7 +108,6 @@ define([
 			//end edit
 			
 			this.commandService.registerCommandContribution('profileCommands', "orion.deleteprofile", 3); //$NON-NLS-1$ //$NON-NLS-0$
-
 			this.commandService.renderCommands('profileCommands', lib.node( 'userCommands' ), this, this, "button"); //$NON-NLS-1$ //$NON-NLS-0$  //$NON-NLS-2$		
 			
 			/*Added by Jon remove linked accounts section */
@@ -163,6 +138,20 @@ define([
 			}
 		},
 		
+		deleteUser: function(data){
+			//command service.confirm
+			this.commandService.confirm(data.domNode, messages["DeleteUserComfirmation"], messages["Ok"], messages["Cancel"], false, function(confirmed) {
+				if (confirmed) {
+					var userService = this.userService; //$NON-NLS-0$
+					userService.deleteUser(this.accountData.Location).then(function(jsonData) {  //$NON-NLS-0$
+						window.location.href = "/";
+					}, function(jsonData) {
+						alert(jsonData.Message);
+					});
+				}
+			}.bind(this));
+		},
+		
 		updateAccount: function(){
 			var authenticationIds = [];
 			var authServices = this.registry.getServiceReferences("orion.core.auth"); //$NON-NLS-0$
@@ -173,9 +162,6 @@ define([
 			userdata.UserName = this.accountFields[0].getValue();
 			userdata.FullName = this.accountFields[1].getValue();
 			userdata.Email = this.accountFields[2].getValue();
-			
-			//Added by Jon
-			userdata.HomeWiki = this.accountFields[4].getSelection();
 			
 			for(var i=0; i<authServices.length; i++){
 				var servicePtr = authServices[i];
@@ -332,6 +318,7 @@ define([
 					authService.getUser().then(function(jsonData){
 
 						var b = userService.getUserInfo(jsonData.Location).then( function( accountData ){
+							settingsWidget.accountData = accountData;
 							settingsWidget.UserName = accountData.UserName;
 							settingsWidget.accountFields[0].setValue( accountData.UserName );
 							if (accountData.FullName){
@@ -345,13 +332,6 @@ define([
 								settingsWidget.accountFields[2].setValue( '' );
 							}
 							settingsWidget.accountFields[3].setChecked( accountData.EmailConfirmed );
-							
-							//Added by Jon
-							if(accountData.HomeWiki)
-								settingsWidget.accountFields[4].setSelection(accountData.HomeWiki);
-							else
-								settingsWidget.accountFields[4].setSelection( '' );
-							
 						}, function(error) {
 							messageService.setProgressResult(error);
 						});

@@ -10,7 +10,6 @@
  *******************************************************************************/
 /*eslint-env node */
 var express = require("express");
-var bodyParser = require("body-parser");
 var target = require("./target");
 var tasks = require("../tasks");
 var async = require("async");
@@ -18,7 +17,6 @@ var async = require("async");
 module.exports.router = function() {
 
 	return express.Router()
-		.use(bodyParser.json())
 		.get("*", getService);
 
 	function getService(req, res) {
@@ -53,6 +51,13 @@ module.exports.router = function() {
 					return new Promise(function(fulfill, reject) {
 						async.each(serviceResources, function(resource, cb) {
 							var isBindable = true;
+							function addService() {
+								var serviceJson = {
+									"Name": resource.entity.name,
+									"Type": "Service"
+								};
+								fullService.push(serviceJson);
+							}
 							if (resource.entity.service_plan) {
 								var serviceEntity = resource.entity.service_plan.entity;
 								var serviceGuid = serviceEntity.service_guid;
@@ -61,17 +66,17 @@ module.exports.router = function() {
 									isBindable = singleServiceresult.entity.bindable;
 								}).then(function() {
 									if (isBindable) {
-										var ServiceJson = {
-											"Name": resource.entity.name,
-											"Type": "Service"
-										};
-										fullService.push(ServiceJson);
+										addService();
 									}
 									cb();
 								}).catch(function(err){
 									cb(err);
 								});
 							}
+							if (isBindable) {
+								addService();
+							}
+							cb();
 						}, function(err) {
 							if (err) {
 								return reject(err);

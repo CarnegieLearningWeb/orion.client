@@ -239,7 +239,7 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.get(GIT_ROOT + "/status" + FILE_ROOT + api.encodeURIComponent(client.getName()))
+			.get(api.encodeStringLocation(GIT_ROOT + "/status" + FILE_ROOT + api.encodeURIComponent(client.getName())))
 			.expect(200)
 			.end(function(err, res) {
 				assert.ifError(err);
@@ -260,11 +260,10 @@ GitClient.prototype = {
 			.expect(201)
 			.end(function(err, res) {
 				assert.ifError(err);
-				var encodeBranch = api.encodeURIComponent(branchName).replace(/\%/g, "%25");
 				assert.equal(res.body.CommitLocation,
-					GIT_ROOT + "/commit/refs%25252Fheads%25252F" + encodeBranch + FILE_ROOT + client.getName());
+					api.encodeStringLocation(GIT_ROOT + "/commit/" + api.encodeURIComponent("refs/heads/" + branchName) + FILE_ROOT + client.getName()));
 				assert.equal(res.body.Location,
-					GIT_ROOT + "/branch/" + encodeBranch + FILE_ROOT + client.getName());
+					api.encodeStringLocation(GIT_ROOT + "/branch/" + api.encodeURIComponent(branchName) + FILE_ROOT + client.getName()));
 				client.next(resolve, res.body);
 			});
 		});
@@ -290,7 +289,7 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.delete(GIT_ROOT + "/branch/" + api.encodeURIComponent(branchName) + FILE_ROOT + client.getName())
+			.delete(api.encodeStringLocation(GIT_ROOT + "/branch/" + api.encodeURIComponent(branchName) + FILE_ROOT + client.getName()))
 			.expect(200)
 			.end(function(err, res) {
 				assert.ifError(err);
@@ -356,7 +355,7 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.delete(GIT_ROOT + "/tag/" + api.encodeURIComponent(tagName) + FILE_ROOT + client.getName())
+			.delete(api.encodeStringLocation(GIT_ROOT + "/tag/" + api.encodeURIComponent(tagName) + FILE_ROOT + client.getName()))
 			.expect(200)
 			.end(function(err, res) {
 				assert.ifError(err);
@@ -589,7 +588,7 @@ GitClient.prototype = {
 			target = api.encodeURIComponent(target);
 
 			request()
-			.get(GIT_ROOT + "/commit/" + target + ".." + source + FILE_ROOT + client.getName())
+			.get(api.encodeStringLocation(GIT_ROOT + "/commit/" + target + ".." + source + FILE_ROOT + client.getName()))
 			.query(parameters)
 			.expect(202)
 			.end(function(err, res) {
@@ -626,23 +625,23 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.get(GIT_ROOT + '/commit/' + api.encodeURIComponent(branch) + FILE_ROOT + client.getName() + "/" + path)
+			.get(api.encodeStringLocation(GIT_ROOT + '/commit/' + api.encodeURIComponent(branch) + FILE_ROOT + client.getName() + "/" + path))
 			.expect(202)
 			.query(parameters)
 			.end(function(err, res) {
 				assert.ifError(err);
 				getGitResponse(res).then(function(res2) {
 					assert.equal(res2.JsonData.Type, "Commit");
-					assert.equal(res2.JsonData.Location, GIT_ROOT + "/commit/" + api.encodeURIComponent(branch) + FILE_ROOT + client.getName() + "/" + path);
+					assert.equal(res2.JsonData.Location, api.encodeStringLocation(GIT_ROOT + "/commit/" + api.encodeURIComponent(branch) + FILE_ROOT + client.getName() + "/" + path));
 					assert.equal(res2.JsonData.CloneLocation, GIT_ROOT + "/clone" + FILE_ROOT + client.getName());
 
 					assert.equal(res2.JsonData.toRef.Name, toRef);
 					assert.equal(res2.JsonData.toRef.FullName, "refs/heads/" + toRef);
 					assert.equal(res2.JsonData.toRef.CloneLocation, GIT_ROOT + "/clone" + FILE_ROOT + client.getName());
-					assert.equal(res2.JsonData.toRef.CommitLocation, GIT_ROOT + "/commit/" + api.encodeURIComponent("refs/heads/" + toRef) + FILE_ROOT+ client.getName());
-					assert.equal(res2.JsonData.toRef.DiffLocation, GIT_ROOT + "/diff/" + api.encodeURIComponent(toRef) + FILE_ROOT + client.getName());
-					assert.equal(res2.JsonData.toRef.Location, GIT_ROOT + "/branch/" + api.encodeURIComponent(toRef) + FILE_ROOT + client.getName());
-					assert.equal(res2.JsonData.toRef.TreeLocation, GIT_ROOT + "/tree" + FILE_ROOT + client.getName() + "/" + api.encodeURIComponent("refs/heads/" + toRef));
+					assert.equal(res2.JsonData.toRef.CommitLocation, api.encodeStringLocation(GIT_ROOT + "/commit/" + api.encodeURIComponent("refs/heads/" + toRef) + FILE_ROOT+ client.getName()));
+					assert.equal(res2.JsonData.toRef.DiffLocation, api.encodeStringLocation(GIT_ROOT + "/diff/" + api.encodeURIComponent(toRef) + FILE_ROOT + client.getName()));
+					assert.equal(res2.JsonData.toRef.Location, api.encodeStringLocation(GIT_ROOT + "/branch/" + api.encodeURIComponent(toRef) + FILE_ROOT + client.getName()));
+					assert.equal(res2.JsonData.toRef.TreeLocation, api.encodeStringLocation(GIT_ROOT + "/tree" + FILE_ROOT + client.getName() + "/" + api.encodeURIComponent("refs/heads/" + toRef)));
 					assert.equal(res2.JsonData.toRef.Type, "Branch");
 					
 					client.next(resolve, res2.JsonData);
@@ -658,7 +657,7 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.get(GIT_ROOT + "/config/clone" + FILE_ROOT + api.encodeURIComponent(client.getName()))
+			.get(api.encodeStringLocation(GIT_ROOT + "/config/clone" + FILE_ROOT + api.encodeURIComponent(client.getName())))
 			.expect(200)
 			.end(function(err, res) {
 				assert.ifError(err);
@@ -673,7 +672,7 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.get(GIT_ROOT + "/tree" + FILE_ROOT + api.encodeURIComponent(client.getName())+ "/" + "refs%25252Fheads%25252Fmaster?parts=meta")
+			.get(api.encodeStringLocation(GIT_ROOT + "/tree" + FILE_ROOT + api.encodeURIComponent(client.getName())+ "/" + api.encodeURIComponent("refs/heads/master") + "?parts=meta"))
 			.expect(200)
 			.end(function(err, res) {
 				assert.ifError(err);
@@ -693,7 +692,7 @@ GitClient.prototype = {
 		var client = this;
 		this.tasks.push(function(resolve) {
 			request()
-			.get(GIT_ROOT + "/diff/Default" + FILE_ROOT + path.join(api.encodeURIComponent(client.getName()), fileName) + "?parts=uris")
+			.get(api.encodeStringLocation(GIT_ROOT + "/diff/Default" + FILE_ROOT + path.join(api.encodeURIComponent(client.getName()), fileName) + "?parts=uris"))
 			.expect(200)
 			.end(function(err, res) {
 				assert.ifError(err);
@@ -771,7 +770,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -864,7 +863,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -918,7 +917,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -976,10 +975,11 @@ maybeDescribe("git", function() {
 			var remoteURI = "https://github.com/oriongittester/orion-test-repo.git"; // small test repo
 			var remoteName = "origin";
 			var branchName = "master";
-
+			
 			// Credentials for a github user made for testing... Perhaps need a better solution.
 			var username = "oriongittester";
 			var password = "testpassword1";
+			var testUserEmail = "albertqcui+oriongit@gmail.com";
 
 			it('POST remote (adding a new remote)', function(finished) {
 				request()
@@ -1198,7 +1198,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -1238,7 +1238,7 @@ maybeDescribe("git", function() {
 				.expect(201)
 				.end(function(err, res) {
 					assert.ifError(err);
-					assert.equal(res.body.CommitLocation, GIT_ROOT + "/commit/refs%25252Fheads%25252F" + branchName + FILE_ROOT + TEST_REPO_NAME);
+					assert.equal(res.body.CommitLocation, api.encodeStringLocation(GIT_ROOT + "/commit/" + api.encodeURIComponent("refs/heads/"+ branchName) + FILE_ROOT + TEST_REPO_NAME));
 					assert.equal(res.body.Location, GIT_ROOT + "/branch/" + branchName + FILE_ROOT + TEST_REPO_NAME);
 					finished();
 				});
@@ -1255,7 +1255,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -1337,7 +1337,8 @@ maybeDescribe("git", function() {
 				request()
 				.post(WORKSPACE_ROOT)
 				.send({
-					"Name":  ParentFolder
+					"Name":  ParentFolder,
+					Directory: true
 				})
 				.expect(201)
 				.end(function(err, res){
@@ -1375,7 +1376,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -1426,7 +1427,7 @@ maybeDescribe("git", function() {
 				.catch(function(err) {
 					assert.ifError(err);
 				})
-				.done(function() {
+				.finally(function() {
 					finished();
 				});
 			});
@@ -1437,6 +1438,7 @@ maybeDescribe("git", function() {
 	 * Using ssh url to clone a repo with submodules, and check if everyone's in good shape; then add another submodule and delete the one submodule.
 	 */
 	describe('Use case 5', function(/*done*/) {
+		this.timeout(15000);
 		var remoteURI = "git@github.com:oriongittester/orion-test-submodule-parent.git"; // small test repo
 		var PARENT_REPO_NAME = "orion-test-submodule-parent"; // parent of "orion-test-submodule-child1,2,3"
 		var CHILD1_REPO_NAME = "orion-test-submodule-child1"; // parent of "orion-test-submodule-child-child"
@@ -1475,12 +1477,93 @@ maybeDescribe("git", function() {
 						getGitResponse(res).then(function(result) {
 							assert.equal(result.HttpCode, 200);
 							assert.equal(result.Message, "OK");
-							finished();
+							// Check the submofules was all good
+							var stat1 = fs.statSync(CHILD1RepoPath);
+							assert(stat1.isDirectory());
+							var stat2 = fs.statSync(CHILD2RepoPath);
+							assert(stat2.isDirectory());
+							var statChild = fs.statSync(CHILDCHILDRepoPath);
+							assert(statChild.isDirectory());
+							var childchildPath = PARENT_REPO_NAME + "/" + CHILD1_REPO_NAME + "/" + CHILD_CHILD_REPO_NAME;
+							request()
+							.get(GIT_ROOT + "/branch" + FILE_ROOT + childchildPath)
+							.expect(200)
+							.end(function(err, res) {
+								assert.ifError(err);
+								var headBranch = res.body.Children.find(function(child){
+									return child.Name = "HEAD";
+								})
+								assert(headBranch.Detached,"HEAD is detached");
+								assert(headBranch.Current, "HEAD is current");
+								assert(headBranch.CloneLocation, GIT_ROOT + "/clone" + FILE_ROOT + childchildPath);
+								// Add another submodule child3 to parent
+								var childChildRemoteURI = "git@github.com:oriongittester/orion-test-submodule-child3.git";
+								request()
+								.post(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
+								.send({
+									"GitUrl": childChildRemoteURI,	
+									"Location": '/workspace/' + WORKSPACE_ID,
+								})
+								.expect(202)
+								.end(function(err, res) {
+									assert.ifError(err);
+									getGitResponse(res).then(function(result) {
+										assert.equal(result.HttpCode, 401);
+										assert.equal(result.DetailedMessage, "callback returned unsupported credentials type");
+										request()
+										.post(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
+										.send({
+											"GitUrl": childChildRemoteURI,	
+											"Location": '/workspace/' + WORKSPACE_ID,
+											"GitSshUsername": "git",
+											"GitSshPrivateKey": testHelper.oriongittesterRSAKey
+										})
+										.expect(202)
+										.end(function(err, res) {
+											assert.ifError(err);
+											getGitResponse(res).then(function(result) {
+												assert.equal(result.HttpCode, 200);
+												assert.equal(result.Message, "OK");
+												// Check the new child3 submodule is good and update and sync parent module
+												var stat = fs.statSync(CHILD3RepoPath);
+												assert(stat.isDirectory());
+												request()
+												.put(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
+												.send({
+													"Operation": "sync",	
+												})
+												.expect(200)
+												.end(function(err, res) {
+													assert.ifError(err);
+													request()
+													.put(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
+													.send({
+														"Operation": "update",	
+													})
+													.expect(200)
+													.end(function(err, res) {
+														assert.ifError(err);
+														finished();
+													});
+												});
+											})
+											.catch(function(err) {
+												assert.ifError(err);
+												finished();
+											});
+										});
+									})
+									.catch(function(err) {
+										assert.ifError(err);
+										finished();
+									});
+								});
+							});
 						})
 						.catch(function(err) {
 							assert.ifError(err);
 							finished();
-						});	
+						});
 					});
 				})
 				.catch(function(err) {
@@ -1489,98 +1572,138 @@ maybeDescribe("git", function() {
 				});
 			});
 		});
-		it('Check the submofules was all good', function(finished) {
-			var stat1 = fs.statSync(CHILD1RepoPath);
-			assert(stat1.isDirectory());
-			var stat2 = fs.statSync(CHILD2RepoPath);
-			assert(stat2.isDirectory());
-			var statChild = fs.statSync(CHILDCHILDRepoPath);
-			assert(statChild.isDirectory());
-			var childchildPath = PARENT_REPO_NAME + "/" + CHILD1_REPO_NAME + "/" + CHILD_CHILD_REPO_NAME;
+	}); // describe("Use case 5")
+	
+	// Test "more commits" and "more tags"
+	describe('Test more commits', function(/*done*/) {
+		var remoteURI = "https://github.com/oriongittester/orion-test-repo2.git";
+		var repoName = "orion-test-repo2";
+		var username = "oriongittester";
+		var password = "testpassword1";
+	
+		it('Clone repo which has more then 40 commits, and test more commits', function(finished) {
 			request()
-			.get(GIT_ROOT + "/branch" + FILE_ROOT + childchildPath)
-			.expect(200)
-			.end(function(err, res) {
-				assert.ifError(err);
-				var headBranch = res.body.Children.find(function(child){
-					return child.Name = "HEAD";
-				})
-				assert(headBranch.Detached,"HEAD is detached");
-				assert(headBranch.Current, "HEAD is current");
-				assert(headBranch.CloneLocation, GIT_ROOT + "/clone" + FILE_ROOT + childchildPath)
-				finished();
-			})
-		});
-
-		it('Add another submodule child3 to parent', function(finished) {
-			var childchildPath = PARENT_REPO_NAME + "/" + CHILD3_REPO_NAME
-			var childChildRemoteURI = "git@github.com:oriongittester/orion-test-submodule-child3.git";
-			request()
-			.post(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
+			.post(GIT_ROOT + "/clone")
 			.send({
-				"GitUrl": childChildRemoteURI,	
+				"GitUrl": remoteURI,	
 				"Location": '/workspace/' + WORKSPACE_ID,
+				"GitSshUsername": username,
+				"GitSshPassword": password
 			})
 			.expect(202)
 			.end(function(err, res) {
 				assert.ifError(err);
 				getGitResponse(res).then(function(result) {
-					assert.equal(result.HttpCode, 401);
-					assert.equal(result.DetailedMessage, "callback returned unsupported credentials type");
+					assert.equal(result.HttpCode, 200);
+					assert.equal(result.Message, "OK");
+					// Get the default page of commits
 					request()
-					.post(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
-					.send({
-						"GitUrl": childChildRemoteURI,	
-						"Location": '/workspace/' + WORKSPACE_ID,
-						"GitSshUsername": "git",
-						"GitSshPrivateKey": testHelper.oriongittesterRSAKey
-					})
+					.get(api.encodeStringLocation(GIT_ROOT + "/commit/" + api.encodeURIComponent("refs/remotes/origin/master") + ".." + api.encodeURIComponent("master") + FILE_ROOT + repoName + "?page=1&pageSize=20&mergeBase=true"))
 					.expect(202)
 					.end(function(err, res) {
-						assert.ifError(err);
 						getGitResponse(res).then(function(result) {
 							assert.equal(result.HttpCode, 200);
 							assert.equal(result.Message, "OK");
-							finished();
-						})
-						.catch(function(err) {
+							assert.equal(result.JsonData.Children.length, 20); // The first page should be full of 20 commits;
+							var nextLocation = result.JsonData.NextLocation;
+							// Get the second page of commits
+							request()
+							.get(nextLocation)
+							.expect(202)
+							.end(function(err, res) {
+								getGitResponse(res).then(function(result) {
+									assert.equal(result.HttpCode, 200);
+									assert.equal(result.Message, "OK");
+									assert.equal(result.JsonData.Children.length, 20); // The second page should be full of 20 commits;
+									var nextLocation = result.JsonData.NextLocation;
+									request()
+									.get(nextLocation)
+									.expect(202)
+									.end(function(err, res) {
+										getGitResponse(res).then(function(result) {
+											assert.equal(result.HttpCode, 200);
+											assert.equal(result.Message, "OK");
+											assert(result.JsonData.Children.length > 0);
+											finished();
+										}).catch(function(err) {
+											assert.ifError(err);
+											finished();
+										});
+									});
+								}).catch(function(err) {
+									assert.ifError(err);
+									finished();
+								});
+							});
+						}).catch(function(err) {
 							assert.ifError(err);
 							finished();
-						});	
+						});
 					});
-				})
-				.catch(function(err) {
+				}).catch(function(err) {
 					assert.ifError(err);
 					finished();
 				});
 			});
 		});
+	}); // describe("Test more commits")
 
-		it('Check the new child3 submodule is good and update and sync parent module', function(finished) {
-			var stat = fs.statSync(CHILD3RepoPath);
-			assert(stat.isDirectory());;
+	// Test "more commits" and "more tags"
+	describe('Test more tags', function(/*done*/) {
+		var remoteURI = "https://github.com/oriongittester/orion-test-repo2.git";
+		var repoName = "orion-test-repo2";
+		var username = "oriongittester";
+		var password = "testpassword1";
+	
+		it('Clone repo which has more then 40 tags, and test more commits', function(finished) {
 			request()
-			.put(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
+			.post(GIT_ROOT + "/clone")
 			.send({
-				"Operation": "sync",	
+				"GitUrl": remoteURI,	
+				"Location": '/workspace/' + WORKSPACE_ID,
+				"GitSshUsername": username,
+				"GitSshPassword": password
 			})
-			.expect(200)
+			.expect(202)
 			.end(function(err, res) {
 				assert.ifError(err);
-				request()
-				.put(GIT_ROOT + "/submodule" + FILE_ROOT + PARENT_REPO_NAME)
-				.send({
-					"Operation": "update",	
-				})
-				.expect(200)
-				.end(function(err, res) {
+				getGitResponse(res).then(function(result) {
+					assert.equal(result.HttpCode, 200);
+					assert.equal(result.Message, "OK");
+					// Get the 20 tags
+					request()
+					.get(api.encodeStringLocation(GIT_ROOT + "/tag" + FILE_ROOT + repoName + "?commits=0&page=1&pageSize=20"))
+					.expect(200)
+					.end(function(err, res) {
+						assert.ifError(err);
+						assert.equal(res.body.Children.length, 21); // The first page should be full of 21 tags;
+						var nextLocation = res.body.NextLocation;
+						// Get the rest of tags
+						request()
+						.get(nextLocation)
+						.expect(200)
+						.end(function(err, res) {
+							assert.ifError(err);
+							assert.equal(res.body.Children.length, 21); // The second page should be full of 21 tags;
+							var nextLocation2 = res.body.NextLocation;
+							// Get the rest of tags
+							request()
+							.get(nextLocation2)
+							.expect(200)
+							.end(function(err, res) {
+								assert.ifError(err);
+								assert(res.body.Children.length > 0);
+								finished();
+							});
+						});
+					});
+				}).catch(function(err) {
 					assert.ifError(err);
 					finished();
-				})
-			})
+				});
+			});
 		});
-	}); // describe("Use case 5")
-
+	}); // describe("Test more tags")
 
 	describe("Rebase", function() {
 		before(setup);
@@ -2523,7 +2646,7 @@ maybeDescribe("git", function() {
 				var testName = "merge-squash-simple-index"
 				var name = "test.txt";
 				var fullPath = path.join(path.join(WORKSPACE, testName), name);
-				var initial;
+				var initial, current;
 
 				var client = new GitClient(testName);
 				client.init();
@@ -2575,10 +2698,10 @@ maybeDescribe("git", function() {
 			});
 
 			it("conflicts", function(finished) {
-				var testName = "merge-squash-conflicts"
+				var testName = "merge-squash-conflicts";
 				var name = "test.txt";
 				var fullPath = path.join(path.join(WORKSPACE, testName), name);
-				var initial;
+				var initial, current;
 
 				var client = new GitClient(testName);
 				client.init();
@@ -2594,7 +2717,7 @@ maybeDescribe("git", function() {
 					client.commit();
 					return client.start();
 				})
-				.then(function(commit) {
+				.then(function() {
 					client.createBranch("other");
 					// reset back to the initial state of ""
 					client.reset("HARD", initial);
@@ -3788,7 +3911,7 @@ maybeDescribe("git", function() {
 			assert.equal(tag.TagType, annotated ? "ANNOTATED" : "LIGHTWEIGHT");
 			assert.equal(tag.CloneLocation, GIT_ROOT + "/clone" + FILE_ROOT + testName);
 			assert.equal(tag.CommitLocation, GIT_ROOT + "/commit/" + commitSHA + FILE_ROOT + testName);
-			assert.equal(tag.TreeLocation, GIT_ROOT + "/tree" + FILE_ROOT + testName + "/" + api.encodeURIComponent(tagName).replace(/%/g, "%25"));
+			assert.equal(tag.TreeLocation, api.encodeStringLocation(GIT_ROOT + "/tree" + FILE_ROOT + testName + "/" + api.encodeURIComponent(tagName)));
 		}
 
 		describe("Create", function() {
@@ -4584,4 +4707,70 @@ maybeDescribe("git", function() {
 			});
 		});
 	}); // describe("fileDiff")
+
+	describe("Bug515131", function() {
+		var cloneUrl1 = "https://github.com/oriongittester/nice.gitrepo.git";
+		var name1 = "nice.gitrepo";
+		var cloneUrl2 = "https://github.com/oriongittester/.gitted.git";
+		var name2 = ".gitted";
+		/**
+		 * Clone a repo name nice.gitrepo
+		 */
+		it("test clone special name case 1", function(finished) {
+			request()
+			.post(GIT_ROOT + "/clone/")
+			.send({
+				GitUrl: cloneUrl1,
+				Location: FILE_ROOT
+			})
+			.expect(202)
+			.end(function(err, res) {
+				assert.ifError(err);
+				getGitResponse(res).then(function(res2) {
+					assert.equal(res2.HttpCode, 200);
+					assert.equal(res2.Message, "OK");
+					assert.equal(res2.JsonData.Location, GIT_ROOT + "/clone"+ FILE_ROOT + name1);
+					finished();
+				})
+				.catch(function(err) {
+					assert.ifError(err);
+					finished();
+				});
+			});
+		}); // end of it("test clone special name case 1")
+
+		// Clone a repo with name ".gitted", first confirm the repo name is good then confirm this repo name will be ignored
+		it("test clone special name case 2", function(finished) {
+			request()
+			.post(GIT_ROOT + "/clone/")
+			.send({
+				GitUrl: cloneUrl2,
+				Location: FILE_ROOT
+			})
+			.expect(202)
+			.end(function(err, res) {
+				assert.ifError(err);
+				getGitResponse(res).then(function(res2) {
+					assert.equal(res2.HttpCode, 200);
+					assert.equal(res2.Message, "OK");
+					assert.equal(res2.JsonData.Location, GIT_ROOT + "/clone"+ FILE_ROOT + name2);
+					request()
+					.get(GIT_ROOT + "/clone/workspace/" + WORKSPACE_ID)
+					.expect(200)
+					.end(function(err, res){
+						if(res.body.Children.length > 0){
+							res.body.Children.forEach(function(repo){
+								assert.notEqual(repo.Name, name2); // ".gitted is a very special repo name, which we ignore any repo with that name."
+							})
+						}
+						finished();
+					})
+				})
+				.catch(function(err) {
+					assert.ifError(err);
+					finished();
+				});
+			});
+		}); // end of it("test clone special name case 2")
+	}) // end of it("Bug515131")
 }); // describe("Git")
