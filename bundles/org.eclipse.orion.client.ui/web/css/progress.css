@@ -9,7 +9,7 @@
 
 .progressInfo {
 	color: white !important;
-	background-color: #0b6481 !important;
+	background-color: #121E4C !important;
 }
 
 /* More prominent hyperlinks in notification area */
@@ -31,8 +31,8 @@
 
 .progressNormal {
 	color: white !important;
-	background-color: #0b6481 !important;
-	border: 1px solid #0b6481 !important;
+	background-color: #121E4C !important;
+	border: 1px solid #121E4C !important;
 }
 
 .progressPane {
@@ -263,7 +263,7 @@
 
 .notificationShow {
 	color: white; 
-	background-color: #0b6481;
+	background-color: #121E4C;
 	bottom: 0;
 	position: fixed;
 	float: left; 
@@ -287,7 +287,7 @@
 }
 .notificationHide {
 	color: white; 
-	background-color: #0b6481; 
+	background-color: #121E4C; 
 	bottom: -45px;
 	position: fixed;
 	text-align:center;

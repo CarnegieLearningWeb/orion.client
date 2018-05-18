@@ -117,8 +117,8 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 				link.title = "Globaloria.com";
 				
 				var logo = document.createElement("img");
-				logo.src = "../Globaloria_Square_transparent.png";
-				logo.id = logo.alt = logo.title = "Globaloria_Square.png";
+				logo.src = "../CLI_Logo.png";
+				logo.id = logo.alt = logo.title = "CLI_Logo.png";
 				logo.style.width = "50px";
 				logo.style.height = "50px";
 				link.appendChild(logo);
