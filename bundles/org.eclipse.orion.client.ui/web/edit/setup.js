@@ -863,6 +863,13 @@ objects.mixin(TabWidget.prototype, {
 			if (dirtyIndicator) {
 				dirtyIndicator.style.display = isDirty ? "block" : "none";
 			}
+			var breadcrumb = this.editorTabs[location].breadcrumb;
+			if (breadcrumb) {
+				dirtyIndicator = breadcrumb.dirty;
+				if (dirtyIndicator) {
+					dirtyIndicator.textContent = isDirty ? "*" : "";
+				}
+			}
 		}
 	}
 });
@@ -1143,7 +1150,7 @@ objects.mixin(EditorViewer.prototype, {
 			this.pool.metadata = metadata;
 			
 			var editorView = this.getCurrentEditorView();
-			if (editorView && editorView.editor) {
+			if (editorView && editorView.editor && typeof editorView.editor.getTextView === 'function') {
 				this.editor.isFileInitiallyLoaded = false;
 				var textView = editorView.editor.getTextView();
 				textView.addEventListener("ModelChanged", function(){
@@ -1221,7 +1228,7 @@ objects.mixin(EditorViewer.prototype, {
 								inputManager.removeEventListener("InputChanged", this.loadComplete);
 								that.tabWidget.closeTab(metadata, false);
 							}.bind(this));
-							inputManager.setInput(uriTemplate.expand({resource: newLocation || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(metadata.Location)}));
+							window.location = urlModifier(that.activateContext.computeNavigationHref({Location: newLocation || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(metadata.Location)}));
 						} else {
 							that.tabWidget.closeTab(metadata, false);
 						}
@@ -1236,7 +1243,7 @@ objects.mixin(EditorViewer.prototype, {
 							inputManager.removeEventListener("InputChanged", this.loadComplete);
 							that.tabWidget.closeTab(metadata, false);
 						}.bind(this));
-						inputManager.setInput(uriTemplate.expand({resource: item.result && item.result.Location || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(selectedMetadata.Location)}));
+						window.location = urlModifier(that.activateContext.computeNavigationHref({Location: item.result && item.result.Location || metadata.WorkspaceLocation || fileClient.fileServiceRootURL(selectedMetadata.Location)}));
 					} else if (that.tabWidget.editorTabs.hasOwnProperty(sourceLocation)) {
 						that.tabWidget.closeTab(metadata, false);
 					}
@@ -1622,7 +1629,7 @@ objects.mixin(EditorViewer.prototype, {
 			var loc = this.inputManager.getFileMetadata().Location;
 			var dirty = this.editor.isDirty();
 			mGlobalCommands.setDirtyIndicator(dirty);
-			// Update all dirty indicator for each tab associated with this file.
+			// Update all dirty indicators for each tab associated with this file.
 			this.activateContext.editorViewers.forEach(function(editorViewer) {
 				editorViewer.tabWidget.updateDirtyIndicator(loc, dirty);
 			});
@@ -1659,6 +1666,7 @@ function EditorSetup(serviceRegistry, pluginRegistry, preferences, readonly) {
 	this.sidebarDomNode = lib.node("pageSidebar"); //$NON-NLS-0$
 	this.sidebarToolbar = lib.node("sidebarToolbar"); //$NON-NLS-0$
 	this.pageToolbar = lib.node("pageToolbar"); //$NON-NLS-0$
+	lib.node("auxpane").setAttribute("aria-label", messages.Navigator); //$NON-NLS-1$ //$NON-NLS-0$
 
 	this.editorViewers = [];
 }

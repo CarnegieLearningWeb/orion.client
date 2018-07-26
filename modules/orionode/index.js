@@ -101,7 +101,9 @@ function tryLoadRouter(endpoint, options) {
 	}
 	if (endpoint.authenticated) {
 		args.push(options.authenticate);
-		args.push(checkAuthenticated);
+		if (endpoint.checkAuthenticated === undefined || endpoint.checkAuthenticated) {
+			args.push(checkAuthenticated);
+		}
 	}
 	if (isEndpoint) {
 		args.push(options.basicMiddleware);
@@ -139,7 +141,7 @@ function tryLoadRouter(endpoint, options) {
 			options.app.use.apply(options.app, args);
 		}
 	} catch (err) {
-		logger.error("Failed to load module: " + err.message);
+		logger.error("Failed to load module: " + err.message + "..." + err.stack);
 	}
 }
 
@@ -315,6 +317,9 @@ module.exports = function startServer(options) {
 					res.setHeader("Cache-Control", EXT_CACHE_MAPPING[ext]);
 				} else {
 					res.setHeader("Cache-Control", _24_HOURS);
+				}
+				if (urlPath.endsWith(".woff") || urlPath.endsWith(".ttf")) {
+					res.setHeader("Access-Control-Allow-Origin", "*");
 				}
 			}
 		};

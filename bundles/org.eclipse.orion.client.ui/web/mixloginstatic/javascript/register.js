@@ -11,8 +11,19 @@
 /*eslint-env amd, browser*/
 /*global URL*/
 define(['domReady', 'orion/xhr', 'orion/xsrfUtils', './common'], function(domReady, xhr, xsrfUtils, common) {
+	
+	function confirmAgreement() {
+		if (!document.getElementById("agreement").checked) {
+			common.showStatusMessage("You must agree to the Eclipse Foundation Terms of Use and Privacy Policy to create an account.");
+			return false;
+		}
+		return true;
+	}
+	
 	function confirmCreateUser(e) {
 		e.preventDefault();
+		
+		if (!confirmAgreement()) return;
 
 		var linkedUser = common.getParam("oauth") === "create" ? true : false;
 		var authForm = document.getElementById("orion-auth"),
@@ -101,7 +112,7 @@ define(['domReady', 'orion/xhr', 'orion/xsrfUtils', './common'], function(domRea
 			document.getElementById("passwordContainer").style.display = "none";
 			document.getElementById("repeatPasswordContainer").style.display = "none";
 			document.getElementById("rightSection").style.display = "none";
-			document.getElementById("description").textContent = "Almost there! This account will be associated with your Globaloria Google account in the future.";
+			document.getElementById("description").textContent = "Almost there! This account will be associated with your Google or Github account in the future.";
 			document.getElementById("username").value = username;
 			document.getElementById("email").value = email;
 			document.getElementById("signUpBtn").addEventListener("click", confirmCreateUser, false);
@@ -121,9 +132,13 @@ define(['domReady', 'orion/xhr', 'orion/xsrfUtils', './common'], function(domRea
 
 		// FIX the hrefs of the various forms here.
 		document.getElementById("signInWithGoogle").href = common.createOAuthLink("google");
+		document.getElementById("signInWithGitHub").href = common.createOAuthLink("github");
 		
-		//Added by Jon
-		//document.getElementById("signInWithGitHub").href = common.createOAuthLink("github");
+		function clickHandler(evt) {
+			if (!confirmAgreement()) evt.preventDefault();
+		}
+		document.getElementById("signInWithGoogle").addEventListener("click", clickHandler);
+		document.getElementById("signInWithGitHub").addEventListener("click", clickHandler);
 	}
 
 	domReady(function() {

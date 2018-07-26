@@ -157,6 +157,10 @@ define(['i18n!cfui/nls/messages', 'orion/selection', 'orion/widgets/input/ComboT
 			});
 			self._setSelection();
 			self._selection.getSelection(function(selection){
+				if (!selection) {
+					self._hideMessage();
+					return;
+				}
 				self._loadDomains(selection);
 				self._loadApplications(selection);
 				self._loadHosts(selection);
@@ -393,7 +397,7 @@ define(['i18n!cfui/nls/messages', 'orion/selection', 'orion/widgets/input/ComboT
 					"</tr>"+ //$NON-NLS-0$
 				"</table>" +  //$NON-NLS-0$
 				'<div class="manifestOverride">' + //$NON-NLS-0$
-					'<div id="overrideNote" style="white-space: pre;"></div>' + //$NON-NLS-0$
+					'<div id="overrideNote" style="white-space: pre-wrap;"></div>' + //$NON-NLS-0$
 				'</div>', //$NON-NLS-0$
 				
 				render: function(){

@@ -16,6 +16,7 @@ var auth = require('./lib/middleware/auth'),
 	fs = require('fs'),
 	mkdirp = require('mkdirp'),
 	os = require('os'),
+	constants = require('constants'),
 	log4js = require('log4js'),
 	compression = require('compression'),
 	path = require('path'),
@@ -23,7 +24,8 @@ var auth = require('./lib/middleware/auth'),
 	argslib = require('./lib/args'),
 	graceful = require('./lib/graceful-cluster'),
 	configParams = require("nconf"),
-	api = require('./lib/api');
+	api = require('./lib/api'),
+	serverUtil = require('./lib/util/serverUtil');
 
 // Patches the fs module to use graceful-fs instead
 require('graceful-fs').gracefulify(fs);
@@ -103,6 +105,7 @@ function startServer(cb) {
 	var app = express();
 	if (configParams.get("orion.https.key") && configParams.get("orion.https.cert")) {
 		server = https.createServer({
+			secureOptions: constants.SSL_OP_NO_TLSv1,
 			key: fs.readFileSync(configParams.get("orion.https.key")),
 			cert: fs.readFileSync(configParams.get("orion.https.cert"))
 		}, app);
@@ -132,13 +135,20 @@ function startServer(cb) {
 		next();
 	}, orion);
 	
-	if(configParams.get("orion.proxy.port") && listenContextPath){
+	if ((configParams.get("orion.proxy.host") || configParams.get("orion.proxy.port")) && listenContextPath){
 		var httpProxy;
 		try {
 			httpProxy = require('http-proxy');
+			var proxyHost = configParams.get("orion.proxy.host");
+			var proxyPort = configParams.get("orion.proxy.port");
 			var proxy = httpProxy.createProxyServer({});
-			app.use('/', function(req, res, next) {
-				proxy.web(req, res, { target: 'http://127.0.0.1:' + configParams.get("orion.proxy.port"), changeOrigin: true }, function() { next(); } );
+			app.use(function(req, res, next) {
+				proxy.web(req, res, {
+					target: proxyHost + (proxyPort ? ":" + proxyPort : ""),
+					changeOrigin: true
+				}, function() {
+					next();
+				});
 			});
 		} catch (e) {
 			logger.info("WARNING: http-proxy is not installed. Some features will be unavailable. Reason: " + e.message);
@@ -187,29 +197,7 @@ function startServer(cb) {
 		log: logger.info.bind(logger),
 		shutdownTimeout: shutdownTimeout,
 		exitFunction: function(code) {
-			var _shutdownTimer;
-			_shutdownTimer = setTimeout(function() {
-				_shutdownTimer = null;
-				serverExit(1);
-			}, this.shutdownTimeout);
-			function serverExit(code) {
-				(code ? logger.warn : logger.info).bind(logger)("Exiting worker " + process.pid + " with code: " + code + " (code=1 means timeout)");
-				function done() {
-					if (_shutdownTimer) clearTimeout(_shutdownTimer);
-					log4js.shutdown(function() {
-						logger.info("log4js shutdown. Worker exiting: " + process.pid);
-						process.exit(code || 0);
-					});
-				}
-				var data = {
-					code: code,
-					promises: []
-				};
-				api.getOrionEE().emit("close-socket", data);
-				api.getOrionEE().emit("close-server", data);
-				return Promise.all(data.promises).then(done, done);
-			}
-			serverExit(code);
+			serverUtil.shutdown(code, shutdownTimeout, logger);
 		}
 	});
 	if (cluster && configParams.get("orion_cluster_restart_timeout")) {

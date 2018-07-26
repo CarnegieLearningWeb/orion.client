@@ -31,6 +31,16 @@
 	display: none;
 }
 
+.footer {
+	background:white;
+}
+
+/* Footer */
+.logoFooter { 
+	float: left;
+	margin-top:6px;
+}
+
 a {
 	text-decoration: none;
 	color: #00749c;
