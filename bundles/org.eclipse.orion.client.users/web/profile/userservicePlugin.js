@@ -121,21 +121,6 @@ define([
 						"src": new URL(require.toUrl("mixloginstatic/manageExternalIds.html"), self.location.href).href
 					}
 				}]
-				"sections" : [
-	                            {"id": "personalInformation", "name" : "Personal Information", "data" :[
-                                {"type": "TextBox", "props": {"id": "pi_username", "readOnly" : false, "name" : "UserName"}, "label": "User Name:"},
-                                {"type": "TextBox", "props": {"id": "pi_fullname", "readOnly" : false,  "name" : "FullName"}, "label" : "Full Name:"},
-                              	 {"type": "TextBox", "props": {"id": "pi_email", "readOnly" : false, "name" : "Email"}, "label" : "Email:"},
-                              	 {"type": "CheckBox", "props": {"id": "pi_emailConfirmed", "readOnly" : true, "name" : "EmailConfirmed"}, "label" : "Email confirmed:"},
-                                {"type": "DateLong", "props": {"id": "pi_lastLogin", "name" : "LastLoginTimestamp"}, "label" : "Last login:	"},
-                              	 {"type": "Text", "props": {"id": "pi_diskUsage", "name" : "DiskUsage"}, "label" : "Disk Usage:	"},
-                                 {"type": "DateLong", "props": {"id": "pi_diskUsageTimestamp", "name" : "DiskUsageTimestamp"}, "label" : "Disk Usage Last Calculated:	"},
-                              	 //Added By Jon
-                              	{"type": "TextBox", "props": {"id": "pi_homewiki", "readOnly" : false,  "name" : "HomeWiki"}, "label" : "Home Wiki:"},
-                                ]
-	                            },
-	                          {"id": "oauthids", "name": "Manage External Accounts", "type": "iframe", "data" : {"src": new URL(require.toUrl("mixloginstatic/manageExternalIds.html"), self.location.href).href}}
-	                            ]
 			};
 
 			return content;

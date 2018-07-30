@@ -112,15 +112,16 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 				var sideMenuHome = document.createElement("div"); //$NON-NLS-0$
 				sideMenuHome.classList.add("sideMenuHome"); //$NON-NLS-0$
 				var link = document.createElement("a");
-				link.href = "http://globaloria.com";
+				link.href = "http://carnegielearning.com";
 				link.target = "_blank";
-				link.title = "Globaloria.com";
+				link.title = "CarnegieLearning.com";
 				
 				var logo = document.createElement("img");
-				logo.src = "../CLI_Logo.png";
-				logo.id = logo.alt = logo.title = "CLI_Logo.png";
-				logo.style.width = "50px";
-				logo.style.height = "50px";
+				logo.src = "../CL_Logo.png";
+				logo.id = logo.alt = logo.title = "CL_Logo.png";
+				logo.style.width = "35px";
+				logo.style.height = "35px";
+				logo.style.margin = "5px";
 				link.appendChild(logo);
 				sideMenuHome.appendChild(link);
 				

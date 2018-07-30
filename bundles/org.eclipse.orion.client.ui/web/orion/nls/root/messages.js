@@ -52,7 +52,7 @@ define({//Default message bundle
 	"Options": "Options",
 	"LOG: ": "LOG: ",
 	"View": "View",
-	"SplashTitle": "Setting up your GIDE Workspace!",
+	"SplashTitle": "Setting up your DevSpace!",
 	"SplashTitleSettings": "Loading Settings",
 	"SplashTitleGit": "Loading Git Repositories",
 	"LoadingPage": "Loading Page",

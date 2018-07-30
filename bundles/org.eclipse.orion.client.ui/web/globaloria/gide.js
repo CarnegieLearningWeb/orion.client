@@ -228,23 +228,23 @@ define([
 
             // Add a refresh button to reload the game
             var newWindowButton         = document.createElement('a');
-            newWindowButton.textContent = 'Open in New Page';
+            newWindowButton.textContent = 'Open in New Tab';
             newWindowButton.className   = 'btn glife glife-navy';
             newWindowButton.setAttribute('href', iframeContentUrl);
             newWindowButton.setAttribute('target', '_blank');
 
             // Add a toggle screen button
-            var toggleWindowButton         = document.createElement('button');
-            toggleWindowButton.textContent = 'Toggle Window';
-            toggleWindowButton.className   = 'btn glife glife-navy--outline';
-            toggleWindowButton.setAttribute('onClick', 'toggleWindow();');
-            toggleWindowButton.setAttribute('target', '_blank');
+//            var toggleWindowButton         = document.createElement('button');
+//            toggleWindowButton.textContent = 'Toggle Window';
+//            toggleWindowButton.className   = 'btn glife glife-navy--outline';
+//            toggleWindowButton.setAttribute('onClick', 'toggleWindow();');
+//            toggleWindowButton.setAttribute('target', '_blank');
 
             navigationDiv.appendChild(reloadButton);
             navigationDiv.appendChild(newWindowButton);
 
-            if (this.displayToggleBtn())
-                navigationDiv.appendChild(toggleWindowButton);
+//            if (this.displayToggleBtn())
+//                navigationDiv.appendChild(toggleWindowButton);
 
             return navigationDiv;
         },

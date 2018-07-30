@@ -137,15 +137,6 @@ define(['domReady', 'orion/xhr', 'orion/webui/littlelib', './common'], function(
 			window.location.replace(redirectURL);
 		}
 
-		// FIX the hrefs of the various forms here.
-		// document.getElementById("signInWithGoogle").href = common.createOAuthLink("google");
-		
-		//Added by Jon
-		//document.getElementById("signInWithGitHub").href = common.createOAuthLink("github");
-
-		// FIX the hrefs of the various forms here.
-		document.getElementById("signInWithClever").href = common.createOAuthLink("clever");
-
 		setUpLoginPage();
 	});
 });

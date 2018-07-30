@@ -40,9 +40,9 @@ define([
         this._editorView = options.editorView;
         this._targetAnchor = options.anchor;
 
-        this._splitterResizeListener = /* @callback */ function(e) {
-            this._editorView.editor.resize();
-        }.bind(this);
+//        this._splitterResizeListener = /* @callback */ function(e) {
+//            this._editorView.editor.resize();
+//        }.bind(this);
 
         var hashChangeListener = function(e) {
             var oldParams = PageUtil.matchResourceParameters(e.oldURL);
@@ -78,7 +78,7 @@ define([
             var textView = editor.getTextView();
             var annotationModel = editor.getAnnotationModel();
 
-            this._splitter.addEventListener("resize", this._splitterResizeListener); //$NON-NLS-0$
+//            this._splitter.addEventListener("resize", this._splitterResizeListener); //$NON-NLS-0$
 
             var settings = this._editorView.getSettings();
 
@@ -92,43 +92,45 @@ define([
             this._parent.appendChild(this._rootDiv);
 
             this._editorDiv = document.createElement("div"); //$NON-NLS-0$
+            this._editorDiv.style.width = "100%"; //$NON-NLS-0$
+            this._editorDiv.style.height = "100%"; //$NON-NLS-0$
             this._rootDiv.appendChild(this._editorDiv);
             this._editorView.setParent(this._editorDiv);
 
-            this._splitterDiv = document.createElement("div"); //$NON-NLS-0$
-            this._splitterDiv.id = "orion.js.editor.splitter"; //$NON-NLS-0$
-            this._rootDiv.appendChild(this._splitterDiv);
+//            this._splitterDiv = document.createElement("div"); //$NON-NLS-0$
+//            this._splitterDiv.id = "orion.js.editor.splitter"; //$NON-NLS-0$
+//            this._rootDiv.appendChild(this._splitterDiv);
 
             this._previewWrapperDiv = document.createElement("div"); //$NON-NLS-0$
             this._previewWrapperDiv.style.overflowX = "hidden"; //$NON-NLS-0$
             this._previewWrapperDiv.style.overflowY = "auto"; //$NON-NLS-0$
-            this._rootDiv.appendChild(this._previewWrapperDiv);
+//            this._rootDiv.appendChild(this._previewWrapperDiv);
 
             previewDiv = document.createElement("div"); //$NON-NLS-0$
             previewDiv.classList.add("orionHTML"); //$NON-NLS-0$
 
-            this._previewWrapperDiv.appendChild(previewDiv);
+//            this._previewWrapperDiv.appendChild(previewDiv);
 
-            Gide.createIframeWindow(previewDiv);
+//            Gide.createIframeWindow(previewDiv);
 
-            this._splitter = new mSplitter.Splitter({
-                node: this._splitterDiv,
-                sidePanel: this._editorDiv,
-                mainPanel: this._previewWrapperDiv,
-                toggle: true,
-                closeReversely: true
-            });
-            toggleOrientationCommand.checked = this._splitter.getOrientation() === mSplitter.ORIENTATION_HORIZONTAL;
+//            this._splitter = new mSplitter.Splitter({
+//                node: this._splitterDiv,
+//                sidePanel: this._editorDiv,
+//                mainPanel: this._previewWrapperDiv,
+//                toggle: true,
+//                closeReversely: true
+//            });
+//            toggleOrientationCommand.checked = this._splitter.getOrientation() === mSplitter.ORIENTATION_HORIZONTAL;
 
             BaseEditor.prototype.install.call(this);
         },
         togglePaneOrientation: function() {
-            var orientation = this._splitter.getOrientation() === mSplitter.ORIENTATION_VERTICAL ? mSplitter.ORIENTATION_HORIZONTAL : mSplitter.ORIENTATION_VERTICAL;
-            this._splitter.setOrientation(orientation);
+//            var orientation = this._splitter.getOrientation() === mSplitter.ORIENTATION_VERTICAL ? mSplitter.ORIENTATION_HORIZONTAL : mSplitter.ORIENTATION_VERTICAL;
+//            this._splitter.setOrientation(orientation);
         },
         uninstall: function() {
             var textView = this._editorView.editor.getTextView();
-            this._splitter.removeEventListener("resize", this._splitterResizeListener); //$NON-NLS-0$
+//            this._splitter.removeEventListener("resize", this._splitterResizeListener); //$NON-NLS-0$
             lib.empty(this._parent);
             BaseEditor.prototype.uninstall.call(this);
         }
@@ -164,7 +166,7 @@ define([
 
             Gide.destroyIframeNavigationWindow();
             Gide.destroyIframeHTMLWindow();
-            Gide.buildIframeInstructionWindow();
+//            Gide.buildIframeInstructionWindow();
         },
         destroy: function() {
             this.editor.destroy();
