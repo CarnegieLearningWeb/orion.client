@@ -180,15 +180,6 @@ define([
 		// 	uriTemplate: "https://bugs.eclipse.org/bugs/enter_bug.cgi?product=Orion&component=Client",
 		// 	category: "user.0"
 		// });
-		
-		provider.registerService("orion.page.link.user", null, {
-			id: "orion.student.list",
-			order: 40,
-			name: widgetMessages["StudentList"],
-			nls: "orion/widgets/nls/messages",
-			uriTemplate: "{+OrionHome}/profile/student-list.html",
-			category: "user.0"
-		});
 
 		provider.registerService("orion.core.content", null, {
 			id: "orion.content.html5",

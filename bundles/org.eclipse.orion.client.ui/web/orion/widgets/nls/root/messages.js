@@ -50,7 +50,6 @@ define({//Default message bundle
 	"Sign In": "Sign In",
 	"Help": "Help",
 	"Report a Bug": "Report a Bug",
-	"StudentList": "My Student List",
 	"Keyboard Shortcuts": "Keyboard Shortcuts",
 	"Clear Local Storage": "Clear Local Storage",
 	"About": "About",
