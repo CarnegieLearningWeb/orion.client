@@ -52,8 +52,6 @@ define([
 					this.hide();
 				}
 			}.bind(this));
-			
-			this.hide(); // should already be hidden but calling this to add extra visibility=hidden CSS class
 		},
 		
 		/**
@@ -98,6 +96,7 @@ define([
 		 */
 		show: function(slideoutViewMode) {
 			this._previousActiveElement = document.activeElement;
+			lib.trapTabs(this._wrapperNode);
 			
 			// replace _contentNode's contents
 			if (this._currentViewMode !== slideoutViewMode) {
@@ -106,14 +105,11 @@ define([
 				this._currentViewMode = slideoutViewMode;
 			}
 			
-			// step 1: remove the CSS visibility=hidden extra safeguard
 			if (this._visibilityTransitionTimeout) {
+				this._wrapperNode.classList.remove("slideoutWrapperHiding"); //$NON-NLS-0$
 				window.clearTimeout(this._visibilityTransitionTimeout);
 				this._visibilityTransitionTimeout = null;
 			}
-			this._wrapperNode.classList.remove("slideoutNoVisibility"); //$NON-NLS-0$
-			
-			// step 2: add CSS class to position slideout within visible range
 			this._wrapperNode.classList.add("slideoutWrapperVisible"); //$NON-NLS-0$
 		},
 		
@@ -121,24 +117,15 @@ define([
 		 * Hides the slideout.
 		 */
 		hide: function() {
-			// remove focus from activeElement if it is child of slideout
-			var activeElement = document.activeElement;
-			while (activeElement) {
-				if (this._wrapperNode === activeElement) {
-					document.activeElement.blur();
-				}
-				activeElement = activeElement.parentNode;
-			}
-			
+			lib.returnFocus(this._wrapperNode, this._previousActiveElement);
 			this._previousActiveElement = null;
-			
-			// step 1: remove CSS class which positions slideout within visible range
+
 			this._wrapperNode.classList.remove("slideoutWrapperVisible"); //$NON-NLS-0$
 			
-			// step 2: after the slide-in transition has completed, set the 
-			// CSS visibility attribute to hidden as an extra safeguard
+			this._wrapperNode.classList.add("slideoutWrapperHiding"); //$NON-NLS-0$
 			this._visibilityTransitionTimeout = window.setTimeout(function() {
-				this._wrapperNode.classList.add("slideoutNoVisibility"); //$NON-NLS-0$
+				this._visibilityTransitionTimeout = null;
+				this._wrapperNode.classList.remove("slideoutWrapperHiding"); //$NON-NLS-0$
 			}.bind(this), VISIBILITY_TRANSITION_MS);
 		}
 	});

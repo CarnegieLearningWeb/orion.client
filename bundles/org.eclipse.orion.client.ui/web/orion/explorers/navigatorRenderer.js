@@ -86,6 +86,7 @@ define([
 		}
 		if (item.Directory) {
 			link = document.createElement("a"); //$NON-NLS-0$
+			link.tabIndex = -1;
 			link.className = "navlinkonpage"; //$NON-NLS-0$
 			var template = !folderPageURL ? uriTemplate : new URITemplate(folderPageURL + "#{,resource,params*}"); //$NON-NLS-0$
 			link.href = template.expand({resource: item.ChildrenLocation});
@@ -97,6 +98,7 @@ define([
 				openWithCommands = mExtensionCommands.getOpenWithCommands(commandService);
 			}
 			link = document.createElement("a"); //$NON-NLS-0$
+			link.tabIndex = -1;
 			link.className= "navlink targetSelector"; //$NON-NLS-0$
 			if (linkProperties && typeof linkProperties === "object") { //$NON-NLS-0$
 				Object.keys(linkProperties).forEach(function(property) {
@@ -164,19 +166,15 @@ define([
 	NavigatorRenderer.prototype = new mExplorer.SelectionRenderer(); 
 
 	NavigatorRenderer.prototype.wrapperCallback = function(wrapperElement) {
-		wrapperElement.setAttribute("role", "tree"); //$NON-NLS-1$ //$NON-NLS-2$
 	};
 
 	NavigatorRenderer.prototype.tableCallback = function(tableElement) {
-		tableElement.setAttribute("aria-label", messages["Navigator"]); //$NON-NLS-1$
-		tableElement.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-2$
 	};
 
 	/**
 	 * @param {Element} rowElement
 	 */
 	NavigatorRenderer.prototype.rowCallback = function(rowElement, model) {
-		rowElement.setAttribute("role", "treeitem"); //$NON-NLS-1$ //$NON-NLS-2$
 	};
 	
 	
@@ -213,27 +211,6 @@ define([
 		return null;
 	};
 	
-	/**
-	 * Creates the column header element. We are really only using the header for a spacer at this point.
-	 * @name orion.explorer.NavigatorRenderer.prototype.getCellHeaderElement
-	 * @function
-	 * @returns {Element}
-	 */
-	NavigatorRenderer.prototype.getCellHeaderElement = function(col_no){
-		// TODO see https://bugs.eclipse.org/bugs/show_bug.cgi?id=400121
-		if (this.oneColumn && col_no !== 0) {
-			return null;
-		}
-
-		switch(col_no){
-		case 0:
-		case 1:
-		case 2:
-			var th = document.createElement("th"); //$NON-NLS-0$
-			th.style.height = "8px"; //$NON-NLS-0$
-		}
-	};
-		
 	/**
 	 * Creates a image DOM Element for the specified folder.
 	 * @name orion.explorer.NavigatorRenderer#getFolderImage
@@ -391,8 +368,10 @@ define([
 				var length = parseInt(item.Length, 10),
 					kb = length / 1024;
 				sizeColumn.textContent = Math.ceil(kb).toLocaleString() + " KB"; //$NON-NLS-0$
+			} else {
+				sizeColumn.textContent = "--";
 			}
-			sizeColumn.style.textAlign = "right"; //$NON-NLS-0$
+			sizeColumn.style.textAlign = "left"; //$NON-NLS-0$
 			return sizeColumn;
 		case commitCase:// LastCommit field is optional. For file services that dod not return this properties, we do not have to render this column.
 			if (this.oneColumn || !item.LastCommit) {
@@ -406,6 +385,41 @@ define([
 			return messageColumn;
 		}
 	};
+	
+	
+	/**
+	 * override SelectionRenderer's prototype
+	 */
+	NavigatorRenderer.prototype.getCellHeaderElement = function(col_no) {
+		var labelText = "";
+		switch (col_no) {
+		case 0:
+			labelText = messages["Name"];
+			break;
+		case 1:
+			if (this.oneColumn) {
+				return null;
+			}
+			labelText = messages["Date Modified"];
+			break;
+		case 2:
+			if (this.oneColumn) {
+				return null;
+			}
+			labelText = messages["Size"];
+			break;
+		default:
+			return null;
+		}
+		var th = document.createElement("th"); //$NON-NLS-0$
+		if (this.oneColumn) {
+			th.className = "visuallyhidden"; //$NON-NLS-0$
+		}
+		th.style.paddingTop = th.style.paddingLeft = "4px"; //$NON-NLS-0$
+		th.textContent = labelText;
+		return th;
+	};
+	
 	NavigatorRenderer.prototype.constructor = NavigatorRenderer;
 	
 	//return module exports

@@ -274,8 +274,9 @@ define({//Default message bundle
 	"Cancel": "Cancel", //$NON-NLS-0$  //$NON-NLS-1$
 	"Clear": "Clear", //$NON-NLS-0$  //$NON-NLS-1$
 	"Filter": "Filter", //$NON-NLS-0$  //$NON-NLS-1$
+	"Filter:": "Filter:", //$NON-NLS-0$  //$NON-NLS-1$
 	"FilterCommits": "Filter Commits", //$NON-NLS-0$  //$NON-NLS-1$
-	"FilterCommitsTip": "Toggles the filter commits panel", //$NON-NLS-0$  //$NON-NLS-1$
+	"FilterCommitsTip": "Shows the filter commits panel", //$NON-NLS-0$  //$NON-NLS-1$
 	"MaximizeCmd": "Maximize", //$NON-NLS-0$  //$NON-NLS-1$
 	"MaximizeTip": "Toggles the maximize state of the editor", //$NON-NLS-0$  //$NON-NLS-1$
 	" [New branch]": " [New branch]", //$NON-NLS-0$  //$NON-NLS-1$
@@ -409,6 +410,7 @@ define({//Default message bundle
 	"Push Git Repository": "Push Git Repository", //$NON-NLS-0$  //$NON-NLS-1$
 	"Key:": "Key:", //$NON-NLS-0$  //$NON-NLS-1$
 	"Value:": "Value:", //$NON-NLS-0$  //$NON-NLS-1$
+	"ValueFor:": "Value for ${0}:", //$NON-NLS-0$  //$NON-NLS-1$
 	"New Configuration Entry": "New Configuration Entry", //$NON-NLS-0$  //$NON-NLS-1$
 	"Edit": "Edit", //$NON-NLS-0$  //$NON-NLS-1$
 	"Edit the configuration entry": "Edit the configuration entry", //$NON-NLS-0$  //$NON-NLS-1$
@@ -468,19 +470,20 @@ define({//Default message bundle
 	"See the status" : "See the status", //$NON-NLS-0$  //$NON-NLS-1$
 	"Choose target location" : "Choose target location", //$NON-NLS-0$  //$NON-NLS-1$
 	"Default target location" : "Default target location", //$NON-NLS-0$  //$NON-NLS-1$
+	"Patch Location": "Patch Location", //$NON-NLS-0$  //$NON-NLS-1$
 	"Change..." : "Change...", //$NON-NLS-0$  //$NON-NLS-1$
 	"Merge Squash": "Merge Squash", //$NON-NLS-0$  //$NON-NLS-1$
 	"Squash the content of the branch to the index" : "Squash the content of the branch to the index", //$NON-NLS-0$  //$NON-NLS-1$
 	"Local Branch Name:" : "Local Branch Name:", //$NON-NLS-0$  //$NON-NLS-1$
 	"Local": "local", //$NON-NLS-0$  //$NON-NLS-1$
 	"Filter items" : "Filter items", //$NON-NLS-0$  //$NON-NLS-1$
-	"Filter filter" : "Filter message", //$NON-NLS-0$  //$NON-NLS-1$
-	"Filter author" : "Filter author", //$NON-NLS-0$  //$NON-NLS-1$
-	"Filter committer" : "Filter commiter", //$NON-NLS-0$  //$NON-NLS-1$
-	"Filter sha1" : "Filter sha1", //$NON-NLS-0$  //$NON-NLS-1$
+	"Filter filter" : "Filter by message", //$NON-NLS-0$  //$NON-NLS-1$
+	"Filter author" : "Filter by author", //$NON-NLS-0$  //$NON-NLS-1$
+	"Filter committer" : "Filter by commiter", //$NON-NLS-0$  //$NON-NLS-1$
+	"Filter sha1" : "Filter by sha1", //$NON-NLS-0$  //$NON-NLS-1$
 	"Filter fromDate" : "Filter from date YYYY-MM-DD or 1(h d w m y)", //$NON-NLS-0$  //$NON-NLS-1$
 	"Filter toDate" : "Filter to date YYYY-MM-DD or 1(h d w m y)", //$NON-NLS-0$  //$NON-NLS-1$
-	"Filter path" : "Filter path", //$NON-NLS-0$  //$NON-NLS-1$
+	"Filter path" : "Filter by path", //$NON-NLS-0$  //$NON-NLS-1$
 	"Filter remote branches" : "Filter remote branches", //$NON-NLS-0$  //$NON-NLS-1$
 	"Getting remote branches" : "Getting remote branches ${0}", //$NON-NLS-0$  //$NON-NLS-1$
 	"Getting remote details": "Getting remote details: ${0}", //$NON-NLS-0$  //$NON-NLS-1$
@@ -543,7 +546,10 @@ define({//Default message bundle
 	"Synchronized" : "History", //$NON-NLS-0$  //$NON-NLS-1$
 	"Uncommited" : "Uncommited", //$NON-NLS-0$  //$NON-NLS-1$
 	"Repository:" : "Repository:", //$NON-NLS-0$  //$NON-NLS-1$
+	"RepositoryTooltip" : "Selects the git repository. New repositories can be cloned or init'ed with the Clone or Init buttons.", //$NON-NLS-0$  //$NON-NLS-1$
+	"References" : "References", //$NON-NLS-0$  //$NON-NLS-1$
 	"Reference:" : "Reference:", //$NON-NLS-0$  //$NON-NLS-1$
+	"ReferenceTooltip": "Selects the target reference. The target reference is used for comparing against the active branch to see incoming and outgoing changes. It is also the target of push and sync operations. A reference can be checked out with its Checkout button. Remote repositories can be fetched with their Fetch button.", //$NON-NLS-0$  //$NON-NLS-1$
 	"Author:" : "Author:", //$NON-NLS-0$  //$NON-NLS-1$
 	"Committer:" : "Committer:", //$NON-NLS-0$  //$NON-NLS-1$
 	"SHA1:" : "SHA1:", //$NON-NLS-0$  //$NON-NLS-1$
@@ -588,7 +594,7 @@ define({//Default message bundle
 	'addDependencyName': "Git Repository", //$NON-NLS-0$  //$NON-NLS-1$
 	'addDependencyTooltip': "Associate a git repository with this project.",  //$NON-NLS-0$  //$NON-NLS-1$
 	'addProjectName': "Git Repository",  //$NON-NLS-0$  //$NON-NLS-1$
-	'addProjectTooltip': "Create a project from a git repository.",  //$NON-NLS-0$  //$NON-NLS-1$
+	'addProjectTooltip': "Create a project from a git repository",  //$NON-NLS-0$  //$NON-NLS-1$
 	'fetchGroup': 'Fetch',  //$NON-NLS-0$  //$NON-NLS-1$
 	'pushGroup' : 'Push',  //$NON-NLS-0$  //$NON-NLS-1$
 	'Url:' : 'Url:', //$NON-NLS-0$  //$NON-NLS-1$
@@ -596,15 +602,16 @@ define({//Default message bundle
 	'Ssh Passphrase:' : 'Ssh Passphrase:', //$NON-NLS-0$  //$NON-NLS-1$
 	'confirmUnsavedChanges': 'There are unsaved changes. Do you want to save them?', //$NON-NLS-1$ //$NON-NLS-0$
 	'NewConfigurationEntryTooltip': "Add a new entry to the repository configuration", //$NON-NLS-1$ //$NON-NLS-0$
-	'Configurations' : "Configurations", //$NON-NLS-0$  //$NON-NLS-1$
+	'Configurations' : "Configurations",
+	'ConfigurationsTooltip' : "Displays the repository configurations. New configuration entries can be added with the New button, and existing entries can be edited or removed with their Edit or Delete buttons.", //$NON-NLS-0$  //$NON-NLS-1$
 	'DetachedHead ${0}' : "Detached HEAD@${0}", //$NON-NLS-1$ //$NON-NLS-0$
 	'SingleSubmodule' : "${0} (${1} submodule)", //$NON-NLS-1$ //$NON-NLS-0$
 	'PluralSubmodule' : "${0} (${1} submodules)", //$NON-NLS-1$ //$NON-NLS-0$
 	'UninitializedSubmodule' : " ( Uninitialized Submodule )", //$NON-NLS-1$ //$NON-NLS-0$
 	"Detach Head:": "Detach Head:", //$NON-NLS-0$ //$NON-NLS-1$
-	"Filter repositories": "Filter repositories", //$NON-NLS-0$ //$NON-NLS-1$
-	"Filter references": "Filter references", //$NON-NLS-0$ //$NON-NLS-1$
-	"Filter configuration entries": "Filter configuration entries", //$NON-NLS-0$ //$NON-NLS-1$
+	"Filter repositories": "Filter by repository name", //$NON-NLS-0$ //$NON-NLS-1$
+	"Filter references": "Filter by reference name", //$NON-NLS-0$ //$NON-NLS-1$
+	"Filter configuration entries": "Filter by configuration key", //$NON-NLS-0$ //$NON-NLS-1$
 	"ContinueTooltip": "Use after merging the conflicts and selecting all files", //$NON-NLS-0$  //$NON-NLS-1$
 	"SkipTooltip": "Bypass the current patch", //$NON-NLS-0$  //$NON-NLS-1$
 	"AbortTooltip": "Abort to end the rebase at any time", //$NON-NLS-0$  //$NON-NLS-1$
@@ -627,7 +634,7 @@ define({//Default message bundle
 	"OpenGithubPullRequest": "Open Github Page", //$NON-NLS-0$  //$NON-NLS-1$
 	"OpenGithubPullRequestMsg": "Open the Github page for this Pull Request.", //$NON-NLS-0$  //$NON-NLS-1$
 	"AllowPopUpMsg": "Please allow popups for this site.", //$NON-NLS-0$  //$NON-NLS-1$
-	"ShowGraph":"Show graphical history viewer", //$NON-NLS-0$  //$NON-NLS-1$
+	"ShowGraph":"Graphical history viewer", //$NON-NLS-0$  //$NON-NLS-1$
 	"ToggleGraph":"Toggles the graphical representation of the commit history", //$NON-NLS-0$  //$NON-NLS-1$
 	"Annotated":"Annotated" //$NON-NLS-0$  //$NON-NLS-1$
 });

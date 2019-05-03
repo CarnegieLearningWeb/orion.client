@@ -91,13 +91,14 @@ define([
 			var infoText;
 			if(this._regex) {
 				this._replaceInfo.src = "data:image/gif;base64,R0lGODlhBwAIAMQAAMzX6cbT5kh4qFiIuKC40FCIuGSXwmWZw2SaxGacxmadxmWcxbPM4GigyJW92JzC26DI0P///////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACH5BAEAABIALAAAAAAHAAgAAAUmoEQUQkFI0PBEz5A2yII0w9AwkUPbRpTsjUNEQUsFIgCXiGSShAAAOw==";//$NON-NLS-0$
-				this._replaceInfo.alt = messages["regexOn"];
 				infoText = messages["regexOptionOn"];
+				this._replaceInfo.setAttribute("aria-pressed", "true");
 			} else {
 				this._replaceInfo.src ="data:image/gif;base64,R0lGODlhBwAIAEAAACH5BAEAABIALAAAAAAHAAgAhwAAAAAAMwAAZgAAmQAAzAAA/wArAAArMwArZgArmQArzAAr/wBVAABVMwBVZgBVmQBVzABV/wCAAACAMwCAZgCAmQCAzACA/wCqAACqMwCqZgCqmQCqzACq/wDVAADVMwDVZgDVmQDVzADV/wD/AAD/MwD/ZgD/mQD/zAD//zMAADMAMzMAZjMAmTMAzDMA/zMrADMrMzMrZjMrmTMrzDMr/zNVADNVMzNVZjNVmTNVzDNV/zOAADOAMzOAZjOAmTOAzDOA/zOqADOqMzOqZjOqmTOqzDOq/zPVADPVMzPVZjPVmTPVzDPV/zP/ADP/MzP/ZjP/mTP/zDP//2YAAGYAM2YAZmYAmWYAzGYA/2YrAGYrM2YrZmYrmWYrzGYr/2ZVAGZVM2ZVZmZVmWZVzGZV/2aAAGaAM2aAZmaAmWaAzGaA/2aqAGaqM2aqZmaqmWaqzGaq/2bVAGbVM2bVZmbVmWbVzGbV/2b/AGb/M2b/Zmb/mWb/zGb//5kAAJkAM5kAZpkAmZkAzJkA/5krAJkrM5krZpkrmZkrzJkr/5lVAJlVM5lVZplVmZlVzJlV/5mAAJmAM5mAZpmAmZmAzJmA/5mqAJmqM5mqZpmqmZmqzJmq/5nVAJnVM5nVZpnVmZnVzJnV/5n/AJn/M5n/Zpn/mZn/zJn//8wAAMwAM8wAZswAmcwAzMwA/8wrAMwrM8wrZswrmcwrzMwr/8xVAMxVM8xVZsxVmcxVzMxV/8yAAMyAM8yAZsyAmcyAzMyA/8yqAMyqM8yqZsyqmcyqzMyq/8zVAMzVM8zVZszVmczVzMzV/8z/AMz/M8z/Zsz/mcz/zMz///8AAP8AM/8AZv8Amf8AzP8A//8rAP8rM/8rZv8rmf8rzP8r//9VAP9VM/9VZv9Vmf9VzP9V//+AAP+AM/+AZv+Amf+AzP+A//+qAP+qM/+qZv+qmf+qzP+q///VAP/VM//VZv/Vmf/VzP/V////AP//M///Zv//mf//zP///wAAAAAAAAAAAAAAAAgsAPcpQzMJjbJ9xNAQQ6hwUqaHDws+3PeQoMN9DiUuzFRQ2ZiDyyYdHFhwYUAAOw==";
-				this._replaceInfo.alt = messages["regexOff"];
 				infoText = messages["regexOptionOff"];
+				this._replaceInfo.setAttribute("aria-pressed", "false");
 			}
+			this._replaceInfo.alt = messages["Regular expression"];
 			this._replaceInfo.style.display = "";
 			this._infoTooltip = new mTooltip.Tooltip({
 				node: this._replaceInfo,
@@ -107,7 +108,12 @@ define([
 		},
 		_createActionTable: function() {
 			var that = this;
-			this._commandService.openParameterCollector("pageNavigationActions", function(parentDiv) { //$NON-NLS-0$
+			this._commandService.openParameterCollector("pageNavigationActions", function(parentDiv, dismissArea, containerArea) { //$NON-NLS-0$
+				if (containerArea) {
+					containerArea.onkeydown = function(evt){
+						return that._handleKeyDown(evt);
+					};
+				}
 	
 				// create the input box for searchTerm
 				var searchStringInput = document.createElement('input'); //$NON-NLS-0$
@@ -115,8 +121,8 @@ define([
 				searchStringInput.name = messages["Find:"];
 				searchStringInput.className = "parameterInput"; //$NON-NLS-0$
 				searchStringInput.id = "localSearchFindWith"; //$NON-NLS-0$
-				searchStringInput.placeholder = messages["Find With"];
-				searchStringInput.setAttribute("aria-label", messages["Find With"]); //$NON-NLS-0$
+				searchStringInput.placeholder = messages["FindWhat"];
+				searchStringInput.setAttribute("aria-label", messages["FindWhat"]); //$NON-NLS-0$
 				searchStringInput.oninput = function(evt){
 					return that._handleInput(evt);
 				};
@@ -235,7 +241,8 @@ define([
 					
 				return searchStringInput;
 			},
-			function(){that.hide();});
+			function(){that.hide();},
+			messages["Find"]);
 		},
 		postSelectedLines: function(/*selectedLines*/) {
 			if(this._selectedLinesUI) {
@@ -303,7 +310,10 @@ define([
 				}
 			}.bind(this));
 		},
-	    _initCompletion: function(searchStringInput) {
+		_returnFocus: function() {
+			// Let parameter collector handle this
+		},
+		_initCompletion: function(searchStringInput) {
 			if(this._completion){
 				this._completion.setInputField(searchStringInput);
 			} else { //Create the inputCompletion lazily.
@@ -353,13 +363,27 @@ define([
 		},
 		_createInfoImage: function(text, parent, callback) {
 			var image = document.createElement("img"); //$NON-NLS-0$
+			image.setAttribute("role", "button");
 			image.classList.add("replaceInfo"); //$NON-NLS-0$
+			image.tabIndex = 0;
+			var that = this;
+			function toggle() {
+				that._regExBox.checked = !that._regex;
+				that.setOptions({regex: !that._regex});
+				that.find(true);
+				that._showReplaceInfo();
+			}
 			image.addEventListener("click", function(e) { //$NON-NLS-0$
-				this._regExBox.checked = !this._regex;
-				this.setOptions({regex: !this._regex});
-				this.find(true);
-				this._showReplaceInfo();
-			}.bind(this));
+				toggle();
+			});
+			image.addEventListener("keydown", function(e) { //$NON-NLS-0$
+				if (e.keyCode === lib.KEY.SPACE || e.keyCode === lib.KEY.ENTER) {
+					toggle();
+				}
+				if (e.keyCode === lib.KEY.ESCAPE) {
+					that.hide();
+				}
+			});
 			parent.appendChild(image);
 			return image;
 		},

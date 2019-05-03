@@ -38,35 +38,36 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 	
 		close: function () {
 			if (this._activeElements) {
-				if (this._activeElements.parameterArea) {
-					lib.empty(this._activeElements.parameterArea);
-				}
-				if (this._activeElements.slideContainer) {
-					this._activeElements.slideContainer.classList.remove("slideContainerActive"); //$NON-NLS-0$
-				}
-				if (this._activeElements.dismissArea) {
-					 lib.empty(this._activeElements.dismissArea);
-				}
-				if (this._activeElements.commandNode) {
-					this._activeElements.commandNode.classList.remove("activeCommand"); //$NON-NLS-0$
-				}
-				if (this._activeElements.closeTooltip) {
-		            this._activeElements.closeTooltip.destroy();
-		            this._activeElements.closeTooltip = null;
-		        }
-				this._toolbarLayoutFunction(this._activeElements);
-				if (this._activeElements.onClose) {
-					this._activeElements.onClose();
-				}
-				if (this._oldFocusNode) {
-					this._oldFocusNode.focus();
-					this._oldFocusNode = null;
-				}
+				lib.returnFocus(this._activeElements.slideContainer, this._oldFocusNode, function() {
+					if (this._activeElements.parameterArea) {
+						lib.empty(this._activeElements.parameterArea);
+					}
+					if (this._activeElements.slideContainer) {
+						this._activeElements.slideContainer.classList.remove("slideContainerActive"); //$NON-NLS-0$
+					}
+					if (this._activeElements.dismissArea) {
+						 lib.empty(this._activeElements.dismissArea);
+					}
+					if (this._activeElements.commandNode) {
+						this._activeElements.commandNode.classList.remove("activeCommand"); //$NON-NLS-0$
+					}
+					if (this._activeElements.closeTooltip) {
+			            this._activeElements.closeTooltip.destroy();
+			            this._activeElements.closeTooltip = null;
+			        }
+					this._toolbarLayoutFunction(this._activeElements);
+					if (this._activeElements.onClose) {
+						this._activeElements.onClose();
+					}
+					if (this._oldFocusNode) {
+						this._oldFocusNode = null;
+					}
+				}.bind(this));
 			}
 			this._activeElements = null;
 		},
 		
-		open: function(commandNode, fillFunction, onClose) {
+		open: function(commandNode, fillFunction, onClose, name) {
 			if (typeof commandNode === "string") { //$NON-NLS-0$
 				commandNode = lib.node(commandNode);
 			}
@@ -83,12 +84,13 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 			this._activeElements = this._getElementsFunction(commandNode);
 			if (this._activeElements && this._activeElements.parameterArea && this._activeElements.slideContainer) {
 				this._activeElements.onClose = onClose;
-				var focusNode = fillFunction(this._activeElements.parameterArea, this._activeElements.dismissArea);
+				var focusNode = fillFunction(this._activeElements.parameterArea, this._activeElements.dismissArea, this._activeElements.slideContainer);
 				if (!focusNode) {
 					// no parameters were generated.  
 					return false;
 				}
 				this._activeElements.focusNode = focusNode;
+				var self = this;
 				var close = lib.$$array("#closebox", this._activeElements.dismissArea || this._activeElements.parameterArea); //$NON-NLS-0$
 				if (close.length === 0) {
 					// add the close button if the fill function did not.
@@ -103,12 +105,19 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 							position: ["right", "below", "above", "left"] //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 					});
 					dismiss.appendChild(close);
-					var self = this;
 					close.addEventListener("click", function(event) { //$NON-NLS-0$
 						self.close();
 					}, false);
 				}
+				// ESC closes slideout if it has focus
+				this._activeElements.slideContainer.tabIndex = -1;
+				this._activeElements.slideContainer.style.outline = "none";
+				
 				// all parameters have been generated.  Activate the area.
+				this._activeElements.slideContainer.setAttribute("role", "dialog");
+				if (name) {
+					this._activeElements.slideContainer.setAttribute("aria-label", name);
+				}
 				this._activeElements.slideContainer.classList.add("slideContainerActive"); //$NON-NLS-0$
 				this._toolbarLayoutFunction(this._activeElements);
 
@@ -192,19 +201,19 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 			return true;
 		},
 		
-		collectParameters: function(commandInvocation,cancelCallback) {
+		collectParameters: function(commandInvocation, cancelCallback, name) {
 			if (commandInvocation.parameters) {
 				if (commandInvocation.domNode) {
 					commandInvocation.domNode.classList.add("commandMarker"); //$NON-NLS-0$
 				}
-				return this.open(commandInvocation.domNode || commandInvocation.domParent, this.getFillFunction(commandInvocation,null,cancelCallback));
+				return this.open(commandInvocation.domNode || commandInvocation.domParent, this.getFillFunction(commandInvocation,null,cancelCallback), null, name);
 			}
 			return false;
 		},
 		
 		getFillFunction: function(commandInvocation, closeFunction, cancelFunction) {
 			var self = this;
-			return function(parameterArea, dismissArea) {
+			return function(parameterArea, dismissArea, containerArea) {
 				var first = null;
 				var localClose = function() {
 					if (closeFunction) {
@@ -225,6 +234,16 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 						lib.stop(event);
 					}
 				};
+				
+				if (containerArea) {
+					containerArea.addEventListener("keydown", function(event) { //$NON-NLS-0$
+						if (event.keyCode === lib.KEY.ESCAPE) {
+							if (typeof(cancelFunction) === 'function') cancelFunction(); //$NON-NLS-0$
+							localClose();
+							lib.stop(event);
+						}
+					}, false);
+				}
 
 				var makeButton = function(text, parent) {
 					var button = document.createElement("button"); //$NON-NLS-0$
@@ -360,6 +379,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 					ok.addEventListener("click", function() { //$NON-NLS-0$
 					finish(self);
 				}, false);
+				ok.addEventListener("keydown", keyHandler);
 				
 				var name = parameters.getCancelName ? parameters.getCancelName(commandInvocation) : null;
 				var close = makeButton(name, parentDismiss);
@@ -378,6 +398,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/bidiUtils', '
 					localClose();
 					if (typeof(cancelFunction) === 'function') cancelFunction();
 				}, false);
+				close.addEventListener("keydown", keyHandler);
 				return first;
 			};
 		 }

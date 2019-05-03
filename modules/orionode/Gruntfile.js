@@ -109,6 +109,7 @@ module.exports = function(grunt) {
 					return {
 						expand: true,
 						cwd: modulePath,
+						dot: true,
 						src: SOURCE_GLOB,
 						dest: _path.join('lib', _path.basename(modulePath))
 					};
@@ -197,7 +198,7 @@ module.exports = function(grunt) {
 
 	// Dynamic configuration
 	grunt.config("requirejs.compile.options", util.mixin(grunt.config("nodeBuildConfig"), {
-		optimize: "uglify2",
+		optimize: skipMinify ? "none" : "uglify2",
 		generateSourceMaps: generateSourceMaps,
 		appDir: staging,
 		baseUrl: "./",
@@ -230,11 +231,7 @@ module.exports = function(grunt) {
 	grunt.registerTask("optimize", fingerPrint ?
 		["printBuild", "copy:stage", "requirejs", "fingerprint", "string-replace:requiremin", "copy:unstage"]:
 		["printBuild", "copy:stage", "requirejs", "string-replace:requiremin", "copy:unstage"]);
-	var tasksArray = ["checkDirs", "clean", "copy:orionserver"];
-	if(!skipMinify){
-		tasksArray.push("optimize");
-	}
-	grunt.registerTask("default", tasksArray);
+	grunt.registerTask("default", ["checkDirs", "clean", "copy:orionserver", "optimize"]);
 	grunt.registerTask("server_unit_tests", ["mocha_istanbul:coverage"]);
   grunt.registerTask("client_unit_tests", ["karma:client_unit_tests:start"]);
   grunt.registerTask("combine_reports", ["makeReport"]);

@@ -10,6 +10,9 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 define(['orion/webui/littlelib'], function(lib) {
+	
+	var ID_INDEX = 0;
+	var RANDOM = Date.now();
 
 	/**
 	 * Attaches tooltip behavior to a given node.  The tooltip will be assigned class "tooltip" which can be
@@ -122,19 +125,18 @@ define(['orion/webui/littlelib'], function(lib) {
 				var self = this;
 				lib.addAutoDismiss([this._tip, this._node], function() {self.hide();});
 
-				if (this._showByKB) {
-					this._tip.tabIndex = "0";
-				}
 				this._tip.addEventListener("keydown", function (e) {
 					if (e.keyCode === lib.KEY.ESCAPE) {
-						self._node.focus();
-						self.hide();
+						lib.returnFocus(self._tipInner, self._originalFocus, function() {
+							self.hide(0);
+						});
 					}
 				}, false);
 
 				if (this._trigger === "mouseover") { //$NON-NLS-0$
 					this._tipInner.setAttribute("role", "tooltip"); //$NON-NLS-2$ //$NON-NLS-1$
-					this._tipInner.id = "tooltip" + Date.now(); //$NON-NLS-0$
+					// if we are in an iframe dialog, need to use a different ID string to ensure unique id
+					this._tipInner.id = "tooltip-" + RANDOM + "-" + ID_INDEX++; //$NON-NLS-1$ //$NON-NLS-0$
 					var label = this._node.getAttribute("aria-label");
 					if (this._text !== label) {
 						this._node.setAttribute("aria-describedby", this._tipInner.id); //$NON-NLS-0$
@@ -157,6 +159,7 @@ define(['orion/webui/littlelib'], function(lib) {
 					}, false);
 				}
 			}
+			this._tipInner.tabIndex = this._showByKB ? 0 : -1;
 			return this._tip;
 		},
 		
@@ -312,7 +315,7 @@ define(['orion/webui/littlelib'], function(lib) {
 		/**
 		 * Show the tooltip.
 		 */			
-		show: function() {
+		show: function(delay) {
 			if(this.isTurnedOff){
 				return;
 			}
@@ -323,14 +326,16 @@ define(['orion/webui/littlelib'], function(lib) {
 				window.clearTimeout(this._timeout);
 				this._timeout = null;
 			}
-			if (this._showDelay) {
-				this._timeout = window.setTimeout(this._showImmediately.bind(this), this._showDelay);	
+			var showDelay = delay !== undefined ? delay : this._showDelay;
+			if (showDelay) {
+				this._timeout = window.setTimeout(this._showImmediately.bind(this), showDelay);	
 			} else {
 				this._showImmediately();
 			}
 		},
 		
 		_showImmediately: function() {
+			this._originalFocus = document.activeElement;
 			var positioned = false;
 			var index = 0;
 			// See if the tooltip can fit anywhere around the anchor
@@ -350,10 +355,10 @@ define(['orion/webui/littlelib'], function(lib) {
 			}
 			
 			if (this._showByKB) {
-				this._tip.focus();
+				this._tipInner.focus();
 			}
 			
-			lib.trapTabs(this._tip);
+			lib.trapTabs(this._tipInner);
 			
 			if (this._afterShowing) {
 				this._afterShowing();
@@ -399,6 +404,7 @@ define(['orion/webui/littlelib'], function(lib) {
 				this._tail = null;
 			}
 			if (this._node) {
+				this._node.removeAttribute("aria-describedby"); //$NON-NLS-0$
 				this._node.removeEventListener("click", this._clickHandler, false); //$NON-NLS-0$
 				this._node.removeEventListener("mouseover", this._mouseoverHandler, false); //$NON-NLS-0$
 				this._node.removeEventListener("focus", this._focusHandler, false); //$NON-NLS-0$

@@ -264,7 +264,7 @@ define([
 			if (this.section.filterBox) {
 				this.section.filterBox.destroy();
 			}
-			this.section.filterBox = uiUtil.createFilter(this.section, messages["Filter repositories"],  function(value) {
+			this.section.filterBox = uiUtil.createFilter(this.section, "Filter repositories",  function(value) {
 				this.model.filterQuery = value.trim();
 				this.changedItem();
 			}.bind(this));
@@ -287,6 +287,8 @@ define([
 			});
 			this.createFilter();
 			this.createTree(this.parentId, model, {
+				role: "treegrid",
+				name: messages["Repo"],
 				setFocus: false, // do not steal focus on load
 				selectionPolicy: this.selectionPolicy,
 				onComplete: function() {
@@ -331,6 +333,21 @@ define([
 	}
 	GitRepoListRenderer.prototype = Object.create(mExplorer.SelectionRenderer.prototype);
 	objects.mixin(GitRepoListRenderer.prototype, {
+		getCellHeaderElement: function(col_no) {
+			var labelText = "";
+			switch (col_no) {
+			case 0:
+				labelText = messages["Repo"];
+				break;
+			default:
+				return null;
+			}
+			var th = document.createElement("th"); //$NON-NLS-0$
+			th.className = "visuallyhidden"; //$NON-NLS-0$
+			th.style.paddingTop = th.style.paddingLeft = "4px"; //$NON-NLS-0$
+			th.textContent = labelText;
+			return th;
+		},
 		getCellElement: function(col_no, item, tableRow){
 			var div, td;
 			switch (col_no) {

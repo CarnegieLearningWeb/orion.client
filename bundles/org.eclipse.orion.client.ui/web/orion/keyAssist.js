@@ -37,14 +37,24 @@ define([
 			keyAssistDiv.id = "keyAssist"; //$NON-NLS-1$
 			keyAssistDiv.style.display = "none"; //$NON-NLS-1$
 			keyAssistDiv.classList.add("keyAssistFloat"); //$NON-NLS-1$
-			keyAssistDiv.setAttribute("role", "menu"); //$NON-NLS-2$ //$NON-NLS-1$
+			keyAssistDiv.setAttribute("role", "dialog"); //$NON-NLS-2$ //$NON-NLS-1$
+			keyAssistDiv.setAttribute("aria-modal", "true"); //$NON-NLS-2$ //$NON-NLS-1$
+			keyAssistDiv.setAttribute("aria-label", messages["Key Bindings"]); //$NON-NLS-2$ //$NON-NLS-1$
+
+			var keyAssistCombo = document.createElement("div"); //$NON-NLS-1$
+			keyAssistCombo.setAttribute("role", "combobox"); //$NON-NLS-1$ //$NON-NLS-0$
+			keyAssistCombo.setAttribute("aria-haspopup", "grid"); //$NON-NLS-1$ //$NON-NLS-0$
+			keyAssistCombo.setAttribute("aria-owns", "keyAssistList"); //$NON-NLS-1$ //$NON-NLS-0$
+			keyAssistCombo.setAttribute("aria-expanded", "true"); //$NON-NLS-1$ //$NON-NLS-0$
 			var keyAssistInput = this._keyAssistInput = document.createElement("input"); //$NON-NLS-1$
 			keyAssistInput.classList.add("keyAssistInput"); //$NON-NLS-1$
 			keyAssistInput.type = "text"; //$NON-NLS-1$
-			keyAssistInput.setAttribute("aria-label", "Filter bindings:");
+			keyAssistInput.setAttribute("aria-label", "Filter bindings:"); //$NON-NLS-1$ //$NON-NLS-0$
 			keyAssistInput.placeholder = messages["Filter bindings"]; //$NON-NLS-1$
 			keyAssistInput.setAttribute("aria-autocomplete", "list"); //$NON-NLS-1$ //$NON-NLS-0$
-			keyAssistDiv.appendChild(keyAssistInput);
+			keyAssistInput.setAttribute("aria-controls", "keyAssistList"); //$NON-NLS-1$ //$NON-NLS-0$
+			keyAssistCombo.appendChild(keyAssistInput);
+			keyAssistDiv.appendChild(keyAssistCombo);
 
 			var keyAssistContents = this._keyAssistContents = document.createElement("div"); //$NON-NLS-1$
 			keyAssistContents.classList.add("keyAssistContents"); //$NON-NLS-1$
@@ -53,6 +63,8 @@ define([
 			}
 			keyAssistDiv.appendChild(keyAssistContents);
 			var keyAssistTable = this._keyAssistTable = document.createElement('table'); //$NON-NLS-1$
+			keyAssistTable.setAttribute("role", "grid"); //$NON-NLS-1$ //$NON-NLS-0$
+			keyAssistTable.id = "keyAssistList"; //$NON-NLS-1$
 			keyAssistTable.tabIndex = 0;
 			keyAssistTable.classList.add("keyAssistList"); //$NON-NLS-1$
 			keyAssistContents.appendChild(keyAssistTable);
@@ -64,13 +76,16 @@ define([
 			keyAssistTable.addEventListener("keydown", function (e) { //$NON-NLS-1$
 				this._keyDown(e);
 			}.bind(this));
+			keyAssistTable.addEventListener("focus", function (e) { //$NON-NLS-1$
+				this.selectRow(this._selectedIndex !== -1 ? this._selectedIndex : 0);
+			}.bind(this));
 			keyAssistInput.addEventListener("input", function (e) { //$NON-NLS-1$
 				this.filterChanged();
 			}.bind(this));
 			keyAssistContents.addEventListener(util.isFirefox ? "DOMMouseScroll" : "mousewheel", function (e) { //$NON-NLS-2$ //$NON-NLS-1$
 				this._scrollWheel(e);
 			}.bind(this));
-			document.addEventListener("keydown", function (e) { //$NON-NLS-1$
+			keyAssistDiv.addEventListener("keydown", function (e) { //$NON-NLS-1$
 				if (e.keyCode === lib.KEY.ESCAPE) {
 					this.hide();
 				}
@@ -112,11 +127,29 @@ define([
 			this._selectedRow = null;
 			this._keyAssistContents.scrollTop = 0;
 			this._idCount = 0;
+			this.createHeaders();
 			for (var i=0; i<this._providers.length; i++) {
 				this._providers[i].showKeyBindings(this);
 			}
-			this.createHeader(messages["Global"]);
+			this.createHeader(messages["Global"], "GlobalScope"); //$NON-NLS-0$
 			this.commandRegistry.showKeyBindings(this);
+		},
+		createHeaders: function () {
+			var thead = document.createElement('thead'); //$NON-NLS-0$
+			var row = document.createElement('tr'); //$NON-NLS-0$
+			row.setAttribute("role", "row"); //$NON-NLS-1$ //$NON-NLS-0$
+			["Spacer", "Command", "KeyBinding", "Edit"].forEach(function(id) { //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+				var cell = document.createElement('th'); //$NON-NLS-0$
+				cell.classList.add("visuallyhidden"); //$NON-NLS-0$
+				cell.setAttribute("role", "columnheader"); //$NON-NLS-1$ //$NON-NLS-0$
+				cell.id = id + "Col";
+				if (id === "Command" || id === "KeyBinding") { //$NON-NLS-1$ //$NON-NLS-0$
+					cell.textContent = messages[id];
+				}
+				row.appendChild(cell);
+			});
+			thead.appendChild(row);
+			this._keyAssistTable.appendChild(thead);	
 		},
 		createItem: function (binding, name, cmdID, execute) {
 			var bindingString = binding ? UIUtil.getUserKeyString(binding) : messages["NoBinding"];
@@ -139,7 +172,8 @@ define([
 			}
 			var row = this._keyAssistTable.insertRow(-1);
 			row.id = "keyAssist-keyBinding-" + this._idCount++; //$NON-NLS-1$
-			row.setAttribute("role", "menuitem"); //$NON-NLS-2$ //$NON-NLS-1$
+			row.setAttribute("role", "row"); //$NON-NLS-2$ //$NON-NLS-1$
+			row.tabIndex = -1;
 			row.cmdID = cmdID;
 			row._execute = execute;
 			row.curBinding = binding;
@@ -152,23 +186,34 @@ define([
 			
 			var column = row.insertCell(-1);
 			column.classList.add("keyAssistSpacer"); //$NON-NLS-1$
+			column.headers = this._lastHeaderID + " " + "SpacerCol"; //$NON-NLS-0$
 			column.appendChild(document.createElement("div")); //$NON-NLS-1$
 			
-			var column = row.insertCell(-1);
+			column = row.insertCell(-1);
 			column.classList.add("keyAssistName"); //$NON-NLS-1$
+			column.headers = this._lastHeaderID + " " + "CommandCol"; //$NON-NLS-0$
+			column.setAttribute("role", "gridcell"); //$NON-NLS-1$ //$NON-NLS-0$
 			column.appendChild(document.createTextNode(name));
 			
 			column = row.insertCell(-1);
 			column.classList.add("keyAssistAccel"); //$NON-NLS-1$
+			column.headers = this._lastHeaderID + " " + "KeyBindingCol"; //$NON-NLS-0$
+			column.setAttribute("role", "gridcell"); //$NON-NLS-1$ //$NON-NLS-0$
 			var bindingSpan = document.createElement("span"); //$NON-NLS-1$
 			bindingSpan.textContent = bindingString;
 			column.appendChild(bindingSpan);
 			
 			column = row.insertCell(-1);
 			column.classList.add("keyAssistActions"); //$NON-NLS-1$
+			column.headers = this._lastHeaderID + " " + "EditCol"; //$NON-NLS-0$
 			var eb = document.createElement("button"); //$NON-NLS-1$
+			eb.tabIndex = -1;
 			eb.classList.add("keyAssistEditButton"); //$NON-NLS-1$
-			eb.classList.add("core-sprite-edit"); //$NON-NLS-1$
+			eb.classList.add("orionButton"); //$NON-NLS-1$
+			eb.classList.add("commandImage"); //$NON-NLS-1$
+			var span = document.createElement("span"); //$NON-NLS-0$
+			span.classList.add("core-sprite-edit"); //$NON-NLS-1$
+			eb.appendChild(span);
 			eb.setAttribute("aria-label", messages["Edit"]); //$NON-NLS-1$
 			//eb.textContent = "E"; //$NON-NLS-1$
 			eb.addEventListener("click", function(evt) {
@@ -274,15 +319,22 @@ define([
 			keyAssistKBEdit.focus();
 			this._editingABinding = true;
 		},
-		createHeader: function (name) {
+		createHeader: function (name, id) {
 			this._lastHeader = name;
-			var row = this._keyAssistTable.insertRow(-1);
-			row.classList.add("keyAssistSection"); //$NON-NLS-1$
-			var column = row.insertCell(-1);
+			this._lastHeaderID = id;
+			var rowgroup = document.createElement("tbody");
+			this._keyAssistTable.appendChild(rowgroup);
+			var row = rowgroup.insertRow(-1);
+			row.classList.add("keyAssistSection"); //$NON-NLS-0$
+			var column = document.createElement('th'); //$NON-NLS-0$
+			column.id = id;
 			column.colSpan = 4;
-			var heading = document.createElement("h2"); //$NON-NLS-1$
+			column.scope = "rowgroup"; //$NON-NLS-0$
+			var heading = document.createElement("h2"); //$NON-NLS-0$
+			heading.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-0$
 			heading.appendChild(document.createTextNode(name));
 			column.appendChild(heading);
+			row.appendChild(column);
 		},
 		execute: function () {
 			window.setTimeout(function () {
@@ -311,13 +363,10 @@ define([
 			if (!this.isVisible()) {
 				return;
 			}
-			var activeElement = document.activeElement;
 			var keyAssistDiv = this._keyAssistDiv;
-			var hasFocus = keyAssistDiv === activeElement || (keyAssistDiv.compareDocumentPosition(activeElement) & 16) !== 0;
-			keyAssistDiv.style.display = "none"; //$NON-NLS-1$
-			if (hasFocus && document.compareDocumentPosition(this._previousActiveElement) !== 1) {
-				this._previousActiveElement.focus();
-			}
+			lib.returnFocus(keyAssistDiv, this._previousActiveElement, function() {
+				keyAssistDiv.style.display = "none"; //$NON-NLS-1$
+			});
 			this._previousActiveElement = null;
 		},
 		isVisible: function () {
@@ -346,19 +395,32 @@ define([
 			this.selectRow(selectedIndex, rows);
 		},
 		selectRow: function(index, rows) {
+			var row, editButton;
+			if (!rows) {
+				rows = this._keyAssistTable.querySelectorAll(".keyAssistItem");
+			}
 			if (this._selectedIndex !== -1) {
 				row = rows[this._selectedIndex];
 				row.classList.remove("selected"); //$NON-NLS-1$
-				row.childNodes[3].firstChild.classList.remove("keyAssistEditButtonVisible"); //$NON-NLS-1$
+				editButton = row.querySelector(".keyAssistEditButton");
+				if (editButton) {
+					editButton.classList.remove("keyAssistEditButtonVisible"); //$NON-NLS-1$
+					editButton.tabIndex = -1;
+				}
 				this._selectedRow = null;
 			}
 			
 			if (index >= 0 && index < rows.length) {
 				this._selectedIndex = index;
 				this._selectedRow = rows[this._selectedIndex];
-				var row = this._selectedRow;
+				row = this._selectedRow;
 				row.classList.add("selected"); //$NON-NLS-1$
-				row.childNodes[3].firstChild.classList.add("keyAssistEditButtonVisible"); //$NON-NLS-1$
+				editButton = row.querySelector(".keyAssistEditButton");
+				if (editButton) {
+					editButton.classList.add("keyAssistEditButtonVisible"); //$NON-NLS-1$
+					editButton.tabIndex = 0;
+				}
+				this._keyAssistInput.setAttribute("aria-activedescendant", row.id); //$NON-NLS-1$
 				this._keyAssistTable.setAttribute("aria-activedescendant", row.id); //$NON-NLS-1$
 				this._keyAssistTable.focus();
 				var rowRect = row.getBoundingClientRect();
@@ -379,6 +441,7 @@ define([
 			if (this.isVisible()) {
 				return;
 			}
+			lib.trapTabs(this._keyAssistDiv);
 			this._previousActiveElement = document.activeElement;
 			this.createContents();
 			this._keyAssistContents.style.height = Math.floor(this._keyAssistDiv.parentNode.clientHeight * 0.75) + "px"; //$NON-NLS-1$

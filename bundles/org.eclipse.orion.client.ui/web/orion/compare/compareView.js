@@ -13,6 +13,7 @@
 define(['i18n!orion/compare/nls/messages',
 		'orion/Deferred',
 		'orion/EventTarget',
+		'orion/i18nUtil',
 		'orion/webui/littlelib',
 		'orion/compare/diffParser',
 		'orion/compare/compareRulers',
@@ -25,7 +26,7 @@ define(['i18n!orion/compare/nls/messages',
         'orion/compare/compareUtils',
         'orion/compare/jsdiffAdapter',
         'orion/compare/diffTreeNavigator'],
-function(messages, Deferred, mEventTarget, lib, mDiffParser, mCompareRulers, mEditor, mEditorFeatures, mKeyBinding, mTextTheme, mTextView,
+function(messages, Deferred, mEventTarget, i18nUtil, lib, mDiffParser, mCompareRulers, mEditor, mEditorFeatures, mKeyBinding, mTextTheme, mTextView,
 		 mCompareUIFactory, mCompareUtils, mJSDiffAdapter, mDiffTreeNavigator,  mTextMateStyler, mHtmlGrammar, mTextStyler) {
 var exports = {};
 /**
@@ -511,6 +512,7 @@ exports.TwoWayCompareView = (function() {
 			domNode: parentDiv
 		});
 				
+		editor.setNoFocus(true);
 		editor.installTextView();
 		editor.setInput(null, null, fileOptions.Content ? fileOptions.Content : initString);
 		editor.setOverviewRulerVisible(false);
@@ -684,13 +686,21 @@ exports.TwoWayCompareView = (function() {
 		}
 		title1 = simplified1.join(separator);
 		title2 = simplified2.join(separator);
+		var label1 = segments1[segments1.length - 1];
+		var label2 = segments2[segments2.length - 1];
 		if(editorIndex === 1){
+			this._editors[1].getTextView().setOptions({
+				label: i18nUtil.formatMessage(label1 === label2 ? messages.newContents : messages.fileContents, label1)
+			});
 			var newFileTitleNode = this._uiFactory.getTitleDiv(true);
 			if(newFileTitleNode){
 				lib.empty(newFileTitleNode);
 				newFileTitleNode.appendChild(document.createTextNode(dirty || this._editors[editorIndex].isDirty() ? title1 + "*" : title1)); //$NON-NLS-0$
 			}
 		} else {
+			this._editors[0].getTextView().setOptions({
+				label: i18nUtil.formatMessage(label1 === label2 ? messages.oldContents : messages.fileContents, label2)
+			});
 			var oldFileTitleNode = this._uiFactory.getTitleDiv(false);
 			if(oldFileTitleNode){
 				lib.empty(oldFileTitleNode);
@@ -815,7 +825,8 @@ exports.InlineCompareView = (function() {
 			annotationFactory: new mEditorFeatures.AnnotationFactory(),
 			domNode: parentDiv
 		});
-				
+	
+		this._editor.setNoFocus(true);
 		this._editor.installTextView();
 		this._editor.setInput(null, null, initString);
 		this._editor.setOverviewRulerVisible(false);
@@ -898,6 +909,9 @@ exports.InlineCompareView = (function() {
 			}
 		}else{
 			this._mapper = result.mapper;
+			this._textView.setOptions({
+				label: i18nUtil.formatMessage(messages.fileContents, this.options.oldFile.Name.split("/").pop())
+			});
 			this._textView.getModel().setText(this.options.oldFile.Content);
 			//Merge the text with diff 
 			var rFeeder = new mDiffTreeNavigator.inlineDiffBlockFeeder(result.mapper, 1);

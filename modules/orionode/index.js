@@ -111,9 +111,15 @@ function tryLoadRouter(endpoint, options) {
 	if (isEndpoint && csrf && (endpoint.checkCSRF === undefined || endpoint.checkCSRF)) { // perform CSRF by default
 		args.push(csrf);
 		args.push(function(req, res, next) {
-			var tokenCookie = 'x-csrf-token';
+			var preamble = options.configParams.get("orion_cookies_name_premable") || "";
+			var tokenCookie = preamble + 'x-csrf-token';
 			if (!req.cookies[tokenCookie]) {
-				res.cookie(tokenCookie, req.csrfToken());
+				var cookieOptions;
+				var cookiesPath = options.configParams.get("orion_cookies_path");
+				if (cookiesPath) {
+					cookieOptions = {path: cookiesPath};
+				}
+				res.cookie(tokenCookie, req.csrfToken(), cookieOptions);
 			}
 			next();
 		});
@@ -267,7 +273,9 @@ module.exports = function startServer(options) {
 		passport.session()
 	].concat(options.authenticate || []);
 	if (options.configParams.get("orion.XSRFPreventionFilterEnabled")) {
-		csrf = csurf({ cookie: true });
+		var cookieKey = (options.configParams.get("orion_cookies_name_premable") || "") + '_csrf';
+		var cookiePath = options.configParams.get("orion_cookies_path") || '/';
+		csrf = csurf({cookie: {key: cookieKey, path: cookiePath }});
 		options.CSRF = csrf;
 	} else {
 		/**
@@ -312,10 +320,13 @@ module.exports = function startServer(options) {
 			setHeaders: function(res, urlPath, stat) {
 				const ext = path.extname(urlPath);
 				if (path.basename(path.dirname(urlPath)) === "requirejs") {
+					api.addStrictTransportHeaders(res);
 					res.setHeader("Cache-Control", _24_HOURS);
 				} else if (EXT_CACHE_MAPPING[ext]) {
+					api.addStrictTransportHeaders(res);
 					res.setHeader("Cache-Control", EXT_CACHE_MAPPING[ext]);
 				} else {
+					api.addStrictTransportHeaders(res);
 					res.setHeader("Cache-Control", _24_HOURS);
 				}
 				if (urlPath.endsWith(".woff") || urlPath.endsWith(".ttf")) {

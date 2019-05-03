@@ -18,9 +18,12 @@ var ETag = require('./util/etag'),
 	api = require('./api'),
 	log4js = require('log4js'),
 	logger = log4js.getLogger("file"),
+	constants = require("constants"),
 	fs = Promise.promisifyAll(require('fs'));
 	
 var ISFS_CASE_INSENSITIVE;
+
+var isWin = /^win/.test(process.platform);
 
 var ChangeType = module.exports.ChangeType = Object.freeze({
 	/**
@@ -427,13 +430,15 @@ function fileJSON(store, fileRoot, workspaceRoot, file, stats, depth, metadataMi
 			Location: getFileLocation(fileRoot, wwwpath, isDir),
 			Directory: isDir,
 			LocalTimeStamp: stats.mtime.getTime(),
-			Parents: getParents(fileRoot, wwwpath),
-			Attributes: {
-				// TODO fix this
-				ReadOnly: false, //!(stats.mode & USER_WRITE_FLAG === USER_WRITE_FLAG),
-				Executable: false //!(stats.mode & USER_EXECUTE_FLAG === USER_EXECUTE_FLAG)
-			}
+			Length: stats.size,
+			Parents: getParents(fileRoot, wwwpath)
 		};
+		if (!isWin) {
+			result.Attributes = {
+				ReadOnly: !((stats.mode & constants.S_IWUSR) === constants.S_IWUSR),
+				Executable: (stats.mode & constants.S_IXUSR) === constants.S_IXUSR
+			};
+		}
 		if (metadataMixins) {
 			Object.keys(metadataMixins).forEach(function(property) {
 				result[property] = metadataMixins[property];

@@ -8,7 +8,7 @@
 		<div class="searchOptionControlBar">
 			<div class="searchGeneralOptionBlock">
 				<span class="searchOption">
-					<button id="toggleReplaceLink" class="searchOptionControlButton" aria-pressed="false" aria-label="${Replace Mode}">${Show Replace}</button>
+					<button id="toggleReplaceLink" class="searchOptionControlButton toggleReplaceLink" aria-pressed="false" aria-label="${Replace Mode}"></button>
 				</span>
 				<span class="searchOption">
 					<button id="advSearchCaseSensitive" class="searchOptionControlButton advSearchCaseSensitive" aria-pressed="false" aria-label="${Case sensitive}"></button>
@@ -26,7 +26,7 @@
 				<div class="searchOptionBlock">
 					<span id="searchScopeLabel" class="searchLabel scopeLabel"></span>
 					<div id="searchScopeInputWrapper" class="searchScopeInputWrapper">
-						<span id="searchScopeElementWrapper" class="searchScopeElementWrapper" role="textbox" tabindex="0" aria-labelledby="searchScopeLabel" aria-readonly="true"></span>
+						<span id="searchScopeElementWrapper" class="searchScopeElementWrapper" role="textbox" aria-labelledby="searchScopeLabel" aria-readonly="true"></span>
 						<button id="searchScopeSelectButton" class="commandButton core-sprite-outline searchScopeSelectButton" aria-label="${Choose a Folder}"></button>
 					</div>
 					<div role="radiogroup" aria-labelledby="searchScopeLabel">
@@ -60,8 +60,12 @@
 			</div>
 	</div>
 </div>
-<a id="toggleSearchOptionsLink" class="toggleDisplayLink toggleSearchOptionsLink linkHidden"></a>
+<div>
+	<button id="toggleSearchOptionsLink" class="searchOptionControlButton toggleDisplayLink toggleSearchOptionsLink linkHidden"></button>
+</div>
 <div id="searchResultsTitle" class="searchResultsTitle"></div>
-<div id="searchPageActions" class="searchPageActions layoutLeft"></div>
-<div id="searchPageActionsRight" class="searchPageActions searchPageActionsRight layoutRight"></div>
+<div>
+	<div id="searchPageActions" class="searchPageActions layoutLeft"></div>
+	<div id="searchPageActionsRight" class="searchPageActions searchPageActionsRight layoutRight"></div>
+</div>
 <div class="searchResultsWrapperDiv"></div>

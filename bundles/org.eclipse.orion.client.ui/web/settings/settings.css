@@ -53,6 +53,10 @@
 	top: 0;
 }
 
+.sidebarToolbar {
+	display: none;
+}
+
 .navbar {
 	background: white;
 	margin: 0;
@@ -66,9 +70,9 @@
 	display: block;
 	font-size: 8pt;
 	font-weight: bold;
-	outline: none;
 	padding: 6px 0;
 	padding-left: 20px;
+	margin: 3px;
 	cursor: pointer;
 	list-style: none;
 	text-transform: uppercase;
@@ -303,6 +307,10 @@ html[dir="rtl"] .setting-row { /* ACGC */
 	top: 10px;
 }
 
+.stretch {
+	float: left;
+}
+
 html[dir="rtl"] .addPluginClosed{ /* ACGC */
 	float: left;
 }
@@ -494,6 +502,7 @@ html[dir="rtl"] .serviceContainer { /* ACGC */
 	font-size: 9px;
 	font-weight: normal;
 	margin-left: 5px;
+	margin-right: 5px;
 	border: 1px solid #707070;
 }
 
@@ -708,7 +717,6 @@ html[dir="rtl"] .themeController { /* ACGC */
     float: right;
     background: none;
     position:relative;
-    outline: none;
     top: 0px;
 }
 
@@ -765,7 +773,6 @@ _:-moz-tree-row(hover), .colorpicker-input { /* Firefox  HACK */
     font-size: 12px;
     position: relative;
     top: -2px;
-    outline: none;
 }
 
 html[dir="rtl"] .scopeList li select{ /* ACGC */
@@ -832,11 +839,10 @@ html[dir="rtl"] #editorThemeDelete, #editorThemeRevert, #editorThemeSave { /* AC
     float: left;
 }
  
-.editorThemeCleanButton{
-	padding:0;
+.editorThemeCleanButton {
+	padding:0 3px 3px 3px;
 	border:none;
 	background:none;
-	outline:none;
 }
 
 .editorThemeButton {

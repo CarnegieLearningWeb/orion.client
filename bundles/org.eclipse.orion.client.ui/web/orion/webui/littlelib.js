@@ -141,7 +141,7 @@ define(["orion/util"], function(util) {
 	 * @param {Node} node
 	 */
 	function empty(node) {
-		while (node.hasChildNodes()) {
+		while (node && node.hasChildNodes()) {
 			var child = node.firstChild;
 			node.removeChild(child);
 		}
@@ -180,8 +180,9 @@ define(["orion/util"], function(util) {
 	/* 
 	 * Inspired by http://brianwhitmer.blogspot.com/2009/05/jquery-ui-tabbable-what.html
 	 */
-	function firstTabbable(node) {
-		if (_getTabIndex(node) >= 0 && !node.disabled && node.offsetParent) {
+	function firstTabbable(node, allowFocusable) {
+		var tabIndex = _getTabIndex(node);
+		if ((tabIndex >= 0 || allowFocusable && tabIndex >= -1) && !node.disabled && node.offsetParent && window.getComputedStyle(node).visibility === "visible") {
 			return node;
 		}
 		if (node.hasChildNodes()) {
@@ -204,7 +205,7 @@ define(["orion/util"], function(util) {
 				}
 			}
 		}
-		if (_getTabIndex(node) >= 0 && !node.disabled && node.offsetParent) {
+		if (_getTabIndex(node) >= 0 && !node.disabled && node.offsetParent && window.getComputedStyle(node).visibility === "visible") {
 			return node;
 		}
 		return null;
@@ -475,6 +476,50 @@ define(["orion/util"], function(util) {
 	}
 	
 	/**
+	 * Return focus to the element that was active before the <code>hidingParent</code> was
+	 * shown if the parent contains the active element. If the previous active node is no
+	 * longer available, the first tabbable in the nearest ancestor is focused.
+	 * 
+	 * @name orion.webui.littlelib.returnFocus
+	 * @function
+	 * @static
+	 * @param {Element} hidingParent The node that is hiding
+	 * @param {Element} previousActiveElement The previously focus node
+	 */
+	function returnFocus(hidingParent, previousActiveElement, hideCallback) {
+		var activeElement = document.activeElement;
+		var hasFocus = hidingParent && (hidingParent === activeElement || (hidingParent.compareDocumentPosition(activeElement) & 16) !== 0);
+		if (hideCallback) {
+			hideCallback();
+		}
+		var temp = previousActiveElement;
+		if (hasFocus) {
+			while (temp && temp !== document.body) {
+				if (document.compareDocumentPosition(temp) !== 1 && temp.offsetParent) {
+					var tabbable = firstTabbable(temp, previousActiveElement === temp);
+					if (tabbable) {
+						temp = tabbable;
+						break;
+					}
+				}
+				if (temp.classList.contains("contextMenu")) {
+					if (temp.triggerNode) {
+						temp = temp.triggerNode;
+						continue;
+					}
+					break;
+				}
+				temp = temp.parentNode;
+			}
+			if (temp) {
+				temp.focus();
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/**
 	 * Cancels the default behavior of an event and stops its propagation.
 	 * @name orion.webui.littlelib.stop
 	 * @function
@@ -494,6 +539,7 @@ define(["orion/util"], function(util) {
 	function setFramesEnabled(enable) {
 		var frames = document.getElementsByTagName("iframe"); //$NON-NLS-0$
 		for (var i = 0; i<frames.length; i++) {
+			if (frames[i].parentNode === document.body) continue;
 			frames[i].parentNode.style.pointerEvents = enable ? "" : "none"; //$NON-NLS-0$
 		}
 	}
@@ -578,6 +624,7 @@ define(["orion/util"], function(util) {
 		validId: validId,
 		getOffsetParent: getOffsetParent,
 		removeAutoDismiss: removeAutoDismiss,
+		returnFocus: returnFocus,
 		keyName: keyName,
 		KEY: KEY,
 		createNodes: createNodes

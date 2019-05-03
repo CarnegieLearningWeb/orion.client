@@ -10,9 +10,23 @@
  ******************************************************************************/
 
 /*eslint-env browser, amd*/
-define(['i18n!orion/compare/nls/messages', 'require', 'orion/webui/littlelib', 'orion/i18nUtil', 'orion/explorers/explorer', 'orion/fileClient', 'orion/commands', 
-		'orion/explorers/navigationUtils', 'orion/crawler/searchCrawler', 'orion/compare/compareUtils', 'orion/searchUtils', 'orion/selection', 'orion/urlModifier'], 
-		function(messages, require, lib, i18nUtil, mExplorer, mFileClient, mCommands, mNavUtils, mSearchCrawler, mCompareUtils, mSearchUtils, mSelection, urlModifier) {
+define([
+	'i18n!orion/compare/nls/messages',
+	'require',
+	'orion/webui/littlelib',
+	'orion/i18nUtil',
+	'orion/explorers/explorer',
+	'orion/keyBinding',
+	'orion/widgets/input/DropDownMenu',
+	'orion/widgets/input/SettingsCheckbox',
+	'orion/commands',
+	'orion/explorers/navigationUtils',
+	'orion/crawler/searchCrawler',
+	'orion/compare/compareUtils',
+	'orion/searchUtils',
+	'orion/selection',
+	'orion/urlModifier'
+],  function(messages, require, lib, i18nUtil, mExplorer, mKeyBinding, DropDownMenu, SettingsCheckbox, mCommands, mNavUtils, mSearchCrawler, mCompareUtils, mSearchUtils, mSelection, urlModifier) {
 	var _DEBUG_ = false;
 	function _logInfo(info) {
 		if(_DEBUG_) {
@@ -99,17 +113,15 @@ define(['i18n!orion/compare/nls/messages', 'require', 'orion/webui/littlelib', '
 	CompareTreeExplorerRenderer.prototype = new mExplorer.SelectionRenderer();
 	
 	CompareTreeExplorerRenderer.prototype.getCellHeaderElement = function(col_no){
-		var col, h2;
+		var col;
 		switch(col_no){
 			case 0:
-				col = _createElement('th'); //$NON-NLS-0$
-				h2 = _createElement('h2', "compare_tree_grid", null, col); //$NON-NLS-1$ //$NON-NLS-0$
-				h2.textContent = i18nUtil.formatMessage(messages["n of t files changed"], this.explorer._compareResults.length, this.explorer._totalFiles); //$NON-NLS-0$
+				col = _createElement('th', "compare_tree_grid"); //$NON-NLS-1$ //$NON-NLS-0$
+				col.textContent = i18nUtil.formatMessage(messages["n of t files changed"], this.explorer._compareResults.length, this.explorer._totalFiles); //$NON-NLS-0$
 				return col;
 			case 1: 
-				col = _createElement('th'); //$NON-NLS-0$
-				h2 = _createElement('h2', "compare_tree_grid", null, col); //$NON-NLS-1$ //$NON-NLS-0$
-				h2.textContent = messages["Location"]; //$NON-NLS-0$
+				col = _createElement('th', "compare_tree_grid"); //$NON-NLS-1$ //$NON-NLS-0$
+				col.textContent = messages["Location"]; //$NON-NLS-0$
 			return col;
 		}
 	};
@@ -233,7 +245,7 @@ define(['i18n!orion/compare/nls/messages', 'require', 'orion/webui/littlelib', '
 		if(currentIndex === this._sameFiles.length){
 			var that = this;
 			if(this._compareResults.length > 0){
-				this._loadOneFileMetaData(0,function(){that._renderUI(); that._addOptions();});
+				this._loadOneFileMetaData(0,function(){that._renderUI();});
 			} else {
 				var message = i18nUtil.formatMessage(messages["NoFoldersIdentical"], this._totalFiles);
 			    var parentNode = lib.node(this.parentId);
@@ -421,6 +433,7 @@ define(['i18n!orion/compare/nls/messages', 'require', 'orion/webui/littlelib', '
 
 	CompareTreeExplorer.prototype.startup = function(compareParams) {
 		_empty(this.parentId);
+		this._createSettingsCommand();
 		this.reportStatus(messages['generatingTreeResult']); //$NON-NLS-0$
 		this.prepareResults(compareParams);
 	};
@@ -428,17 +441,49 @@ define(['i18n!orion/compare/nls/messages', 'require', 'orion/webui/littlelib', '
 	CompareTreeExplorer.prototype.readonly = function() {
 		return (this._compareParams.readonly === "true" ? true : false); //$NON-NLS-0$
 	};
-
-	CompareTreeExplorer.prototype._addOptions = function() {
+	
+	CompareTreeExplorer.prototype._createSettingsCommand = function() {
 		var that = this;
-		_empty("pageNavigationActions"); //$NON-NLS-0$
-		var optionMenu = mCommands.createDropdownMenu("pageNavigationActions", messages['Options']); //$NON-NLS-1$ //$NON-NLS-0$
-		mCommands.createCheckedMenuItem(optionMenu.menu, messages["Sort by folders"], false,
-			function(event) {
-				that._sortByFolder = event.target.checked;
-				that._renderUI();
-				optionMenu.dropdown.close(true);
-			});
+		var settingsCommand = new mCommands.Command({
+			imageClass: "core-sprite-wrench", //$NON-NLS-0$
+			name: messages.Options,
+			id: "orion.compare.settings", //$NON-NLS-0$
+			visibleWhen: /** @callback */ function(items, data) {
+				return true;
+			},
+			callback: function(data) {
+				var dropDown = settingsCommand.settingsDropDown;
+				if (!dropDown || dropDown.isDestroyed()) {
+					dropDown = settingsCommand.settingsDropDown = new DropDownMenu(data.domNode.parentNode, data.domNode, {
+						noClick: true,
+						selectionClass: 'dropdownSelection' //$NON-NLS-0$
+					});
+					dropDown.updateContent = function(contentNode, callback) {
+						lib.empty(contentNode);
+						contentNode.style.paddingLeft = "10px";
+						var folderSort;
+						var options = {};
+						options.fieldlabel = messages["Sort by folders"];
+						options.postChange = function(on) {
+							console.log(folderSort.isChecked())
+							that._sortByFolder = folderSort.isChecked();
+							that._renderUI();
+							dropDown.clearPanel();
+						};
+						folderSort = new SettingsCheckbox(options, contentNode);
+						folderSort.show();
+						folderSort.setChecked(that._sortByFolder);
+						callback();
+					};
+					var menu = dropDown.getContentNode();
+					menu.tabIndex = menu.style.marginTop = 0;
+				}					
+				dropDown.click();
+			}
+		});
+		this._commandService.addCommand(settingsCommand);
+		this._commandService.registerCommandContribution("settingsActions", "orion.compare.settings", 1, null, false, new mKeyBinding.KeyBinding("s", true, true), null, this); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+		this._commandService.renderCommands("settingsActions", "settingsActions", this, this, "tool");
 	};
 
 	CompareTreeExplorer.prototype._renderUI = function() {
@@ -454,7 +499,7 @@ define(['i18n!orion/compare/nls/messages', 'require', 'orion/webui/littlelib', '
 					return 0;
 				}
 			});
-		this.createTree(this.parentId, new CompareTreeModel(null, null, this._compareResults), {selectionPolicy: "cursorOnly", setFocus: true}); //$NON-NLS-0$
+		this.createTree(this.parentId, new CompareTreeModel(null, null, this._compareResults), {role: "grid", selectionPolicy: "cursorOnly", setFocus: true}); //$NON-NLS-0$
 	};
 	
 	CompareTreeExplorer.prototype.constructor = CompareTreeExplorer;

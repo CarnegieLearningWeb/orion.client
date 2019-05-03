@@ -53,12 +53,13 @@ exports.ExplorerNavHandler = (function() {
 		this.model = this.explorer.model;
 		this._navDict = navDict;
 		
-	    this._listeners = [];
-	    this._selections = [];
-	    
-	    this._currentColumn = 0;
-	    var parentDiv = this._getEventListeningDiv();
-	    parentDiv.tabIndex = 0;
+		this._listeners = [];
+		this._selections = [];
+
+		this._currentColumn = 0;
+		var parentDiv = this._getEventListeningDiv();
+		this._parentDiv = parentDiv;
+		parentDiv.tabIndex = 0;
 		parentDiv.classList.add("selectionModelContainer"); //$NON-NLS-0$
 		var self = this;
 		this._modelIterator = new mTreeModelIterator.TreeModelIterator([], {
@@ -74,10 +75,7 @@ exports.ExplorerNavHandler = (function() {
 		});
 		this._init(options);
 		
-	    if(!options || options.setFocus !== false){
-			parentDiv.focus();
-	    }
-	    var keyListener = function (e) { 
+		var keyListener = function (e) { 
 			if(UiUtils.isFormElement(e.target)) {
 				// Not for us
 				return true;
@@ -97,6 +95,10 @@ exports.ExplorerNavHandler = (function() {
 				return self.onSpace(e);
 			} else if(e.keyCode === lib.KEY.ENTER) {
 				return self.onEnter(e);
+			} else if (e.keyCode === lib.KEY.TAB && e.shiftKey) {
+				if (document.activeElement.classList.contains("treeTableRow")) {
+					parentDiv.tabIndex = -1;
+				}
 			}
 		};
 		parentDiv.addEventListener("keydown", keyListener, false); //$NON-NLS-0$
@@ -112,25 +114,32 @@ exports.ExplorerNavHandler = (function() {
 		};
 		parentDiv.addEventListener("mousedown", mouseListener, false); //$NON-NLS-0$
 		this._listeners.push({type: "mousedown", listener: mouseListener}); //$NON-NLS-0$
-		var l1 = function (e) { 
+		var offsetParent = lib.getOffsetParent(this._parentDiv);
+		var scrollListener = function() {
+			self._scrollTop = offsetParent ? offsetParent.scrollTop : 0;
+		};
+		offsetParent.addEventListener("scroll", scrollListener);
+		this._listeners.push({type: "scroll", listener: scrollListener}); //$NON-NLS-0$
+		var l1 = this._blurListener = function (e) { 
+			self.toggleCursor(null, false, e);
 			if(self.explorer.onFocus){
 				self.explorer.onFocus(false);
-			} else {
-				self.toggleCursor(null, false);
 			}
 		};
 		parentDiv.addEventListener("blur", l1, false); //$NON-NLS-0$
 		this._listeners.push({type: "blur", listener: l1}); //$NON-NLS-0$
-		var l2 = function (e) { 
+		var l2 = this._focusListener = function (e) {
+			offsetParent.scrollTop = self._scrollTop;
+			self.toggleCursor(null, true, e);
 			if(self.explorer.onFocus){
 				self.explorer.onFocus(true);
-			} else {
-				self.toggleCursor(null, true);
 			}
 		};
 		parentDiv.addEventListener("focus", l2, false); //$NON-NLS-0$
 		this._listeners.push({type: "focus", listener: l2}); //$NON-NLS-0$
-		this._parentDiv = parentDiv;
+		if(!options || options.setFocus !== false){
+			this.focus();
+		}
 	}
 	
 	ExplorerNavHandler.prototype = /** @lends orion.explorerNavHandler.ExplorerNavHandler.prototype */ {
@@ -282,6 +291,7 @@ exports.ExplorerNavHandler = (function() {
 			if(this._selectionPolicy === "cursorOnly"){ //$NON-NLS-0$
 				if(toggling && this.explorer.renderer._useCheckboxSelection){
 					this._checkRow(model,true);
+					return true;
 				}
 				return false;
 			}
@@ -372,32 +382,90 @@ exports.ExplorerNavHandler = (function() {
 			return null;
 		},
 
-		/**
-		 * @returns {Element} The ancestor element of <code>node</code> that provides grid/tree/treegrid behavior,
-		 * or <code>null</code> if no such node was found.
-		 */
-		getAriaContainerElement: function(node) {
-			var stop = this._parentDiv, role;
-			while (node && node !== stop &&
-					(role = node.getAttribute("role")) !== "grid" && role !== "tree" && role !== "treegrid") {//$NON-NLS-3$//$NON-NLS-2$//$NON-NLS-1$//$NON-NLS-0$
-				node = node.parentNode;
-			}
-			return node === stop ? null : node;
+		getFocusableElems: function(root) {
+			var nodeList = root.querySelectorAll('a,button,input,select,textarea,div[tabIndex]');
+			return Array.prototype.slice.call(nodeList);
+		},
+		
+		getAllRows: function() {
+			var nodeList = this._parentDiv.querySelectorAll(".treeTableRow");
+			return Array.prototype.slice.call(nodeList);
+		},
+		
+		rowsChanged: function() {
+			this.getAllRows().forEach(function(row) {
+				var model = this._modelIterator.cursor();
+				if (!model) {
+					model = row._item;
+					this._modelIterator.setCursor(model);
+					if (this._parentDiv === document.activeElement) {
+						this.toggleCursor(model, true);
+					}
+				} 
+				if (!row._focusListener) {
+					row._focusListener = this._focusListener;
+					row.addEventListener("focus", this._focusListener);
+				}
+				if (!row._blurListener) {
+					row._blurListener = this._blurListener;
+					row.addEventListener("blur", this._blurListener);
+				}
+			}.bind(this));
 		},
 
-		toggleCursor:  function(model, on){
+		toggleCursor:  function(model, on, evt){
+			if (!model) {
+				if (on && evt && evt.target._item) {
+					model = evt.target._item;
+					this._modelIterator.setCursor(model);
+				}
+			}
+			if (!model) {
+				model = this._modelIterator.cursor();
+			}
+			if (!model) {
+				model = this.model.root && this.model.root.children && this.model.root.children[0];
+				this._modelIterator.setCursor(model);
+			}
 			var currentRow = this.getRowDiv(model);
 			var currentgrid = this.getCurrentGrid(model);
-			if(currentgrid) {
+			if (on) {
+				this.getFocusableElems(this._parentDiv).forEach(function(element) {
+					if (element.savedTabIndex === undefined) {
+						element.savedTabIndex = element.tabIndex;
+					}
+					element.tabIndex = -1;
+				});
+			}
+			var handleRow = function (className) {
 				if(currentRow){
 					if (on) {
-						currentRow.classList.add("treeIterationCursorRow"); //$NON-NLS-0$
+						if (this._parentDiv === document.activeElement || document.activeElement.parentNode === currentRow.parentNode) {
+							currentRow.classList.add(className);
+							currentRow.tabIndex = "0";
+							this.getFocusableElems(currentRow).forEach(function(element) {
+								if (element.savedTabIndex === -1) {
+									return;
+								}
+								element.tabIndex = 0;
+							});
+							this._parentDiv.removeAttribute("tabindex");
+							if (!(evt && evt.target !== this._parentDiv) && document.activeElement !== currentRow) {
+								currentRow.focus();
+								this.scroll();
+							}
+						}
 					} else {
-						currentRow.classList.remove("treeIterationCursorRow"); //$NON-NLS-0$
+						currentRow.tabIndex = "-1";
+						this._parentDiv.tabIndex = "0";
+						currentRow.classList.remove(className);
 					}
 				}
-				if(currentgrid.domNode){
-					var ariaElement = this.getAriaContainerElement(currentgrid.domNode);
+			}.bind(this);
+			if(currentgrid) {
+				handleRow("treeIterationCursorRow"); //$NON-NLS-0$
+				if(currentgrid.domNode && currentgrid.domNode.tabIndex !== -1){
+					var ariaElement = currentRow;
 					if (on) {
 						currentgrid.domNode.classList.add("treeIterationCursor"); //$NON-NLS-0$
 						if (ariaElement) {
@@ -409,18 +477,53 @@ exports.ExplorerNavHandler = (function() {
 					}
 				}
 			} else {
-				if(currentRow){
-					if (on) {
-						currentRow.classList.add("treeIterationCursorRow_Dotted"); //$NON-NLS-0$
-					} else {
-						currentRow.classList.remove("treeIterationCursorRow_Dotted"); //$NON-NLS-0$
-					}
-				}
+				handleRow("treeIterationCursorRow_Dotted"); //$NON-NLS-0$
 			}
 		},
 		
 		currentModel: function(){
 			return this._modelIterator.cursor();
+		},
+		
+		getScrollParent: function(node) {
+			if (!node) {
+				return null;
+			}
+			var overflow = window.getComputedStyle(node).overflowY;
+			if (!(overflow === "visible" || overflow === "hidden")) {
+				return node;
+			}
+			return this.getScrollParent(node.parentNode);
+		},
+		
+		scroll: function(next) {
+			var currentRowDiv = this.getRowDiv();
+			if(currentRowDiv) {
+				var offsetParent = lib.getOffsetParent(currentRowDiv);
+				if (offsetParent) {
+					var visible = true;
+					var offset = this.getScrollParent(currentRowDiv) !== this._parentDiv ? this._parentDiv.offsetTop : 0;
+					var rowTop = offset + currentRowDiv.offsetTop;
+					var clientHeight = offsetParent.clientHeight;
+					if(rowTop <= offsetParent.scrollTop){
+						visible = false;
+						if(next === undefined){
+							next = false;
+						}
+					}else if((rowTop + currentRowDiv.offsetHeight) >= (offsetParent.scrollTop + offsetParent.clientHeight)){
+						visible = false;
+						if(next === undefined){
+							next = true;
+						}
+					}
+					if(!visible){
+						var scrollTop = offset + currentRowDiv.offsetTop - (next ? clientHeight * 3 / 4 : clientHeight / 4);
+						this._scrollTop = scrollTop;
+						offsetParent.scrollTop = scrollTop; 
+						//currentRowDiv.scrollIntoView(!next);
+					}
+				}
+			}
 		},
 		
 		cursorOn: function(model, force, next, noScroll){
@@ -445,27 +548,8 @@ exports.ExplorerNavHandler = (function() {
 			}
 			this.moveColumn(null, 0);
 			this.toggleCursor(currentModel, true);
-			var currentRowDiv = this.getRowDiv();
-			if(currentRowDiv && !noScroll) {
-				var offsetParent = lib.getOffsetParent(currentRowDiv);
-				if (offsetParent) {
-					var visible = true;
-					if(currentRowDiv.offsetTop <= offsetParent.scrollTop){
-						visible = false;
-						if(next === undefined){
-							next = false;
-						}
-					}else if((currentRowDiv.offsetTop + currentRowDiv.offsetHeight) >= (offsetParent.scrollTop + offsetParent.clientHeight)){
-						visible = false;
-						if(next === undefined){
-							next = true;
-						}
-					}
-					if(!visible){
-						offsetParent.scrollTop = currentRowDiv.offsetTop - (next ? offsetParent.clientHeight * 3 / 4: offsetParent.clientHeight / 4); 
-						//currentRowDiv.scrollIntoView(!next);
-					}
-				}
+			if(!noScroll) {
+				this.scroll(next);
 			}
 			if(this.explorer.onCursorChanged){
 				this.explorer.onCursorChanged(previousModel, currentModel);
@@ -565,7 +649,7 @@ exports.ExplorerNavHandler = (function() {
 				var checkBox  = lib.node(this.explorer.renderer.getCheckBoxId(tableRow.id));
 				var checked = toggle ? !checkBox.checked : true;
 				if(checked !== checkBox.checked){
-					this.explorer.renderer.onCheck(tableRow, checkBox, checked, true);
+					this.explorer.renderer.onCheck(tableRow, checkBox, checked, true, false, model);
 				}
 			} else {
 				this._select(model, toggle);
@@ -579,8 +663,10 @@ exports.ExplorerNavHandler = (function() {
 			var rowDiv = this.getRowDiv(model);
 			if(rowDiv){
 				if (this._inSelection(model) < 0) {
+					rowDiv.setAttribute("aria-selected", true);
 					rowDiv.classList.add("checkedRow"); //$NON-NLS-0$
 				} else {
+					rowDiv.setAttribute("aria-selected", false);
 					rowDiv.classList.remove("checkedRow"); //$NON-NLS-0$
 				}
 			}
@@ -636,7 +722,7 @@ exports.ExplorerNavHandler = (function() {
 		
 		onCollapse: function(model)	{
 			if(this._modelIterator.collapse(model)){
-				this.cursorOn();
+				this.cursorOn(model);
 			}
 		},
 		
@@ -732,6 +818,7 @@ exports.ExplorerNavHandler = (function() {
 
 		//Space key toggles the check box on the current row if the renderer uses check box
 		onSpace: function(e) {
+			if (!e.target.classList.contains("treeTableRow")) return;
 			if(this.setSelection(this.currentModel(), true, true)) {
 				e.preventDefault();
 			}

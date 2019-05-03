@@ -125,10 +125,12 @@ define([
 					}.bind(this));
 				}.bind(this));
 				
+				window.addEventListener("blur", function() {
+					this._stopStatusPolling();
+				}.bind(this));
+				
 				window.addEventListener("focus", function() {
-					if (this._authenticationFailed) {
-						this._checkStatus();
-					}
+					this._checkStatus();
 				}.bind(this));
 			} else {
 				throw new Error("this._domNode is null"); //$NON-NLS-0$
@@ -250,11 +252,16 @@ define([
 			
 			this._launchConfigurationsDropdown = new mRichDropdown.RichDropdown({
 				parentNode: this._launchConfigurationsWrapper,
+				id: "launchConfig",  //$NON-NLS-0$
 				populateFunction: populateFunction
 			});
 			this._launchConfigurationsDropdownTriggerButton = this._launchConfigurationsDropdown.getDropdownTriggerButton();
 			this._launchConfigurationsDropdownTriggerButton.classList.remove("dropdownDefaultButton"); //$NON-NLS-0$
 			this._launchConfigurationsDropdownTriggerButton.classList.add("launchConfigurationsButton"); //$NON-NLS-0$
+			this._launchConfigurationsDropdownTriggerButton.setAttribute("aria-label", messages["launchConfiguration"]); //$NON-NLS-0$
+			this._launchConfigurationsDropdownTriggerButton.setAttribute("aria-labelledby", "launchConfigButton launchConfigLabel"); //$NON-NLS-1$ //$NON-NLS-0$
+			var dropdownNode = this._launchConfigurationsDropdown.getDropdownNode();
+			dropdownNode.setAttribute("aria-label", messages["launchConfigurations"]); //$NON-NLS-0$
 			
 			this._disableLaunchConfigurationsDropdown(); // start with control greyed out until launch configs are set
 			
@@ -966,8 +973,16 @@ define([
 				this._stopStatusPolling();
 				return;
 			}
+			if (launchConfiguration.status && launchConfiguration.status.State === "PROGRESS") {
+				return;
+			}
 			var startTime = Date.now();
-			this._checkLaunchConfigurationStatus(launchConfiguration).then(function(_status) {
+			if (this._pendingCheckStatus) {
+				return;
+			}
+			this._pendingCheckStatus = this._checkLaunchConfigurationStatus(launchConfiguration);
+			this._pendingCheckStatus.then(function(_status) {
+				this._pendingCheckStatus = null;
 				var interval = Date.now() - startTime;
 				mMetrics.logTiming("deployment", "check status (poll)", interval, launchConfiguration.Type); //$NON-NLS-1$ //$NON-NLS-2$
 
@@ -975,6 +990,8 @@ define([
 					launchConfiguration.status = _status;
 				}
 				this._updateLaunchConfiguration(launchConfiguration);
+			}.bind(this), function() {
+				this._pendingCheckStatus = null;
 			}.bind(this));
 		},
 		

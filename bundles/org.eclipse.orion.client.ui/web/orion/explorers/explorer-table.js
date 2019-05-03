@@ -299,6 +299,8 @@ define([
 		this.renderer = options.rendererFactory(this);
 		this.dragAndDrop = options.dragAndDrop;
 		this.setFocus = options.setFocus;
+		this.role = options.role || "treegrid";
+		this.name = options.name;
 		this.model = null;
 		this.myTree = null;
 		this.checkbox = false;
@@ -976,7 +978,7 @@ define([
 						if (targetIsRoot) {
 							(progress ? progress.progress(fileClient.createProject(target.ChildrenLocation, entry.name), i18nUtil.formatMessage(messages["Creating ${0}"], entry.name)) :
 								fileClient.createProject(target.ChildrenLocation, entry.name)).then(function(project) {
-								(progress ? progress.progress(fileClient.read(project.ContentLocation, true), messages["Loading "] + project.name) :
+								(progress ? progress.progress(fileClient.read(project.ContentLocation, true), i18nUtil.formatMessage(messages["Loading ${0}"], project.name)) :
 									fileClient.read(project.ContentLocation, true)).then(function(folder) {
 									traverseChildren(folder);
 								}, internalErrorHandler);
@@ -1455,7 +1457,7 @@ define([
 			var self = this;
 			if (force || path !== this.treeRoot.Path || path !== this._lastPath) {
 				this._lastPath = path;
-				return this.load(this.fileClient.read(path, true), messages["Loading "] + path, postLoad).then(function() {
+				return this.load(this.fileClient.read(path, true), i18nUtil.formatMessage(messages["Loading ${0}"], path), postLoad).then(function() {
 					self.treeRoot.Path = path;
 					return self.treeRoot;
 				}, function(err) {
@@ -1529,18 +1531,15 @@ define([
 
 					var deferred = new Deferred();
 					self.createTree(self.parentId, self.model, {
+						role: self.role,
+						name: self.name,
 						onComplete: function(tree) {
 							deferred.resolve(tree);
 						},
 						navHandlerFactory: self.navHandlerFactory,
 						showRoot: self.showRoot,
 						setFocus: typeof self.setFocus === "undefined" ? true : self.setFocus,
-						selectionPolicy: self.renderer.selectionPolicy,
-						onCollapse: function(model) {
-							if (self.getNavHandler()) {
-								self.getNavHandler().onCollapse(model);
-							}
-						}
+						selectionPolicy: self.renderer.selectionPolicy
 					});
 
 					return deferred.then(function() {

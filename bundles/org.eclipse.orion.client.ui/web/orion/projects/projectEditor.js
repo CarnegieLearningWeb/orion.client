@@ -64,14 +64,13 @@ define([
 	ProjectInfoRenderer.prototype = new mExplorer.SelectionRenderer();
 	ProjectInfoRenderer.prototype.constructor = ProjectInfoRenderer;
 
-	ProjectInfoRenderer.prototype.getCellHeaderElement = function(col_no){
-	};
-
 	ProjectInfoRenderer.prototype.getCellElement = function(col_no, item, tableRow){
+		var labelID = tableRow.id + "Label"; //$NON-NLS-0$
 		if(col_no===0) {
 			var td = document.createElement("td");
 			var b = document.createElement("span");
 			b.className = "discreetInputLabel";
+			b.id = labelID;
 			b.appendChild(document.createTextNode(item.displayName));
 			td.classList.add("discreetInputLabel");
 			td.appendChild(b);
@@ -85,20 +84,17 @@ define([
 
 				var urlInput = document.createElement("input");
 				urlInput.classList.add("discreetInputHidden"); //$NON-NLS-0$
+				urlInput.setAttribute("aria-labelledby", labelID);
 
 				var urlSelector = document.createElement("div");
-				urlSelector.title = messages.ClickEditLabel;
 				urlSelector.classList.add("discreetInput"); //$NON-NLS-0$
 				urlSelector.classList.add("discreetInputURLWrapper"); //$NON-NLS-0$
-				urlSelector.tabIndex = item.no;	//this is the same as the urlInput's tab index but they will never be visible at the same time
 
 				var urlLink = document.createElement("a");
 				urlLink.href = item.value || "";
 				urlLink.appendChild(document.createTextNode(item.value || ""));
-				urlLink.tabIndex = item.no+1;
 
 				urlSelector.appendChild(urlLink);
-				urlSelector.title = "Click to edit";
 
 				//show url input, hide selector
 				urlSelector.onclick = function (event){
@@ -110,8 +106,8 @@ define([
 					urlInput.focus();
 				}.bind(this.projectEditor);
 
-				//make the url editable when the selector gains focus
-				urlSelector.onfocus = urlSelector.onclick;
+				//make the url editable when the link gains focus
+				urlLink.onfocus = urlSelector.onclick;
 
 				//Make pressing "Enter" on the selector do the same think as clicking it
 				urlSelector.onkeyup = function(event){
@@ -129,6 +125,7 @@ define([
 			}
 			td = document.createElement("td");
 			var input = item.id==="Description" ? document.createElement("textArea") : document.createElement("input");
+			input.setAttribute("aria-labelledby", labelID);
 			this.projectEditor._renderEditableFields(input, item.id, item.no, null);
 			td.appendChild(input);
 			return td;
@@ -176,20 +173,13 @@ define([
 	AdditionalInfoRenderer.prototype = new mExplorer.SelectionRenderer();
 	AdditionalInfoRenderer.prototype.constructor = AdditionalInfoRenderer;
 
-	AdditionalInfoRenderer.prototype.getCellHeaderElement = function(col_no){
-		if(col_no===0){
-			var td = document.createElement("td");
-			td.colSpan = 2;
-			td.appendChild(document.createTextNode(this.explorer.model.root.Name));
-			return td;
-		}
-	};
-
 	AdditionalInfoRenderer.prototype.getCellElement = function(col_no, item, tableRow){
+		var labelID = tableRow.id + "Label"; //$NON-NLS-0$
 		if(col_no===0) {
 			var td = document.createElement("td");
 			var b = document.createElement("span");
 			b.className = "discreetInputLabel";
+			b.id = labelID;
 			b.appendChild(document.createTextNode(item.Name));
 			td.classList.add("discreetInputLabel");
 			td.appendChild(b);
@@ -207,6 +197,7 @@ define([
 			} else {
 				td.appendChild(document.createTextNode(item.Value || " "));
 			}
+			td.setAttribute("aria-labelledby", labelID);
 			return td;
 		}
 
@@ -263,9 +254,6 @@ define([
 	DependenciesRenderer.prototype = new mExplorer.SelectionRenderer();
 	DependenciesRenderer.prototype.constructor = DependenciesRenderer;
 
-	DependenciesRenderer.prototype.getCellHeaderElement = function(col_no){
-	};
-
 	DependenciesRenderer.prototype.getCellElement = function(col_no, item, tableRow){
 		if(col_no===0) {
 			var td = document.createElement("td");
@@ -287,8 +275,8 @@ define([
 		}
 		if(col_no===1){
 			var actionsColumn = this.getActionsColumn(item, tableRow, null, null, true);
-		actionsColumn.style.textAlign = "right";
-		return actionsColumn;
+			actionsColumn.style.textAlign = "right";
+			return actionsColumn;
 		}
 
 	};
@@ -358,7 +346,7 @@ define([
 							break;
 					}
 				}.bind(this));
-		}
+			}
 
 			var sectionsOrder = ["projectInfo", "additionalInfo", "dependencies"];
 			this.preferences.get("/sectionsOrder").then(function(sectionsOrderPrefs){
@@ -429,9 +417,7 @@ define([
 			}.bind(this);
 
 			input.value = this.projectData[property] || "";
-			input.title = messages.ClickEditLabel;
 			input.classList.add("discreetInput"); //$NON-NLS-0$
-			input.tabIndex = String(tabIndex);
 
 			input.onkeyup = function(event){
 				if(event.keyCode === lib.KEY.ENTER){

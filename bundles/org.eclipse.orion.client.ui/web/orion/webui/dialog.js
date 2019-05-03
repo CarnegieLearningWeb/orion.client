@@ -55,9 +55,9 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/uiUtils'],
 		/* Not used by clients */
 		CONTAINERTEMPLATE:		
 		'<div class="dialog" role="dialog">' + //$NON-NLS-0$
-			'<div class="dialogTitle"><span id="title" class="dialogTitleText layoutLeft"></span><button class="dismissButton layoutRight core-sprite-close imageSprite" id="closeDialog"></button></div>' + //$NON-NLS-0$
-			'<div id="dialogContent" class="dialogContent layoutBlock"></div>' + //$NON-NLS-1$ //$NON-NLS-0$
-			'<div id="buttons" class="dialogButtons"></div>' + //$NON-NLS-1$ //$NON-NLS-0$
+			'<div class="dialogTitle"><span class="dialogTitleText layoutLeft"></span><button class="dismissButton closeDialog layoutRight core-sprite-close imageSprite"></button></div>' + //$NON-NLS-0$
+			'<div class="dialogContent layoutBlock"></div>' + //$NON-NLS-1$ //$NON-NLS-0$
+			'<div class="dialogButtons"></div>' + //$NON-NLS-1$ //$NON-NLS-0$
 		'</div>', //$NON-NLS-0$
 
 		/* 
@@ -73,12 +73,14 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/uiUtils'],
 			var frameFragment = range.createContextualFragment(this.CONTAINERTEMPLATE);
 			parent.appendChild(frameFragment);
 			this.$frame = parent.lastChild;
+			this.$frame.tabIndex = -1;
+			this.$frame.style.outline = "none";
 //			this.handle = lib.addAutoDismiss([this.$frame], this.hide.bind(this));
 			if (this.title) {
-				lib.$("#title", this.$frame).appendChild(document.createTextNode(this.title)); //$NON-NLS-0$
-				this.$frame.setAttribute("aria-labelledby", "title");
+				lib.$(".dialogTitleText", this.$frame).appendChild(document.createTextNode(this.title)); //$NON-NLS-0$
+				this.$frame.setAttribute("aria-label", this.title); //$NON-NLS-0$
 			}
-			this.$close = lib.$("#closeDialog", this.$frame);//$NON-NLS-0$
+			this.$close = lib.$(".closeDialog", this.$frame);//$NON-NLS-0$
 			this.$close.setAttribute("aria-label", containerMessages["Close"]); //$NON-NLS-0$
 			var self = this;
 			this.$close.addEventListener("click", function(event) { //$NON-NLS-0$
@@ -220,28 +222,24 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/uiUtils'],
 		 * as destroying resources.
 		 */
 		hide: function(keepCurrentModal) {
-			var activeElement = document.activeElement;
-			var hasFocus = this.$frameParent === activeElement || (this.$frameParent.compareDocumentPosition(activeElement) & 16) !== 0;
-			var originalFocus = this.$originalFocus;
-			if(!keepCurrentModal && modalDialogManager.dialog === this) {
-				modalDialogManager.dialog = null;
-			}
-			if (typeof this._beforeHiding === "function") { //$NON-NLS-0$
-				this._beforeHiding();
-			}
-			if (this._modalListener) {
-				this.$frameParent.removeEventListener("focus", this._modalListener, true);  //$NON-NLS-0$
-				this.$frameParent.removeEventListener("click", this._modalListener, true);  //$NON-NLS-0$
-			}
-
-			this.$frame.classList.remove("dialogShowing"); //$NON-NLS-0$
-			lib.setFramesEnabled(true);
-			if (typeof this._afterHiding === "function") { //$NON-NLS-0$
-				this._afterHiding();
-			}
-			if (hasFocus && originalFocus && document.compareDocumentPosition(originalFocus) !== 1) {
-				originalFocus.focus();
-			}
+			lib.returnFocus(this.$frameParent, this.$originalFocus, function() {
+				if(!keepCurrentModal && modalDialogManager.dialog === this) {
+					modalDialogManager.dialog = null;
+				}
+				if (typeof this._beforeHiding === "function") { //$NON-NLS-0$
+					this._beforeHiding();
+				}
+				if (this._modalListener) {
+					this.$frameParent.removeEventListener("focus", this._modalListener, true);  //$NON-NLS-0$
+					this.$frameParent.removeEventListener("click", this._modalListener, true);  //$NON-NLS-0$
+				}
+	
+				this.$frame.classList.remove("dialogShowing"); //$NON-NLS-0$
+				lib.setFramesEnabled(true);
+				if (typeof this._afterHiding === "function") { //$NON-NLS-0$
+					this._afterHiding();
+				}
+			}.bind(this));
 			var self = this;
 			if (!this.keepAlive) {
 				window.setTimeout(function() { self.destroy(); }, 0);
@@ -301,6 +299,13 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/uiUtils'],
 				var focusField = this._getFirstFocusField();
 				focusField.focus();
 			}
+		},
+		
+		/**
+		 * Set the node that should receive focus after the dialog is closed.
+		 */
+		setOriginalFocus: function(node) {
+			this.$originalFocus = node;
 		},
 		
 		_getFirstFocusField: function() {

@@ -58,12 +58,13 @@
 .sectionTableItem {
 	padding-top: 2px;
 	padding-bottom: 2px;
+	padding-left: 2px;
 }
 
 .gitChangeListCompare {
 	height: 420px;
 	border: 1px solid lightgray;
-	margin-right: 10px;
+	margin-right: 20px;
 	min-height: 50px;
 }
 
@@ -71,7 +72,7 @@
 	position: absolute;
 	top: 1px;
 	left: 1px;
-	width: calc(100% - 14px);
+	width: calc(100% - 8px);
 	height: calc(100% - 14px);
 	background-color: white;
 	padding-bottom: 10px;
@@ -203,83 +204,76 @@ html[dir="rtl"] .mainToolbar .sectionWrapper { /* ACGC */
 	height: 100%;
 }
 
-.commitFilterHeader.sectionWrapper {
-	border-width: 0;
-	padding: 0;
-	margin: 0;
-	height: 0;
-}
-
-.commitFilterHeader.sectionTable {
+.commitFilterPanel {
 	margin: 0;
 	margin-left: 10px;
 	margin-right: 10px;
 	position: absolute;
-	width: calc(100% - 20px);
+	width: calc(100% - 24px);
 	z-index: 200;
 	margin-top: -1px;
+	resize: none;
+	overflow: auto;
 	background-color: white;
+	border: 1px solid #e3e7ea;
+	border-top: none;
 	border-bottom-left-radius: 8px;
 	border-bottom-right-radius: 8px;
 }
 
-.commitFilterHeader.sectionTable.sectionClosed {
-	visibility: hidden;
+.commitFilterPanel .filterSections {
+	width: 100%;
+	table-layout: auto;
+	padding-left: 10px;
+	padding-right: 10px;
 }
 
-.commitFilter.sectionWrapper {
-	border-width: 0;
-	padding-bottom: 0px;
-	padding-left: 15px;
-	padding-top: 5px;
-	margin: 0;
-	opacity: 1;
-	min-height: 35px;
+.commitFilterLabelColumn {
+	text-align: right;
+	width: 15%;
 }
 
-.commitFilter.sectionWrapper.sectionClosed:hover {
-	box-shadow: initial;
+.commitFilterInputColumn {
+	width: 100%;
 }
 
-.commitFilter .sectionTitle {
-	width: 100px;
-	color: #333;
-	padding-left: 3px;
+.commitFilterPanel .filterSections td {
+	border: none;
+}
+
+.commitFilterPanel input {
+	border: 1px solid #ddd;
+	min-width: 260px;
+	width: 70%;
 }
 
 .commitFilterActions {
-	padding: 5px;
+	padding: 10px;
 	overflow: hidden;
 }
 
-.core-sprite-edit {
-	color: #77858d;
-}
-
 .core-sprite-leftarrow {
-  	color: #777;
+	color: #777;
 }
 
 .core-sprite-save {
-  	color: #777;
+	color: #777;
 }
 
-.pathFilter.sectionTable.sectionOpened {
-	height: 300px;
-	margin-top: 5px;
-	margin-right: 5px;
-	margin-left: 5px;
+.sidebar .selectionModelContainer.commitFilterPathFilter {
+	height: 160px;
 	background-color: white;
-	border-top: 1px solid #ddd;
+	border: 1px solid #ddd;
 	overflow-y: auto;
-}
-
-.pathFilter.sectionTable.sectionClosed {
-	height: 0;
 }
 
 .mainToolbar .gitFilterBox input {
 	width: 200px;
+}
+
+.mainToolbar .gitFilterBox label {
+	padding-left: 5px;
+	padding-right: 5px;
 }
 
 html[dir="rtl"] .mainToolbar .gitFilterBox input { /* ACGC */
@@ -312,9 +306,9 @@ html[dir="rtl"] .mainToolbar .gitFilterBox input { /* ACGC */
 
 .mainToolbar #configSection {
 	float: right;
-	padding: 4px;
-	padding-top: 0;
+	padding: 0 1px 4px 1px;
 	border: 1px solid transparent;
+	margin-right: 0;
 	height: 18px;
 }
 
@@ -471,9 +465,16 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 	padding-right: 10px;
 }
 
+.gitChangeListGroupContent table td {
+	border: none;
+}
+
 .gitChangeListCompareActions {
 	overflow: hidden;
 	padding: 5px;
+	padding-top: 0;
+	padding-bottom: 4px;
+	margin-right: 20px;
 }
 
 .gitCommitInfoValue {
@@ -493,11 +494,13 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 }
 
 .gitCommitMessageSection {
+	color: #505050;
 	background-color: #F2FBF9;
-}
-
-.gitCommitMessageSection .sectionTableItem {
 	padding-top: 8px;
+	padding-bottom: 8px;
+	padding-right: 6px;
+	margin: 3px;
+	margin-bottom: -4px;
 }
 
 .gitCommitMessage .gitCommitMessageTopRow {
@@ -535,6 +538,7 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 .gitCommitMessage .gitCommitMessageTopRow textarea {
 	width: calc(100% - 10px);
 	background-color: transparent;
+	resize: vertical;
 	border-width: 0px;
 }
 
@@ -560,9 +564,8 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 .gitCommitMore {
 	padding: 0;
 	margin: 10px 5px 5px 0;
-	opacity: 0.81;
 	border: none;
-	background: transparent;
+	background-color: transparent;
 	color: #00aed1;
 	cursor: pointer;
 	float: left;
@@ -573,7 +576,7 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 }
 
 .gitListCell:hover .gitCommitMore {
-	opacity: 1;
+	opacity: 0.8;
 }
 
 .gitListMore {
@@ -600,7 +603,7 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 }
 
 .gitCommitListSection {
-	background-color: #e9f1f4;
+	background-color: #ebf2f5;
 }
 
 .gitListCell {
@@ -621,7 +624,7 @@ _:-moz-tree-row(hover), .gitChangeListCheck { /* Firefox  HACK */
 .gitCommitListSectionTitle {
 	font-size: 8.5pt;
 	/* text-transform: uppercase; */
-	margin-top: 4px;
+	margin-top: 0;
 	color: #3B4B54;
 }
 

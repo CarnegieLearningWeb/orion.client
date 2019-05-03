@@ -249,7 +249,7 @@ a.currentLocation:hover {
 }
 
 a.breadcrumb.currentLocation {
-	margin: 0;
+	margin: 3px;
 }
 
 .tooltipContainer .currentLocation {
@@ -333,9 +333,10 @@ a.breadcrumb.currentLocation {
 }
 
 .sidebarToolbar {
-	display: inline;
+	display: flex;
 	overflow: visible;
 	padding: 0 !important;
+	background-color: transparent !important;
 }
 
 /* Searchbox in the top navigation area seems a difficult thing to 
@@ -843,6 +844,9 @@ a.breadcrumb.currentLocation {
 	clear: both;
 	float: left;
 	border: 1px solid #158d7a;
+}
+
+.tooltip:not(:focus) {
 	box-shadow: 0px 0px 10pt -2pt rgba(0, 0, 0, 0.5);
 }
 
@@ -858,7 +862,7 @@ a.breadcrumb.currentLocation {
 }
 
 .tooltip .operationStatus {
-	color: #00aed1;
+	color: #bfffff;
 }
 
 .tooltip .operationError {
@@ -1085,7 +1089,8 @@ a.breadcrumb.currentLocation {
 }
 
 .dialogTitle > .dismissButton {
-	margin-right: 0;	
+    margin-right: 5px;
+    padding-right: 0;
 }
 
 .dialogTitleText {
@@ -1106,7 +1111,7 @@ a.breadcrumb.currentLocation {
 	cursor: pointer;
 }
 
-.parameterPopup .dismissButton:hover, .dialogTitle .dismissButton:hover {
+.parameterPopup .dismissButton:hover, .dialogTitle .dismissButton:hover, .dialogTitle .dismissButton:focus {
 	color: white;
 }
 
@@ -1160,6 +1165,7 @@ a.breadcrumb.currentLocation {
 
 .core-sprite-git-logo {
 	font-size: 20px !important;
+	line-height: 18px !important;
 }
 
 .sprite-switch-check-x {

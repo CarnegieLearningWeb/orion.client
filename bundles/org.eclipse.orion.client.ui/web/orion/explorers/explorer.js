@@ -223,7 +223,8 @@ exports.Explorer = (function() {
 				this.selection.setSelections([]);
 			}
 			if(this.getNavHandler()){
-				this.getNavHandler()._clearSelection();
+				this.getNavHandler().destroy();
+				this._navHandler = null;
 			}
 			var treeId = parentId + "innerTree"; //$NON-NLS-0$
 			var existing = lib.node(treeId);
@@ -235,6 +236,7 @@ exports.Explorer = (function() {
 			}
 			this.model = model;
 			this._parentId = parentId;
+			this.role = options && options.role;
 			this._treeOptions = options;
 			var useSelection = !options || (options && !options.noSelection);
 			if(useSelection){
@@ -244,24 +246,36 @@ exports.Explorer = (function() {
 			this.myTree = new mTreeTable.TableTree({
 				id: treeId,
 				role: options ? options.role : undefined,
+				name: options ? options.name : undefined,
 				model: model,
 				parent: parentId,
-				onComplete: options ? options.onComplete : undefined,
+				onComplete: function(tree) {
+					if(this.selectionPolicy === "cursorOnly"){ //$NON-NLS-0$
+						this.initNavHandler();
+						var navHandler = this.getNavHandler();
+						if (navHandler) {
+							navHandler.rowsChanged();
+						}
+					}
+					if (options.onComplete) options.onComplete(tree);
+				}.bind(this),
 				labelColumnIndex: this.renderer.getLabelColumnIndex(),
 				renderer: this.renderer,
 				showRoot: options ? !!options.showRoot : false,  
 				indent: options ? options.indent: undefined,
 				preCollapse: options ? options.preCollapse: undefined,
-				onCollapse: options ? options.onCollapse: undefined,
+				onCollapse: options && options.onCollapse ? options.onCollapse : function(model) {
+					var navHandler = this.getNavHandler();
+					if (navHandler) {
+						navHandler.onCollapse(model);
+					}
+				}.bind(this),
 				navHandlerFactory: options ? options.navHandlerFactory: undefined,
 				tableElement: options ? options.tableElement : undefined,
 				tableBodyElement: options ? options.tableBodyElement : undefined,
 				tableRowElement: options ? options.tableRowElement : undefined
 			});
 			this.renderer._initializeUIState();
-			if(this.selectionPolicy === "cursorOnly"){ //$NON-NLS-0$
-				this.initNavHandler();
-			}
 		},
 		getNavHandler: function(){
 			return this._navHandler;
@@ -542,13 +556,16 @@ exports.ExplorerRenderer = (function() {
 		initTable: function (tableNode, tableTree) {
 			this.tableTree = tableTree;
 			this.tableNode = tableNode;
+			if (!this.selectionPolicy && this.role) {
+				this.tableNode.setAttribute("aria-multiselectable", true);
+			}
 			lib.empty(tableNode);
 			if (this._treeTableClass) {
 				tableNode.classList.add(this._treeTableClass); 
 			}
 			this.renderTableHeader(tableNode);
 			var self = this;
-			tableNode.onclick = function(evt) {
+			tableNode.addEventListener("mousedown", function(evt) {
 				var target = evt.target;
 				var tableRow = target;
 				while (tableRow && tableRow !== tableNode) {
@@ -587,8 +604,10 @@ exports.ExplorerRenderer = (function() {
 					if (prefPath && window.sessionStorage) {
 						self._storeExpansions(prefPath);
 					}
+					evt.stopPropagation();
+					evt.preventDefault();
 				}
-			};
+			});
 		},
 		getActionsColumn: function(item, tableRow, renderType, columnClass, renderAsGrid){
 			renderType = renderType || "tool"; //$NON-NLS-0$
@@ -621,6 +640,7 @@ exports.ExplorerRenderer = (function() {
 				check.rowId = tableRow.id;
 				if(this.getCheckedFunc){
 					check.checked = this.getCheckedFunc(item);
+					tableRow.setAttribute("aria-selected", check.checked);
 					if (check.checked) {
 						if(this._highlightSelection){
 							tableRow.classList.add("checkedRow"); //$NON-NLS-0$
@@ -635,8 +655,9 @@ exports.ExplorerRenderer = (function() {
 				}
 				checkColumn.appendChild(check);
 				var self = this;
-				check.addEventListener("click", function(evt) { //$NON-NLS-0$
+				check.addEventListener("mousedown", function(evt) { //$NON-NLS-0$
 					var newValue = evt.target.checked ? false : true;
+					tableRow.setAttribute("aria-selected", newValue);
 					self.onCheck(tableRow, evt.target, newValue, true, false, item);
 					lib.stop(evt);
 				}, false);
@@ -787,6 +808,7 @@ exports.ExplorerRenderer = (function() {
 			placeHolder.appendChild(expandImage);
 			expandImage.classList.add(this._twistieSpriteClass);
 			expandImage.classList.add(this._collapseImageClass);
+			tableRow.setAttribute("aria-expanded", false);
 			if (decorateImageClass) {
 				var decorateImage = document.createElement("span"); //$NON-NLS-0$
 				placeHolder.appendChild(decorateImage);
@@ -798,6 +820,9 @@ exports.ExplorerRenderer = (function() {
 		
 		render: function(item, tableRow){
 			tableRow.classList.add("navRow"); //$NON-NLS-0$
+			if (this.explorer.role) {
+				tableRow.tabIndex = -1;
+			}
 			this.renderRow(item, tableRow);
 		},
 		
@@ -806,6 +831,10 @@ exports.ExplorerRenderer = (function() {
 			if(this.explorer.selectionPolicy !== "cursorOnly"){ //$NON-NLS-0$
 				this.explorer.refreshSelection();
 				this.explorer.initNavHandler();			
+			}
+			var navHandler = this.explorer.getNavHandler();
+			if (navHandler) {
+				navHandler.rowsChanged();
 			}
 			if (!this._noRowHighlighting){
 				var even = "darkSectionTreeTableRow"; //$NON-NLS-0$
@@ -849,6 +878,8 @@ exports.ExplorerRenderer = (function() {
 	return ExplorerRenderer;
 }());
 
+var CHECK_COLUMN_ID = 0;
+
 /**
  * @name orion.explorer.SelectionRenderer
  * @class This  renderer renders a tree table and installs a selection and cursoring model to
@@ -871,23 +902,35 @@ exports.SelectionRenderer = (function(){
 
 	SelectionRenderer.prototype.renderTableHeader = function(tableNode){
 		var thead = document.createElement('thead'); //$NON-NLS-0$
-		var row = document.createElement('tr'); //$NON-NLS-0$
 		thead.classList.add("navTableHeading"); //$NON-NLS-0$
-		if (this._useCheckboxSelection) {
-			row.appendChild(this.initCheckboxColumn(tableNode));
-		}
-		
-		var i = 0;
-		var cell = this.getCellHeaderElement(i);
-		while(cell){
-			if (cell.innerHTML.length > 0) {
-				cell.classList.add("navColumn"); //$NON-NLS-0$
+		var rowCount = this.getHeaderRowCount ? this.getHeaderRowCount() : 1;
+		var empty = rowCount === 1;
+		for (var r=0; r<rowCount; r++) {
+			var row = document.createElement('tr'); //$NON-NLS-0$
+			row.setAttribute("role", "row"); //$NON-NLS-1$ //$NON-NLS-0$
+			row.tabIndex = -1;
+			if (this._useCheckboxSelection) {
+				var col = this.initCheckboxColumn(tableNode);
+				col.id = this._checkColumnId = "checkColumn_" + CHECK_COLUMN_ID++;
+				row.appendChild(col);
 			}
-			row.appendChild(cell);			
-			cell = this.getCellHeaderElement(++i);
+			
+			var i = 0;
+			var cell = this.getCellHeaderElement(i, r);
+			while(cell){
+				if (cell.innerHTML.length > 0 && !this.getPrimColumnStyle) {
+					cell.classList.add("navColumn"); //$NON-NLS-0$
+				}
+				cell.setAttribute("role", "columnheader"); //$NON-NLS-1$ //$NON-NLS-0$
+				row.appendChild(cell);			
+				cell = this.getCellHeaderElement(++i, r);
+			}
+			thead.appendChild(row);
+			if (i > 0 && empty) {
+				empty = false;
+			}
 		}
-		thead.appendChild(row);
-		if (i > 0) {
+		if (!empty) {
 			tableNode.appendChild(thead);
 		}
 	};
@@ -920,17 +963,25 @@ exports.SelectionRenderer = (function(){
 			
 			navDict.addRow(item, tableRow);
 		}
-		if (item.selectable === undefined || item.selectable) {
-			var checkColumn = this.getCheckboxColumn(item, tableRow);
-			if(checkColumn) {
-				checkColumn.classList.add('checkColumn'); //$NON-NLS-0$
-				tableRow.appendChild(checkColumn);
+		var checkColumn = this.getCheckboxColumn(item, tableRow);
+		if(checkColumn) {
+			if (this._checkColumnId) {
+				checkColumn.setAttribute("headers", this._checkColumnId);
 			}
+			if (item.selectable !== undefined && !item.selectable) {
+				checkColumn.style.opacity = 0;
+				checkColumn.setAttribute("aria-hidden", true);
+			}
+			checkColumn.classList.add('checkColumn'); //$NON-NLS-0$
+			tableRow.appendChild(checkColumn);
 		}
 
 		var i = 0;
 		var cell = this.getCellElement(i, item, tableRow);
 		while(cell){
+			if (tableRow.getAttribute("role") === "row") {
+				cell.setAttribute("role", "gridcell");
+			}
 			tableRow.appendChild(cell);
 			if (i===0) {
 				if(this.getPrimColumnStyle){

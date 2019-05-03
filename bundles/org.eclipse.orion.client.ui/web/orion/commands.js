@@ -354,7 +354,7 @@ define([
 	function createCommandItem(parent, command, commandInvocation, id, keyBinding, useImage, callback) {
 		var element;
 		var clickTarget;
-		useImage = useImage || command.hasImage && command.hasImage();
+		useImage = useImage || (!command.name && command.hasImage && command.hasImage());
 		
 		var renderButton = function() {
 				if (useImage) {
@@ -422,6 +422,7 @@ define([
 				element.addEventListener("keydown", function(e) { //$NON-NLS-0$
 					if (e.keyCode === lib.KEY.ENTER || e.keyCode === lib.KEY.SPACE) {
 						element.click();
+						e.preventDefault();
 					}
 				}, false);
 				element.addEventListener("click", function(e) { //$NON-NLS-0$

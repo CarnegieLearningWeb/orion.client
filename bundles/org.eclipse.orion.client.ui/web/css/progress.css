@@ -18,15 +18,15 @@
 }
 
 .progressWarning {
-	color: white !important;
-	background-color: #f0ad4e !important;
-	border: 1px solid #f0ad4e !important;
+	color: black !important;
+	background-color: #efc100 !important;
+	border: 1px solid #efc100 !important;
 }
 
 .progressError {
 	color: white !important;
-	background-color: #d9534f !important;
-	border: 1px solid #d9534f !important;
+	background-color: #e0182d !important;
+	border: 1px solid #e0182d !important;
 }
 
 .progressNormal {
@@ -45,13 +45,17 @@
 	height: 16px;
 }
 
+.progressWatchWrapper {
+	width: 16px;
+	height: 16px;
+	margin: 3px;
+}
+
 .progressWatch {
 	cursor: pointer;
 	text-align: center;
 	position: relative;
 	display: inline-block;
-	width: 16px;
-	height: 16px;
 	background: transparent;
 	border: none;
 	margin-top: -2px;
@@ -262,7 +266,7 @@
 }
 
 .notificationShow {
-	color: white; 
+	color: white;
 	background-color: #121E4C;
 	bottom: 0;
 	position: fixed;
@@ -289,8 +293,8 @@
 	display: block;
 }
 .notificationHide {
-	color: white; 
-	background-color: #121E4C; 
+	color: white;
+	background-color: #121E4C;
 	bottom: -45px;
 	position: fixed;
 	text-align:center;

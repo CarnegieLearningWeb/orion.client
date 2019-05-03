@@ -21,6 +21,9 @@ define({//Default message bundle
 	"EditorRelatedLinkProj": "Show Project",
 	"sidebar": "Sidebar",
 	"toolbar": "Toolbar",
+	"Key Bindings": "Key Bindings",
+	"KeyBinding": "Key Binding",
+	"Command": "Command",
 	"Filter bindings:": "Filter bindings:",
 	"Filter bindings": "Type characters to filter by name or key combination",
 	"BindingPrompt": "Enter the new binding",
@@ -95,6 +98,7 @@ define({//Default message bundle
 	"Sample Orion Plugin": "Sample Orion Plug-in",
 	"Generate a sample plugin for integrating with Orion.": "Generate a sample plug-in for integrating with Orion.",
 	"Browser": "Web Browser",
+	"Outline": "Outline",
 	"OutlineProgress": "Getting outline for ${0} from ${1}",
 	"FormatProgress" : "Formatting ${0} from ${1}",
 	"outlineTimeout": "Outline service timed out. Try reloading the page and opening the outline again.",
@@ -178,5 +182,10 @@ define({//Default message bundle
 	"fixAll": "Fix all",
 	"nextSplitter" : "Next Splitter",
 	"nextSplitterTooltip": "Move focus through the available splitters",
-	"Confirm": "Confirm"
+	"Confirm": "Confirm",
+	"CONFIRM": "Confirm",
+	"PROMPT": "Prompt",
+	"ALERT": "Alert",
+	"Up": "Up",
+	"Down": "Down"
 });

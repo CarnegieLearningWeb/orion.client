@@ -90,13 +90,16 @@ define({//Default message bundle
 	"Fetching children of ": "Fetching children of ",
 	"Paste": "Paste",
 	"Open With": "Open With",
-	"Loading ": "Loading ",
+	"Loading ${0}": "Loading ${0}",
 	"New": "New",
 	"File": "File",
 	"Actions": "Actions",
 	"Orion Content": "Orion Content",
 	"File System": "File System",
 	"Root": "Root",
+	"Name": "Name",
+	"Date Modified": "Date Modified",
+	"Size": "Size",
 	"Create new content": "Create new content",
 	"Import from HTTP...": "HTTP",
 	"File URL:": "File URL:",
@@ -113,7 +116,7 @@ define({//Default message bundle
 	"Enter project name:": "Enter project name:",
 	"Create new project" : "Create new project",
 	"Creating project ${0}": "Creating project ${0}",
-	"NoFile": "Use the ${0} menu to create new files and folders. Click a file to start coding.",
+	"NoFile": "Use the ${0} menu to create new files and folders. Click a file to start coding, or go to the Git page to bring in existing code.",
 	"Download": "Download",
 	"Download_tooltips": "Download the file contents as the displayed name",
 	"Downloading...": "Reading file contents...",
@@ -138,8 +141,8 @@ define({//Default message bundle
 	"startApplication": "Start the application",
 	"manage": "Manage",
 	"manageThisApplicationOnRemote": "Manage this application on remote server",
-	"deleteLaunchConfiguration": "Delete this launch configuration",
-	"editLaunchConfiguration": "Edit this launch configuration",
+	"deleteLaunchConfiguration": "Delete",
+	"editLaunchConfiguration": "Edit",
 	"deployThisApplication": "Deploy the App from the Workspace",
 	"associatedFolder": "Associated Folder",
 	"associateAFolderFromThe": "Associate a folder from the workspace with this project.",
@@ -147,13 +150,13 @@ define({//Default message bundle
 	"convertThisFolderIntoA": "Convert this folder into a project",
 	"thisFolderIsAProject": "This folder is a project already.",
 	"basic": "Basic",
-	"createAnEmptyProject.": "Create an empty project.",
+	"createAnEmptyProject.": "Create an empty project",
 	"sFTP": "SFTP",
-	"createAProjectFromAn": "Create a project from an SFTP site.",
+	"createAProjectFromAn": "Create a project from an SFTP site",
 	'readMeCommandName': 'Readme File',  //$NON-NLS-0$  //$NON-NLS-1$
 	'readMeCommandTooltip': 'Create a README.md file in this project',  //$NON-NLS-0$  //$NON-NLS-1$
 	'zipArchiveCommandName': 'Zip Archive',  //$NON-NLS-0$  //$NON-NLS-1$
-	'zipArchiveCommandTooltip': 'Create a project from a local zip archive.',  //$NON-NLS-0$  //$NON-NLS-1$
+	'zipArchiveCommandTooltip': 'Create a project from a local zip archive',  //$NON-NLS-0$  //$NON-NLS-1$
 	'Url:': 'Url:',  //$NON-NLS-0$  //$NON-NLS-1$
 	'notZip' : 'The following files are not zip files: ${0}. Would you like to continue the import?', //$NON-NLS-0$  //$NON-NLS-1$
 	'notZipMultiple' : 'There are multiple non-zip files being uploaded. Would you like to continue the import?', //$NON-NLS-0$  //$NON-NLS-1$

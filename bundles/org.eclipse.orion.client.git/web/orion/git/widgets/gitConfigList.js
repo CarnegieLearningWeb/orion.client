@@ -158,7 +158,7 @@ define([
 			if (this.section.filterBox) {
 				this.section.filterBox.destroy();
 			}
-			this.section.filterBox = uiUtil.createFilter(this.section, messages["Filter configuration entries"],  function(value) {
+			this.section.filterBox = uiUtil.createFilter(this.section, "Filter configuration entries",  function(value) {
 				this.model.filterQuery = value.trim();
 				this.changedItem();
 			}.bind(this));
@@ -174,6 +174,8 @@ define([
 			});
 			this.createFilter();
 			this.createTree(this.parentId, model, {
+				role: "grid",
+				name: messages["Configurations"],
 				setFocus: false, // do not steal focus on load
 			});
 			this.updateCommands();
@@ -201,6 +203,21 @@ define([
 	}
 	GitConfigListRenderer.prototype = Object.create(mExplorer.SelectionRenderer.prototype);
 	objects.mixin(GitConfigListRenderer.prototype, {
+		getCellHeaderElement: function(col_no) {
+			var labelText = "";
+			switch (col_no) {
+			case 0:
+				labelText = messages["Configurations"];
+				break;
+			default:
+				return null;
+			}
+			var th = document.createElement("th"); //$NON-NLS-0$
+			th.className = "visuallyhidden"; //$NON-NLS-0$
+			th.style.paddingTop = th.style.paddingLeft = "4px"; //$NON-NLS-0$
+			th.textContent = labelText;
+			return th;
+		},
 		getCellElement: function(col_no, item, tableRow){
 			if (col_no > 1) return null;
 			var div, td;
@@ -234,9 +251,10 @@ define([
 					div.appendChild(valueNode);
 					break;
 				case 1:
+					td.setAttribute("aria-label", messages["Actions"]);
 					var actionsArea = document.createElement("ul"); //$NON-NLS-0$
 					actionsArea.className = "sectionTableItemActions layoutRight commandList toolComposite"; //$NON-NLS-0$
-					actionsArea.id = "configActionsArea"; //$NON-NLS-0$
+					actionsArea.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
 					div.appendChild(actionsArea);
 					this.commandService.renderCommands(this.actionScopeId, actionsArea, item, this.explorer, "tool"); //$NON-NLS-0$
 					break;

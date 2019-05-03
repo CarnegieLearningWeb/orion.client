@@ -72,6 +72,7 @@ define([
 			this._searchResultsTitle = lib.$(".searchResultsTitle", this._searchWrapper); //$NON-NLS-0$
 			this._searchResultsWrapperDiv = lib.$(".searchResultsWrapperDiv", this._searchWrapper); //$NON-NLS-0$
 			this._searchResultsWrapperDiv.id = "inlineSearchResultsWrapper";
+			this._searchResultsWrapperDiv.setAttribute("aria-labelledby", "searchResultsTitle");
 			
 			this._replaceCompareTitleDiv = lib.node("replaceCompareTitleDiv"); //$NON-NLS-0$
 			this._replaceCompareDiv = lib.node("replaceCompareDiv"); //$NON-NLS-0$
@@ -238,7 +239,7 @@ define([
 	       				searchParams = mSearchUtils.copySearchParams(this._filledResult.searchParams);
 	       				searchParams.replace = options.replace;
 					} else {
-						searchParams = mSearchUtils.getSearchParams(this._searcher, options.keyword, options);
+						searchParams = mSearchUtils.getSearchParams(this._searcher, options.keyword, options, this.getSearchScopeOption());
 						this._hideSearchOptions();
 					}
 					this._searchResultExplorer.runSearch(searchParams, this._searchResultsWrapperDiv, this._filledResult);
@@ -314,6 +315,8 @@ define([
 			
 			this._searchBox.getRecentEntryButton().setAttribute("aria-label", messages["Show previous search terms"]); //$NON-NLS-0$
 			
+			this._searchWrapper.tabIndex = -1;
+			this._searchWrapper.style.outline = "none";
 			this._searchWrapper.addEventListener("keydown", function(e) { //$NON-NLS-0$
 				if(e.defaultPrevented){// If the key event was handled by other listeners and preventDefault was set on(e.g. input completion handled ENTER), we do not handle it here
 					return;
@@ -462,7 +465,13 @@ define([
 
 			this._toggleSearchOptionsLink = lib.$("#toggleSearchOptionsLink", this._searchWrapper); //$NON-NLS-0$
 			this._toggleSearchOptionsLink.addEventListener("click", this.showSearchOptions.bind(this)); //$NON-NLS-0$
-			this._toggleSearchOptionsLink.textContent = messages["^ Edit Search"]; //$NON-NLS-0$
+			var span = document.createElement("span"); //$NON-NLS-0$
+			span.setAttribute("aria-hidden", "true"); //$NON-NLS-1$ //$NON-NLS-0$
+			span.textContent = "^ "; //$NON-NLS-0$
+			this._toggleSearchOptionsLink.appendChild(span);
+			span = document.createElement("span"); //$NON-NLS-0$
+			span.textContent = messages["Edit Search"];
+			this._toggleSearchOptionsLink.appendChild(span);
 
 			if (this._replaceBoxIsHidden()) {
 	        	this._toggleReplaceLink.classList.remove("checkedSearchOptionButton"); //$NON-NLS-0$	
@@ -503,7 +512,7 @@ define([
 		},
 
 		_generateTooltips: function(node,message){
-			return new mTooltip.Tooltip({
+			return node.tooltip = new mTooltip.Tooltip({
 				node: node,
 				text: message,
 				position: ["below", "right", "above", "left"] //$NON-NLS-4$ //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
@@ -656,12 +665,16 @@ define([
 		},
 		
 		_toggleReplaceFieldVisibility: function () {
+			var focusElement = this._searchTextInputBox;
 			if (this._replaceBoxIsHidden()) {
 				this._showReplaceField();
+				if (this._searchTextInputBox.value.length > 0) {
+					focusElement = this._replaceTextInputBox;
+				}
 			} else {
 				this._hideReplaceField();
 			}
-			this._searchTextInputBox.focus();
+			focusElement.focus();
 		},
 		_toggleCaseSensitive: function () {
 			if(this._caseSensitive){
@@ -702,6 +715,7 @@ define([
 		showSearchOptions: function() {
 			this._searchWrapper.classList.remove("searchOptionsHidden"); //$NON-NLS-0$
 			this._toggleSearchOptionsLink.classList.add("linkHidden"); //$NON-NLS-0$
+			this.focusOnTextInput();
 		},
 		
 		_hideSearchOptions: function() {

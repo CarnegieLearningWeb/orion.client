@@ -10,6 +10,9 @@
 
 /*eslint-env browser, amd*/
 define([
+	'i18n!orion/edit/nls/messages',
+	'i18n!orion/navigate/nls/messages',
+	'orion/i18nUtil',
 	'orion/globalCommands',
 	'orion/explorers/explorer-table',
 	'orion/explorers/navigatorRenderer',
@@ -20,13 +23,12 @@ define([
 	'orion/URITemplate',
 	'orion/webui/littlelib',
 	'orion/objects',
-	'orion/util',
 	'orion/Deferred',
 	'orion/projects/projectView',
 	'orion/generalPreferences',
 	'orion/section'
-], function(mGlobalCommands, mExplorerTable, mNavigatorRenderer, FileCommands, mMarkdownView, mProjectEditor, PageUtil, 
-			URITemplate, lib, objects, util, Deferred, mProjectView, mGeneralPrefs, mSection) {
+], function(editMessages, navMessages, i18nUtil, mGlobalCommands, mExplorerTable, mNavigatorRenderer, FileCommands, mMarkdownView, mProjectEditor, PageUtil, 
+			URITemplate, lib, objects, Deferred, mProjectView, mGeneralPrefs, mSection) {
 
 	var ID_COUNT = 0;
 
@@ -59,26 +61,13 @@ define([
 		/**
 		 * override NavigatorRenderer's prototype
 		 */
-		getCellHeaderElement: function(col_no) {
-			var td;
-			if (col_no === 0) {
-				td = document.createElement("th");
-				td.colSpan = 1;
-				var root = this.explorer.treeRoot;
-				td.appendChild(document.createTextNode(root.Parents || util.isElectron ? root.Name : this.explorer.fileClient.fileServiceName(root.Location)));
-				return td;
-			}
-			return null;
-		},
-		/**
-		 * override NavigatorRenderer's prototype
-		 */
 		getExpandImage: function() {
 			return null;
 		}
 	});
 
 	function FolderNavExplorer(options) {
+		options.role = "grid"; //$NON-NLS-0$
 		options.setFocus = false; // do not steal focus on load
 		options.cachePrefix = null; // do not persist table state
 		options.dragAndDrop = FileCommands.uploadFile;
@@ -104,7 +93,7 @@ define([
 	objects.mixin(FolderNavExplorer.prototype, /** @lends orion.FolderNavExplorer.prototype */ {
 		loadRoot: function(root) {
 			if (root) {
-				this.load(root, "Loading " + root.Name).then(this.loaded.bind(this));
+				this.load(root, i18nUtil.formatMessage(navMessages["Loading ${0}"], root.Name)).then(this.loaded.bind(this));
 			} else {
 				this.loadResourceList(PageUtil.matchResourceParameters().resource + "?depth=1", false).then(this.loaded.bind(this)); //$NON-NLS-0$
 			}
@@ -246,7 +235,7 @@ define([
 						if (this.showFolderNav) {
 							var navNode = document.createElement("div");
 							navNode.id = "folderNavNode" + this.idCount; //$NON-NLS-0$
-							var title = sectionNames[sectionName] || "Files";
+							var title = sectionNames[sectionName] || this._metadata.Name;
 							var foldersSection = new mSection.Section(this._node, {
 								id: "folderNavSection" + this.idCount,
 								headerClass: ["sectionTreeTableHeader"],
@@ -255,6 +244,7 @@ define([
 								canHide: true
 							});
 							this.folderNavExplorer = new FolderNavExplorer({
+								name: editMessages["FolderNavigator"],
 								parentId: navNode,
 								view: this,
 								menuBar: this.menuBar,

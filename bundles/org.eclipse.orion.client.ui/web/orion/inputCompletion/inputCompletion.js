@@ -10,6 +10,8 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( EventTarget, bidiUtils, urlModifier ) {
+	
+	var ITEM_ID = 0
 
 	/**
 	 * InputCompletion is an alternative to datalist support in html5.
@@ -133,6 +135,11 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 		if (typeof(this._inputField) === "string") { //$NON-NLS-0$
 			this._inputField = document.getElementById(this._inputField);
 		}
+		this._inputField.setAttribute("role", "combobox");
+		this._inputField.setAttribute("autocomplete", "off");
+		this._inputField.setAttribute("aria-autocomplete", "list");
+		this._inputField.setAttribute("aria-haspopup", true);
+		this._inputField.setAttribute("aria-expanded", false);
 		
 		var blurHanlder = function(e) {
 			if(this._mouseDown){
@@ -189,10 +196,25 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 	 * If this function returns true, the caller's listener has to stop handling it.
 	 */
 	InputCompletion.prototype.onKeyDown = function(e){
-		if(this._dismissed){
+		var keyCode= e.charCode || e.keyCode;
+		if(keyCode === 40 /* Down arrow */ || keyCode === 38 /* Up arrow */){
+			if (e.altKey) {
+				if (keyCode === 40 && this._dismissed) {
+					this._proposeOn(this._inputField.value);
+					e.preventDefault();
+					e.stopPropagation();
+					return false;
+				} else if (keyCode === 38 && !this._dismissed) {
+					this._dismiss();//Dismiss the proposal UI and do nothing.
+					e.preventDefault();
+					e.stopPropagation();
+					return false;
+				}
+			}
+		}
+		if (this._dismissed) {
 			return true;
 		}
-		var keyCode= e.charCode || e.keyCode;
 		if (keyCode === 13/* Enter */) {//If there is already a selected/hightlighted item in the proposal list, then put hte proposal back to the input field and dismiss the proposal UI
 			if(this._proposalList && this._proposalList.length > 0 && this._proposalIndex >= 0 && this._proposalIndex < this._proposalList.length){
 				e.preventDefault();
@@ -208,6 +230,7 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 			return false;
 		} else if(keyCode === 27/* ESC */) {
 			e.preventDefault();
+			e.stopPropagation();
 			this._dismiss();//Dismiss the proposal UI and do nothing.
 			return false;
 		} else if(keyCode === 46/* DELETE */) {
@@ -250,9 +273,6 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 			this._completionUIContainer.id = this._getUIContainerID();
 			this._completionUIContainer.style.display = "none"; //$NON-NLS-0$
 			this._completionUIContainer.className = "inputCompletionContainer"; //$NON-NLS-0$
-			this._completionUIContainer.setAttribute("role", "list"); //$NON-NLS-1$ //$NON-NLS-0$
-			this._completionUIContainer.setAttribute("aria-atomic", "true"); //$NON-NLS-1$ //$NON-NLS-0$
-			this._completionUIContainer.setAttribute("aria-live", "assertive"); //$NON-NLS-1$ //$NON-NLS-0$
 			document.body.appendChild(this._completionUIContainer);
 		}
 		this._completionUIContainer.textContent = "";
@@ -261,6 +281,8 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 			this._completionUL = document.createElement('ul');//$NON-NLS-0$
 			this._completionUL.id = this._getUIProposalListId();
 			this._completionUL.className = "inputCompletionUL";//$NON-NLS-0$
+			this._completionUL.setAttribute("role", "listbox");
+			this._inputField.setAttribute("aria-owns", this._completionUL.id);
 		}
 		this._completionUL.textContent = "";
 		this._completionUIContainer.appendChild(this._completionUL);
@@ -318,10 +340,14 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 				this._dismiss(e.currentTarget.completionItem.value);
 			}.bind(this);
 			listEle.className = "inputCompletionLINormal"; //$NON-NLS-0$
+			listEle.id = "inputCompletionItem_" + ITEM_ID++;
+			listEle.tabIndex = -1;
+			listEle.setAttribute("role", "option");
 			listEle.completionItem = category.item;
 			var deleteBtn;
 			if(typeof category.item.value === "string"){ //$NON-NLS-0$
 				var tbl = document.createElement('table'); //$NON-NLS-0$
+				tbl.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-0$
 				tbl.style.width = "100%"; //$NON-NLS-0$
 				tbl.style.tableLayout = 'fixed'; //$NON-NLS-0$
 				tbl.style.borderSpacing = "0"; //$NON-NLS-0$
@@ -391,6 +417,8 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 			}
 		}
 		if(domNode){
+			this._inputField.setAttribute("aria-activedescendant", domNode.id);
+			domNode.setAttribute("aria-selected", selected);
 			domNode.className = (selected ? "inputCompletionLISelected": "inputCompletionLINormal"); //$NON-NLS-1$ //$NON-NLS-0$
 			if(deleteBtn){
 				deleteBtn.style.display = selected ? "": "none"; //$NON-NLS-0$
@@ -437,6 +465,7 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 			}
 		}
 		this._completionUIContainer.style.display = "none"; //$NON-NLS-0$
+		this._inputField.setAttribute("aria-expanded", false);
 	};
 	
 	InputCompletion.prototype._show = function(){
@@ -449,6 +478,7 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 		        offsetParent = offsetParent.offsetParent;
 			}
 			this._completionUIContainer.style.display = "block"; //$NON-NLS-0$
+			this._inputField.setAttribute("aria-expanded", true);
 			var top = curTop + this._inputField.offsetHeight + 2;
 			this._completionUIContainer.style.top = top + "px"; //$NON-NLS-0$
 			this._completionUIContainer.style.left = curLeft + "px"; //$NON-NLS-0$
@@ -463,6 +493,7 @@ define(['orion/EventTarget', 'orion/bidiUtils', 'orion/urlModifier'], function( 
 			this._proposalList = null;
 			this._proposalIndex = -1;
 			this._completionUIContainer.style.display = "none"; //$NON-NLS-0$
+			this._inputField.setAttribute("aria-expanded", false);
 		}
 	};
 	

@@ -26,7 +26,9 @@ define([
 	 * @param {DomNode} parent parent node
 	 * @param {DomNode} [options.sibling] if specified, the section will be inserted before the sibling
 	 * @param {String} options.id id of the section header
-	 * @param {String} options.title title (in HTML) of the section
+	 * @param {String} options.title title of the section
+	 * @param {String} options.tooltip tooltip for the section
+	 * @param {String} options.name accessible name of an icon section
 	 * @param {orion.preferences.PreferencesService} [options.preferenceService] used to store the hidden/shown state of the section if specified
 	 * @param {String|Array} [options.headerClass] a class or array of classes to use in the section header, in addition to the default header classes
 	 * @param {String|Array} [options.iconClass] a class or array of classes to use in the icon decorating section, no icon displayed if not provided
@@ -36,7 +38,6 @@ define([
 	 * @param {Boolean} [options.canHide] if true section may be hidden
 	 * @param {Boolean} [options.hidden] if true section will be hidden at first display
 	 * @param {Boolean} [options.useAuxStyle] if true the section will be styled for an auxiliary pane
-	 * @param {Boolean} [options.keepHeader] if true the embedded explorer will keep its header
 	 * @param {Boolean} [options.noTwistie] if true the twisties will not be displayed
 	 * @param {Boolean} [options.dropdown] if true the section is dropdown
 	 * @param {Boolean} [options.noArrow] if true no dropdown arrow
@@ -86,7 +87,7 @@ define([
 		this.domNode.id = options.id;
 		
 		if(options.tooltip) {
-			this.domNode.optionsTooltip = new sTooltip.Tooltip({
+			this.domNode.tooltip = new sTooltip.Tooltip({
 				node: this.domNode,
 				text: options.tooltip,
 				position: ["above", "below", "right", "left"] //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
@@ -129,7 +130,10 @@ define([
 			if (options.dropdown) {
 				if (options.iconClass) {
 					this.domNode.setAttribute("role", "button"); //$NON-NLS-1$ //$NON-NLS-0$
-					if (options.tooltip) {
+					// ensure there is accessible text describing this image
+					if (options.name) {
+						this.domNode.setAttribute("aria-label", options.name); //$NON-NLS-0$
+					} else if (options.tooltip) {
 						this.domNode.setAttribute("aria-label", options.tooltip); //$NON-NLS-0$
 					}
 				} else {
@@ -137,8 +141,8 @@ define([
 					this.domNode.setAttribute("aria-readonly", "true"); //$NON-NLS-1$ //$NON-NLS-0$
 				}
 				this.domNode.setAttribute("aria-haspopup", "dialog"); //$NON-NLS-1$ //$NON-NLS-0$
-				this.domNode.setAttribute("aria-expanded", "false"); //$NON-NLS-1$ //$NON-NLS-0$
 			}
+			this.domNode.setAttribute("aria-expanded", "false"); //$NON-NLS-1$ //$NON-NLS-0$
 		}
 		var classes;
 		if(options.iconClass){
@@ -158,10 +162,6 @@ define([
 			}.bind(this));
 		}
 		
-		if(options.keepHeader){
-			this._keepHeader = options.keepHeader;
-		}
-
 		this.titleActionsNode = document.createElement("div"); //$NON-NLS-0$
 		this.titleActionsNode.id = options.id + "TitleActionsArea"; //$NON-NLS-0$
 		this.titleActionsNode.classList.add("layoutLeft"); //$NON-NLS-0$
@@ -176,10 +176,13 @@ define([
 		
 		// if dropdown and not icon, mark up titleNode as textbox child of combo
 		if (options.dropdown && !options.iconClass) {
-			this.titleNode.setAttribute("role", "textbox"); //$NON-NLS-1$ //$NON-NLS-0$
-			this.titleNode.setAttribute("aria-readonly", "true"); //$NON-NLS-1$ //$NON-NLS-0$
 			this.domNode.setAttribute("aria-labelledby", this.titleNode.id); //$NON-NLS-1$ //$NON-NLS-0$
 		}
+		if (!options.dropdown && options.canHide) {
+			this.domNode.setAttribute("role", "button"); //$NON-NLS-1$ //$NON-NLS-0$
+			this.domNode.setAttribute("aria-labelledby", this.titleNode.id); //$NON-NLS-1$ //$NON-NLS-0$
+		}
+
 		this.domNode.appendChild(this.titleNode);
 		this.titleNode.textContent = options.title;
 
@@ -251,6 +254,8 @@ define([
 		}
 
 		this._contentParent = document.createElement("div"); //$NON-NLS-0$
+		this._contentParent.tabIndex = -1;
+		this._contentParent.style.outline = "none";
 		this._contentParent.id = this.id + "Content"; //$NON-NLS-0$
 		this._contentParent.classList.add("sectionTable"); //$NON-NLS-0$
 
@@ -258,12 +263,16 @@ define([
 		if (options.dropdown) {
 			this._contentParent.classList.add("sectionDropdown");
 			this._contentParent.setAttribute("role", "dialog"); //$NON-NLS-1$ //$NON-NLS-0$
+			this._contentParent.setAttribute("aria-modal", "true"); //$NON-NLS-1$ //$NON-NLS-0$
 			this._contentParent.setAttribute("aria-labelledby", this.titleNode.id); //$NON-NLS-0$
 			this.domNode.setAttribute("aria-owns", this._contentParent.id); //$NON-NLS-0$
 		} else {
 			// if not dropdown, mark up _sectionContainer as region landmark
 			this._sectionContainer.setAttribute("role", "region"); //$NON-NLS-1$ //$NON-NLS-0$
 			this._sectionContainer.setAttribute("aria-labelledby", this.titleNode.id); //$NON-NLS-0$
+			if (options.canHide) {
+				this.domNode.setAttribute("aria-controls", this._contentParent.id); //$NON-NLS-0$
+			}
 		}
 		
 		// initially style as hidden until we determine what needs to happen
@@ -306,10 +315,10 @@ define([
 			this._updateExpandedState(true);
 			this.dropdown = true;
 			this.positionNode = options.positionNode;
-			lib.addAutoDismiss([this._contentParent, this.positionNode || this.domNode], function (event) {
+			lib.addAutoDismiss([this._contentParent, this.domNode], function (event) {
 				var temp = event.target;
 				while (temp) {
-					if (temp.classList && temp.classList.contains("tooltipContainer")) { //$NON-NLS-0$
+					if (temp.classList && (temp.classList.contains("tooltipContainer") || temp.classList.contains("dialog"))) { //$NON-NLS-1$ $NON-NLS-0$
 						return;
 					}
 					temp = temp.parentNode;
@@ -319,7 +328,6 @@ define([
 			this._contentParent.addEventListener("keydown", function(evt) { //$NON-NLS-0$
 				if(evt.keyCode === lib.KEY.ESCAPE) {
 					that.setHidden(true);
-					that.domNode.focus();
 				}
 			}, false);
 		}
@@ -335,6 +343,10 @@ define([
 		 */
 		destroy: function() {
 			var parent;
+			if (this.domNode.tooltip) {
+				this.domNode.tooltip.destroy();
+				this.domNode.tooltip = null;
+			}
 			if (this.domNode) {
 				parent = this.domNode.parentNode;
 				if (parent) parent.removeChild(this.domNode);
@@ -409,6 +421,20 @@ define([
 		 */
 		setOnExpandCollapse: function(func){
 			this._onExpandCollapse = func;
+		},
+		
+		/**
+		 * Set the node that should receive focus after the dropdown is closed.
+		 */
+		getOriginalFocus: function() {
+			return this._originalFocus || this.domNode;
+		},
+		
+		/**
+		 * Set the node that should receive focus after the dropdown is closed.
+		 */
+		setOriginalFocus: function(node) {
+			this._originalFocus = node;
 		},
 
 		/**
@@ -502,21 +528,6 @@ define([
 			});
 			if(explorer.renderer){
 				explorer.renderer.section = this;
-				if(!this._keepHeader){
-					objects.mixin(explorer.renderer, {
-						getCellHeaderElement: function(col_no){
-							var firstHeader = Object.getPrototypeOf(this).getCellHeaderElement.call(this, col_no);
-							if(firstHeader){
-								var sectionTitle = firstHeader.innerHTML;
-								if (bidiUtils.isBidiEnabled()) {
-									sectionTitle = bidiUtils.enforceTextDirWithUcc(sectionTitle);
-								}
-								this.section.setTitle(sectionTitle);
-							}
-							return null;
-						}
-					});
-				}
 			}
 		},
 
@@ -555,23 +566,26 @@ define([
 		},
 		
 		_changeExpandedState: function() {
+			var focus = this.hidden;
 			if (this.hidden){
 				this._expand();
-				
+			} else {
+				this._collapse();
+			}
+
+			this._updateExpandedState(true);
+			
+			if (focus) {
 				if (this.dropdown) {
-					var firstTabbable = lib.firstTabbable(this.domNode.nextElementSibling);					
+					var firstTabbable = lib.firstTabbable(this._contentParent);					
 					if (firstTabbable) {
-						if (firstTabbable.tagName === "INPUT" || firstTabbable.tabIndex >= 0) {
-							firstTabbable.focus(); //$NON-NLS-0$
+						if (firstTabbable.tagName === "INPUT" || firstTabbable.tabIndex >= 0) { //$NON-NLS-0$
+							firstTabbable.focus();
 						}
 						lib.trapTabs(this.domNode.nextElementSibling);
 					}
 				}
-			} else {
-				this._collapse();
 			}
-			
-			this._updateExpandedState(true);
 		},
 		
 		_updateExpandedState: function(storeValue) {
@@ -600,6 +614,7 @@ define([
 		},
 		
 		_expand: function() {
+			this._originalFocus = document.activeElement;
 			this._positionDropdown();
 			if (this._contentParent) {
 				this._contentParent.classList.remove("sectionClosed"); //$NON-NLS-0$
@@ -608,8 +623,10 @@ define([
 			if (this.domNode) {
 				this.domNode.classList.remove("sectionClosed"); //$NON-NLS-0$
 				this.domNode.classList.add("sectionOpened"); //$NON-NLS-0$
-				if (this._contentParent) this.domNode.setAttribute("aria-owns", this._contentParent.id); //$NON-NLS-0$
-				if (this.dropdown) {
+				if (this._contentParent && this.domNode.getAttribute("role") !== "button") {
+					this.domNode.setAttribute("aria-owns", this._contentParent.id); //$NON-NLS-0$
+				}
+				if (this.canHide) {
 					this.domNode.setAttribute("aria-expanded", "true"); //$NON-NLS-1$ //$NON-NLS-0$
 				}
 			}
@@ -643,19 +660,21 @@ define([
 		},
 		
 		_collapse: function() {
-			this.hidden = true;
-			if (this._contentParent) {
-				this._contentParent.classList.add("sectionClosed"); //$NON-NLS-0$
-				this._contentParent.classList.remove("sectionOpened"); //$NON-NLS-0$
-			}
-			if (this.domNode) {
-				this.domNode.classList.add("sectionClosed"); //$NON-NLS-0$
-				this.domNode.classList.remove("sectionOpened"); //$NON-NLS-0$
-				this.domNode.removeAttribute("aria-owns"); //$NON-NLS-0$
-				if (this.dropdown) {
-					this.domNode.setAttribute("aria-expanded", "false"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.returnFocus(this._contentParent, this._originalFocus, function() {
+				this.hidden = true;
+				if (this._contentParent) {
+					this._contentParent.classList.add("sectionClosed"); //$NON-NLS-0$
+					this._contentParent.classList.remove("sectionOpened"); //$NON-NLS-0$
 				}
-			}
+				if (this.domNode) {
+					this.domNode.classList.add("sectionClosed"); //$NON-NLS-0$
+					this.domNode.classList.remove("sectionOpened"); //$NON-NLS-0$
+					this.domNode.removeAttribute("aria-owns"); //$NON-NLS-0$
+					if (this.canHide) {
+						this.domNode.setAttribute("aria-expanded", "false"); //$NON-NLS-1$ //$NON-NLS-0$
+					}
+				}
+			}.bind(this));
 		}
 	};
 	

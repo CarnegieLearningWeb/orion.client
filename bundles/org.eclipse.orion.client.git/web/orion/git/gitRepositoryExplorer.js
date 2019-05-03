@@ -327,9 +327,16 @@ define([
 			if (!force) {
 				if (compareLocation(that.repository, repository)) return;
 			}
-			that.repository = repository;
 			that.initTitleBar(repository || {});
 			if (repository) {
+				that.repositoriesNavigator.model.repositories.some(function(repo){
+					if (repo.Location === repository.Location) {
+						repository = repo;
+						return true;
+					}
+					return false;
+				});
+				that.repository = repository;
 				that.preferencesService.put("/git/settings", {lastRepo: {Location: that.repository.Location}}); //$NON-NLS-1$
 				that.repositoriesNavigator.select(that.repository);
 				that.repositoriesSection.setTitle(repository.Name);
@@ -337,6 +344,7 @@ define([
 				that.displayConfig(repository, "full"); //$NON-NLS-0$
 				that.setSelectedReference(that.reference);
 			} else {
+				that.repository = null;
 				mMetrics.logPageLoadTiming("interactive", window.location.pathname);
 				mMetrics.logPageLoadTiming("complete", window.location.pathname);
 				this.loadingDeferred.resolve();
@@ -373,9 +381,26 @@ define([
 	};
 	
 	GitRepositoryExplorer.prototype.setSelectedChanges = function(changes) {
+		if (changes) {
+			changes = changes.filter(function(c) {
+				return !(c.Type === "Incoming" || c.Type === "Outgoing" || c.Type === "Synchronized" || c.Type === "NoCommits" || c.Type === "MoreCommits");
+			});
+		}
+		if (changes && (0 === changes.length || changes.length > 2)) changes = null;
+		changes = changes || (this.repository.status ? [this.repository.status] : []);
+		if (this.changes && changes) {
+			if (this.changes.length === changes.length) {
+				var i;
+				for (i = 0; i < changes.length; i++) {
+					if (changes[i] !== this.changes[i]) 
+						break;
+				}
+				if (i === changes.length) return;
+			}
+		}
 		lib.empty(lib.node('table')); //$NON-NLS-0$
 		var title;
-		this.changes = changes = changes || (this.repository.status ? [this.repository.status] : []);
+		this.changes = changes;
 		if (changes.length === 2) {
 			if (changes[0].Type === "Commit" && changes[1].Type === "Commit") { //$NON-NLS-1$ //$NON-NLS-0$
 				title = i18nUtil.formatMessage(messages["CompareChanges"], util.shortenRefName(changes[0]), util.shortenRefName(changes[1]));
@@ -492,6 +517,7 @@ define([
 			title: messages["Repo"],
 			sibling: sibling,
 //			iconClass: ["gitImageSprite", "git-sprite-repository"], //$NON-NLS-1$ //$NON-NLS-0$
+			tooltip: messages.RepositoryTooltip,
 			slideout: true,
 			content: '<div id="repositoryNode" class="repoDropdownList"></div><div id="dropdownRepositoryActionsNode" class="sectionDropdownActions toolComposite"></div>', //$NON-NLS-0$
 			canHide: true,
@@ -509,7 +535,7 @@ define([
 			mGitCommands.preStateChanged().then(function(doIt) {
 				if(doIt) {
 					this.changes = this.reference = this.log = null;
-					section.setHidden(true);
+					//section.setHidden(true);
 					this.setSelectedRepository(selected);
 					window.location.href = repoTemplate.expand({resource: this.lastResource = selected.Location});
 				} else {
@@ -551,6 +577,7 @@ define([
 			title: this.previousBranchTitle || "\u00A0", //$NON-NLS-0$
 			sibling: sibling,
 //			iconClass: ["gitImageSprite", "git-sprite-branch"], //$NON-NLS-1$ //$NON-NLS-0$
+			tooltip: messages.ReferenceTooltip,
 			slideout: true,
 			content: '<div id="branchNode" class="branchDropdownList"></div><div id="dropdownBranchesActionsNode" class="sectionDropdownActions toolComposite"></div>', //$NON-NLS-0$
 			canHide: true,
@@ -593,7 +620,7 @@ define([
 							return;
 					}
 					this.changes = this.reference = this.log = null;
-					section.setHidden(true);
+					//section.setHidden(true);
 					this.setSelectedReference(selected);
 					if (!util.isNewBranch(selected)) {
 						window.location.href = repoTemplate.expand({resource: this.lastResource = selected.Location});
@@ -655,7 +682,7 @@ define([
 			id: "statusSection", //$NON-NLS-0$
 			title: messages["WorkingDirChanges"],
 			slideout: false,
-			content: '<div id="statusNode"></div>', //$NON-NLS-0$
+			content: '<div class="gitCommitMessageSection"></div><div id="statusNode"></div>', //$NON-NLS-0$
 			canHide: false,
 			noTwistie: true,
 			preferenceService: this.preferencesService
@@ -669,6 +696,7 @@ define([
 			repository: repository,
 			section: section,
 			editableInComparePage: true,
+			selectionPolicy: "cursorOnly", //$NON-NLS-0$
 			handleError: this.handleError.bind(this),
 			gitClient: this.gitClient,
 			progressService: this.progressService,
@@ -748,6 +776,10 @@ define([
 					explorer.select(repository.status);
 				}
 
+				if (document.activeElement === document.body) {
+					explorer.getNavHandler().focus();
+				}
+
 				mMetrics.logPageLoadTiming("complete", window.location.pathname); //$NON-NLS-0$
 				this.loadingDeferred.resolve();
 			}.bind(this), this.loadingDeferred.reject);
@@ -775,6 +807,7 @@ define([
 			prefix: "diff", //$NON-NLS-0$
 			repository: repository,
 			commit: commit,
+			selectionPolicy: "cursorOnly", //$NON-NLS-0$
 			changes: commit ? commit.Diffs : null,
 			location: location,
 			commitName: commitName,
@@ -802,7 +835,8 @@ define([
 			dropdown: true,
 			noTwistie: true,
 			noArrow: true,
-			tooltip: messages["Configurations"],
+			name: messages["Configurations"],
+			tooltip: messages["ConfigurationsTooltip"],
 			preferenceService: this.preferencesService
 		});
 			

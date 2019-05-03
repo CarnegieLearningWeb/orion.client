@@ -13,9 +13,12 @@ define({//Default message bundle
 	"ProblemsFilter": "Type characters (* = any string, ? = any character)", //$NON-NLS-1$ //$NON-NLS-0$
 	"computeCancelled": "Problems computation cancelled by user", //$NON-NLS-1$ //$NON-NLS-0$
 	"computingProblems": "Computing problems...", //$NON-NLS-1$ //$NON-NLS-0$
+	"Problems": "Problems", //$NON-NLS-1$ //$NON-NLS-0$
 	"Errors": "Errors", //$NON-NLS-1$ //$NON-NLS-0$
 	"Info": "Information", //$NON-NLS-1$ //$NON-NLS-0$
 	"Warnings": "Warnings", //$NON-NLS-1$ //$NON-NLS-0$
+	"Error": "Error", //$NON-NLS-1$ //$NON-NLS-0$
+	"Warning": "Warning", //$NON-NLS-1$ //$NON-NLS-0$
 	"items": " (${0} items)", //$NON-NLS-1$ //$NON-NLS-0$
 	"viewByTypes" : "By types", //$NON-NLS-1$ //$NON-NLS-0$
 	"viewByFiles" : "By files", //$NON-NLS-1$ //$NON-NLS-0$

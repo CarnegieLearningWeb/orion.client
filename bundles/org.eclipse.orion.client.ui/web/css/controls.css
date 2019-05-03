@@ -288,6 +288,7 @@ input.parameterInput[type=checkbox] {
 textarea.parameterInput {
 	vertical-align: top;
 	width: 50em;
+	outline: none;
 }
 
 div.parameterInput[contenteditable="true"] {
@@ -349,7 +350,7 @@ div.parameterInput[contenteditable="true"]:before {
 }
 
 .mainNavColumn {
-	display: inline-block;
+	display: inline;
 	vertical-align: baseline;
 	white-space: nowrap;
 }
@@ -664,7 +665,12 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 	outline: none;
 }
 
+.keyAssistSection th {
+	text-align: start;
+}
+
 .keyAssistItem {
+	outline: none;
 }
 
 .keyAssistItem.selected {
@@ -680,8 +686,11 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 .keyAssistEditButton {
 	display: block;
 	visibility: hidden;
-	font-size: 13px !important;
 	color: white !important;
+}
+
+.keyAssistEditButton .core-sprite-edit {
+	font-size: 12px;
 }
 
 .keyAssistEditButtonVisible {
@@ -689,6 +698,7 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 }
 
 .keyAssistActions {
+	padding-right: 4px;
 	border-top-right-radius: 4px;
 	border-bottom-right-radius: 4px;
 }
@@ -722,6 +732,10 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 	text-align: right;
 	padding: 3px;
 	min-width: 150px;
+}
+
+.keyAssistItem.selected .keyAssistAccel {
+    color: black;
 }
 
 .inputCompletionContainer {
@@ -842,8 +856,7 @@ html[dir="rtl"] #treeButtons { /* ACGC */
 .secondaryColumn {
 	color: #666666;	
 	padding-right: 8px;
-	padding-top: 8px;
-	vertical-align:top;
+	vertical-align:middle;
 	white-space: nowrap;
 }
 
@@ -880,7 +893,7 @@ html[dir="rtl"] .secondaryColumnLeft { /* ACGC */
 }
 
 .primaryColumn {
-	color: #3087B3;
+	color: #266c8f;
 	text-decoration: none;
 	vertical-align:top;
 }
@@ -888,6 +901,7 @@ html[dir="rtl"] .secondaryColumnLeft { /* ACGC */
 .checkColumn {
 	padding: 0;
 	padding-left:10px;
+	vertical-align: middle;
 }
 
 html[dir="rtl"] .checkColumn { /* ACGC */
@@ -905,6 +919,13 @@ html[dir="rtl"] .checkColumn { /* ACGC */
 
 .selectionModelContainer {
 	outline: none;
+	padding-left: 3px;
+	padding-right: 3px;
+ 	width: calc(100% - 6px);
+}
+
+.selectionModelContainer > div > table{
+  border-spacing: 0px 3px;
 }
 
 .treeIterationCursor {
@@ -1205,8 +1226,8 @@ html[dir="rtl"] .groupedContentDivider{ /* ACGC */
 }
 
 .currentLocation{
-	margin-left:auto;
-	margin-right:auto;
+	margin-left:3px;
+	margin-right:3px;
 }
 
 .modifiedFileMarker{
@@ -1327,7 +1348,7 @@ html[dir="rtl"] .sectionWrapper, html[dir="rtl"] .sectionTable{ /* ACGC */
 	transition: all 0.1s ease;
 }
 
-.sectionWrapper.sectionClosed {
+.sectionWrapper.sectionClosed:not(:focus) {
 	box-shadow: none;
 }
 
@@ -1339,7 +1360,7 @@ html[dir="rtl"] .sectionWrapper, html[dir="rtl"] .sectionTable{ /* ACGC */
 .sectionTable td {
 	border-bottom: 1px solid #f1f3f4;
 	vertical-align: middle;
-	color: #606060;
+	color: #505050;
 }
 
 .sectionTable tr:last-child td{

@@ -112,12 +112,15 @@
 }
 
 .searchWrapper {
-	height: 100%;
-	width: 100%;
+	width: calc(100% - 12px);
+	height: calc(100% - 16px);
+	padding: 6px;
+	padding-top: 10px;
+	display: flex;
+	flex-direction: column;
 }
 
 .searchOptWrapperDiv {
-	transition: height 0.2s ease;
 }
 
 .replaceModeActive > .searchOptWrapperDiv {
@@ -126,15 +129,11 @@
 .searchWrapper.searchOptionsHidden > .searchOptWrapperDiv {
 	height: 0;
 	overflow: hidden;
-	visibility: hidden;
+	display: none;
 }
 
 .searchWrapper.searchOptParamBlockHidden > .searchOptWrapperDiv > .searchParamBlockDiv {
 	display: none;
-}
-
-.searchWrapper.searchOptParamBlockHidden > .searchResultsWrapperDiv{
-	height: calc(100% - 150px);
 }
 
 .searchWrapper.searchOptParamBlockHidden > .searchOptWrapperDiv > .searchMainOptionBlock > .toggleDisplayLink{
@@ -146,10 +145,11 @@
 }
 
 .searchResultsWrapperDiv {
-	height: calc(100% - 220px - 97px); /* subtract height of search options*/
-	transition: height 0.2s ease; /* avoid extra scroll bar while switching between search and replace modes */
-	width: 100%;
+	flex: 1 1 auto;
+	background-color: white;
+	outline: 1px solid lightgray;
 	overflow: auto;
+	min-width: 274px;
 }
 
 .searchResultsWrapperDiv > div {
@@ -159,15 +159,6 @@
 
 .searchResultsWrapperDiv > div > .treetable {
 	background: white;
-}
-
-.searchWrapper.searchOptionsHidden > .searchResultsWrapperDiv{
-	height: calc(100% - 70px);
-	overflow: auto;
-}
-
-.replaceModeActive > .searchResultsWrapperDiv {
-	height: calc(100% - 220px - 54px - 38px); /* subtract height of search options and replace box */
 }
 
 .searchWrapper > .comboTextInputWrapper {
@@ -183,9 +174,7 @@
 
 .replaceWrapper {
 	display: block;
-	max-height: 50px; /* for transition */
 	overflow: visible;
-	transition: max-height 0.2s ease;
 }
 
 .replaceWrapperHidden {
@@ -202,15 +191,14 @@
 	margin: 0 0 2px 0;
 	padding: 0 2px;
 	display: block;
-	opacity: 0;
-	text-align: center;
+	visibility: hidden;
 	transition: opacity 0.1s ease;
 	min-width: 252px;
 	text-align: left;
 }
 
 .fileNamePatternsHintVisible {
-	opacity: 1 !important;
+	visibility: visible;
 }
 
 .fileNamePatternsInput {
@@ -234,7 +222,7 @@
 }
 
 .searchMainOptionBlock {
-	margin: 5px 10px 5px 10px;
+	margin-bottom: 10px;
 	display: flex;
 	flex-direction: column;
 	flex-wrap: nowrap;
@@ -245,9 +233,8 @@
 }
 
 .searchOptionBlock {
-	margin: 0 10px 10px 10px;
+	margin-bottom: 10px;
 	min-width: 254px;
-	width: calc(100% - 20px);
 }
 .searchGeneralOptionBlock{
 	margin-left: 4px;
@@ -342,6 +329,10 @@
 	height: calc(100% - 14px);
 }
 
+.projectNavSidebarWrapper .sidebarToolbar {
+	display: none;
+}
+
 .filePathSpan {
 	display: inline-flex;
 	display: -webkit-inline-flex;		/* Safari */
@@ -358,11 +349,10 @@
 	display: inline-flex;
 	display: -webkit-inline-flex;		/* Safari */
 	padding: 7px 10px 7px 2px;
-	width: 100%;
 }
 
 .fullPathSpan {
-	color: #666 !important;
+	color: #555 !important;
 	display: none;
 	flex-grow: 0;
 	flex-shrink: 2;
@@ -397,7 +387,7 @@
 }
 
 .fileParentSpan {
-	color: #666 !important;
+	color: #555 !important;
 	flex-grow: 0;
 	flex-shrink: 0;
 	-webkit-flex-grow: 0;		/* Safari */
@@ -429,7 +419,7 @@
 }
 
 .ellipsisSpan {
-	color: #666 !important;
+	color: #555 !important;
 	flex-grow: 0;
 	flex-shrink: 0;
 	-webkit-flex-grow: 0;		/* Safari */
@@ -457,7 +447,6 @@
 .navlink.searchDetailLink {
 	padding: 5px 0;
 	vertical-align: baseline;
-	width: 100%;
 }
 
 /* search match occurrences */
@@ -533,9 +522,7 @@
 	display: inline-block;
 	font-weight: bold;
 	margin: 0;
-	margin-left: 5px;
 	color: #333;
-	overflow: hidden;
 	text-overflow: ellipsis;
 	vertical-align: middle;
 	white-space: nowrap;
@@ -546,6 +533,10 @@
 	display: block;
 	margin: 5px 0;
 	white-space: nowrap;
+}
+
+.searchPageActions:empty {
+	margin: 0;
 }
 
 .searchPageActionsRight {
@@ -633,6 +624,12 @@
     justify-content: flex-start;
     width: calc(100% - 30px);
 }
+.searchOptionControlButton.toggleReplaceLink:after{
+	content:"a\002192C";
+	font-size: 12px;
+    line-height: 3px;
+    position: relative;
+}
 .searchOptionControlButton.advSearchCaseSensitive:after{
 	content:"Aa";
 	font-size: 12px;
@@ -656,7 +653,7 @@
 .searchOptionControlButton:hover {
 	background-color:#7fa4c0;
 	border-color: #3C71B3;
-	color:rgb(255, 255, 255);
+	color:black;
 }
 
 .locationElementWrapper {
@@ -714,5 +711,5 @@
 .checkedSearchOptionButton{
 	background-color:#7fa4c0;
 	border-color: #3C71B3;
-	color:rgb(255, 255, 255);
+	color:black;
 }

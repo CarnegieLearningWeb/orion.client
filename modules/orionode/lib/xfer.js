@@ -295,6 +295,7 @@ function getXfer(req, res) {
 }
 
 function getXferFrom(req, res, file) {
+	api.addStrictTransportHeaders(res);
 	api.setResponseNoCache(res);
 	var filePath = file.path.replace(/.zip$/, "");
 	var zip = archiver('zip');
@@ -360,7 +361,11 @@ function zipPath(pathToZip, options){
 			.then(function() {
 				if(options.additionalData && options.additionalData.length > 0){
 					options.additionalData.forEach(function(data){
-						zip.append(data.content, data.filename);
+						if (data.content !== undefined) {
+							zip.append(data.content, data.filename);
+						} else if (data.dir) {
+							zip.directory(data.dir, data.destdir, data.data);
+						}
 					});
 				}
 				zip.finalize();

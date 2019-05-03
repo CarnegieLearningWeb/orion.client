@@ -1485,7 +1485,7 @@ var exports = {};
 			if(items) {
 				val = items.Value[items.index || 0];
 			}
-			return [new mCommandRegistry.CommandParameter('value', 'text', messages['Value:'], val)]; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			return [new mCommandRegistry.CommandParameter('value', 'text', i18nUtil.formatMessage(messages['ValueFor:'], items.Key), val)]; //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 		});
 		
 		var editConfigEntryCommand = new mCommands.Command({
@@ -1679,6 +1679,9 @@ var exports = {};
 				});
 						
 				dialog.show();
+				if (data.domNode) {
+					dialog.setOriginalFocus(data.domNode);
+				}
 			}
 		};
 
@@ -1737,6 +1740,9 @@ var exports = {};
 					});
 							
 					dialog.show();
+					if (data.domNode) {
+						dialog.setOriginalFocus(data.domNode);
+					}
 				}
 			},
 			visibleWhen : function() {
@@ -2645,6 +2651,9 @@ var exports = {};
 				});
 						
 				dialog.show();
+				if (data.domNode) {
+					dialog.setOriginalFocus(data.domNode);
+				}
 			}
 		};
 		

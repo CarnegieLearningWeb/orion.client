@@ -61,6 +61,7 @@ define(['orion/webui/littlelib', 'orion/EventTarget'], function(lib, EventTarget
 			this._selectionClass = options.selectionClass;
 			this._parentDropdown = options.parentDropdown;
 			this._positioningNode = options.positioningNode;
+			this._trapTabs = options.trapTabs;
 			
 			if (!this._parentDropdown) {
 				//if a parentDropdown isn't specified move up in dom tree looking for one
@@ -242,6 +243,10 @@ define(['orion/webui/littlelib', 'orion/EventTarget'], function(lib, EventTarget
 					if (this._parentDropdown) {
 						this._parentDropdown.submenuOpen(this);
 					}
+					
+					if (this._trapTabs) {
+						lib.trapTabs(this._dropdownNode);
+					}
 				}
 			}
 			return actionTaken;
@@ -328,7 +333,7 @@ define(['orion/webui/littlelib', 'orion/EventTarget'], function(lib, EventTarget
 				this._dropdownNode.classList.remove("dropdownMenuOpen"); //$NON-NLS-0$
 				lib.setFramesEnabled(true);
 				if (restoreFocus) {
-					this._triggerNode.focus();
+					lib.returnFocus(this._dropdownNode, this._triggerNode);
 				}
 				
 				this._isVisible = false;
@@ -389,7 +394,7 @@ define(['orion/webui/littlelib', 'orion/EventTarget'], function(lib, EventTarget
 		 * A key is down in the dropdown node
 		 */
 		 _dropdownKeyDown: function(event) {
-		 	if (event.keyCode === lib.KEY.TAB) {
+		 	if (event.keyCode === lib.KEY.TAB && !this._trapTabs) {
 		 		if (this._selectedItem || this._isVisible) {
 		 			var keepIterating = true;
 		 			while (keepIterating) {
@@ -455,13 +460,16 @@ define(['orion/webui/littlelib', 'orion/EventTarget'], function(lib, EventTarget
 									}
 								}
 							} else if (event.keyCode === lib.KEY.ENTER || event.keyCode === lib.KEY.SPACE) {
+							 	if (!(event.target === this._dropdownNode || event.target.getAttribute("role") === "menuitem")) {
+							 		return;
+						 		}
 								if (this._selectedItem.classList.contains("dropdownTrigger") && this._selectedItem.dropdown) { //$NON-NLS-0$
 									this._selectedItem.dropdown.open();
 									this._selectedItem.dropdown._selectItem(); // select first item in submenu
 								} else {
 									this._selectedItem.click();
 									// click handling auto closes menus without restoring focus to trigger, so need to restore here
-									this._triggerNode.focus();
+									lib.returnFocus(this._dropdownNode, this._triggerNode);
 								}
 							}
 						}

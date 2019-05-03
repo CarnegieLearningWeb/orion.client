@@ -73,6 +73,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/Deferred'], f
 			this._labelColumnIndex = options.labelColumnIndex === undefined ? 0 : options.labelColumnIndex;
 			this._id = options.id === undefined ? "treetable" : options.id; //$NON-NLS-0$
 			this._role = options.role;
+			this._name = options.name;
 			this._tableStyle = options.tableStyle;
 			this._tableElement = options.tableElement || "table"; //$NON-NLS-0$
 			this._tableBodyElement = options.tableBodyElement || "tbody"; //$NON-NLS-0$
@@ -106,13 +107,14 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/Deferred'], f
 			if (this._renderer.wrapperCallback) {
 				this._renderer.wrapperCallback(wrapper);
 			}
-			var table = document.createElement(this._tableElement); //$NON-NLS-0$
+			var table = this._table = document.createElement(this._tableElement); //$NON-NLS-0$
 			if (this._renderer.tableCallback) {
 				this._renderer.tableCallback(table);
 			}
 			table.id = this._id;
-			if (this._role) {
-				table.setAttribute("role", this._role); //$NON-NLS-0$
+			table.setAttribute("role", this._role || "presentation"); //$NON-NLS-0$
+			if (this._name) {
+				table.setAttribute("aria-label", this._name); //$NON-NLS-0$
 			}
 			if (this._tableStyle) {
 				table.classList.add(this._tableStyle);
@@ -142,6 +144,19 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/Deferred'], f
 		_generateChildren: function(children, indentLevel, referenceNode) {
 			for (var i=0; i<children.length; i++) {
 				var row = document.createElement(this._tableRowElement); //$NON-NLS-0$
+				if (this._role === "treegrid") {
+					row.setAttribute("role", "row");
+					row.setAttribute("aria-level", indentLevel + 1);
+					row.setAttribute("aria-setsize", children.length);
+					row.setAttribute("aria-posinset", i + 1);
+				} else if (this._role === "tree") {
+					row.setAttribute("role", "treeitem");
+					row.setAttribute("aria-level", indentLevel + 1);
+					row.setAttribute("aria-setsize", children.length);
+					row.setAttribute("aria-posinset", i + 1);
+				} else if (this._role === "grid") {
+					row.setAttribute("role", "row");
+				}
 				if(this._renderer && typeof this._renderer.initSelectableRow === "function") { //$NON-NLS-0$
 					this._renderer.initSelectableRow(children[i], row);
 				}
@@ -310,39 +325,41 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/Deferred'], f
 				var row = lib.node(parentId);
 				if (row) {
 					// if it is showing children, refresh what is showing
-					row._item = item;
-					// If the row should be expanded
-					if (row && (forceExpand || row._expanded)) {
-						this._removeChildRows(parentId);
-						if(children){
-							row._expanded = true;
-							if(this._renderer.updateExpandVisuals) {
-							    this._renderer.updateExpandVisuals(row, true);
+					lib.returnFocus(this._table, row, function() {
+						row._item = item;
+						// If the row should be expanded
+						if (row && (forceExpand || row._expanded)) {
+							this._removeChildRows(parentId);
+							if(children){
+								row._expanded = true;
+								if(this._renderer.updateExpandVisuals) {
+									this._renderer.updateExpandVisuals(row, true);
+								}
+								this._generateChildren(children, row._depth+1, row); //$NON-NLS-0$
+								this._rowsChanged();
+							} else {
+								tree = this;
+								if(this._renderer.updateExpandVisuals) {
+								    this._renderer.updateExpandVisuals(row, "progress"); //$NON-NLS-0$
+								}
+								children = this._treeModel.getChildren(row._item, function(children) {
+									if (tree.destroyed) { return; }
+									if(tree._renderer.updateExpandVisuals) {
+									    tree._renderer.updateExpandVisuals(row, true);
+									}
+									if (!row._expanded) {
+										row._expanded = true;
+										tree._generateChildren(children, row._depth+1, row); //$NON-NLS-0$
+										tree._rowsChanged();
+									}
+								});
 							}
-							this._generateChildren(children, row._depth+1, row); //$NON-NLS-0$
-							this._rowsChanged();
 						} else {
-							tree = this;
 							if(this._renderer.updateExpandVisuals) {
-							    this._renderer.updateExpandVisuals(row, "progress"); //$NON-NLS-0$
+								this._renderer.updateExpandVisuals(row, false);
 							}
-							children = this._treeModel.getChildren(row._item, function(children) {
-								if (tree.destroyed) { return; }
-								if(tree._renderer.updateExpandVisuals) {
-								    tree._renderer.updateExpandVisuals(row, true);
-								}
-								if (!row._expanded) {
-									row._expanded = true;
-									tree._generateChildren(children, row._depth+1, row); //$NON-NLS-0$
-									tree._rowsChanged();
-								}
-							});
 						}
-					} else {
-					    if(this._renderer.updateExpandVisuals) {
-						     this._renderer.updateExpandVisuals(row, false);
-						}
-					}
+					}.bind(this));
 				} else {
 					// the item wasn't found.  We could refresh the root here, but for now
 					// let's log it to figure out why.
@@ -410,6 +427,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/Deferred'], f
 			var id = typeof(itemOrId) === "string" ? itemOrId : this._treeModel.getId(itemOrId); //$NON-NLS-0$
 			var row = lib.node(id);
 			if (row) {
+				row.setAttribute("aria-expanded", true);
 				var tree = this;
 				if (row._expanded) {
 					if (postExpandFunc) {
@@ -487,21 +505,24 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/Deferred'], f
 		},
 		
 		_collapse : function(id, row) {
-			row._expanded = false;
-			if(this._renderer.updateExpandVisuals) {
-			    this._renderer.updateExpandVisuals(row, false);
-			}
-			this._removeChildRows(id);
-			this._rowsChanged();
-			if(this._onCollapse){
-				this._onCollapse(row._item);
-			}
+			lib.returnFocus(this._table, row, function() {
+				row._expanded = false;
+				if(this._renderer.updateExpandVisuals) {
+				    this._renderer.updateExpandVisuals(row, false);
+				}
+				this._removeChildRows(id);
+				this._rowsChanged();
+				if(this._onCollapse){
+					this._onCollapse(row._item);
+				}
+			}.bind(this));
 		},
 		
 		collapse: function(itemOrId, byToggle) {
 			var id = typeof(itemOrId) === "string" ? itemOrId : this._treeModel.getId(itemOrId); //$NON-NLS-0$
 			var row = lib.node(id);
 			if (row) {
+				row.setAttribute("aria-expanded", false);
 				if (!row._expanded) {
 					return;
 				}
