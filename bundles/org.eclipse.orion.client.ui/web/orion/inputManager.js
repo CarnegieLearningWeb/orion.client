@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2018 IBM Corporation and others.
+ * Copyright (c) 2010, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -22,8 +22,9 @@ define([
 	'orion/editor/textModelFactory',
 	'orion/formatter',
 	'lsp/languageServerRegistry',
-	'orion/metrics'
-], function(messages, mNavigatorRenderer, i18nUtil, Deferred, EventTarget, objects, PageUtil, mTextModelFactory, mFormatter, mLanguageServerRegistry, mMetrics) {
+	'orion/metrics',
+	'orion/util'
+], function(messages, mNavigatorRenderer, i18nUtil, Deferred, EventTarget, objects, PageUtil, mTextModelFactory, mFormatter, mLanguageServerRegistry, mMetrics, util) {
 
 	function Idle(options){
 		this._document = options.document || document;
@@ -276,7 +277,8 @@ define([
 				this._acceptPatch = null;
 				if (!this._isSameParent(metadataURI)) {
 					var uri = new URL(metadataURI);
-					uri.query.set("tree", localStorage.useCompressedTree ? "compressed" : "decorated"); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
+					var treeType = util.readSetting("useCompressedTree")
+					uri.query.set("tree", treeType ? "compressed" : "decorated"); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$
 					metadataURI = uri.href;
 				}
 				progress(this._read(metadataURI, true), messages.ReadingMetadata, resource).then(function(metadata) {
@@ -414,7 +416,7 @@ define([
 			this.dispatchEvent({ type: "Saving", inputManager: this}); //$NON-NLS-0$
 
 			function _save(that) {
-				editor.markClean();
+				var previousUndoState = editor.markClean();
 				var contents = editor.getText();
 				var data = contents;
 				if (that._getSaveDiffsEnabled() && !that._errorSaving) {
@@ -470,6 +472,7 @@ define([
 					that.reportStatus("");
 					var errorMsg = handleError(statusService, error);
 					mMetrics.logEvent("status", "exception", (that._autoSaveActive ? "Auto-save: " : "Save: ") + errorMsg.Message); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+					editor.markUnclean(previousUndoState);
 					that._errorSaving = true;
 					return done();
 				}
@@ -646,23 +649,30 @@ define([
 					this._setNoInput("");
 				}
 			}.bind(this);
-			if (editor && editor.isDirty() && !this.isEditorTabsEnabled) {
+			if (editor && editor.isDirty()) {
 				var oldLocation = this._location;
 				var oldResource = oldInput.resource;
 				var newResource = input.resource;
-				if (oldResource !== newResource || encodingChanged) {
-					if (this._autoSaveEnabled) {
-						this.save();
-						afterConfirm();
-					} else if(this.syncEnabled && this.isUnsavedWarningNeeed()) {
-						var cancelCallback = function() {
-							window.location.hash = oldLocation;
-							this.reveal(this.getFileMetadata());
-							return;
-						}.bind(this);
-						this.confirmUnsavedChanges(afterConfirm, cancelCallback);
-					}else{
-						afterConfirm();
+				if (this._errorSaving && (oldResource !== newResource || encodingChanged)) {
+					window.location.hash = oldLocation;
+					this.reveal(this.getFileMetadata());
+					return;
+				}
+				if (!this.isEditorTabsEnabled) {
+					if (oldResource !== newResource || encodingChanged) {
+						if (this._autoSaveEnabled) {
+							this.save();
+							afterConfirm();
+						} else if(this.syncEnabled && this.isUnsavedWarningNeeed()) {
+							var cancelCallback = function() {
+								window.location.hash = oldLocation;
+								this.reveal(this.getFileMetadata());
+								return;
+							}.bind(this);
+							this.confirmUnsavedChanges(afterConfirm, cancelCallback);
+						}else{
+							afterConfirm();
+						}
 					}
 				}
 			}else{

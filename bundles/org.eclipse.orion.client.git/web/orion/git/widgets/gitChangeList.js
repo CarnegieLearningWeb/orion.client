@@ -1,5 +1,5 @@
 /*******************************************************************************
- * @license Copyright (c) 2016 IBM Corporation and others. All rights
+ * @license Copyright (c) 2016, 2019 IBM Corporation and others. All rights
  *          reserved. This program and the accompanying materials are made
  *          available under the terms of the Eclipse Public License v1.0
  *          (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse
@@ -159,7 +159,7 @@ define([
 				progress.begin(messages["Getting changes"]);
 				thelocation = repository.StatusLocation;
 				// The status maybe an object in this case, if nothing changed but getChildren get called. Or it will be undefined or Deferred when something changed.
-				Deferred.when(repository.status || (repository.status = progressService.progress(gitClient.getGitStatus(thelocation), messages["Getting changes"])), function(resp) {//$NON-NLS-0$
+				Deferred.when(repository.status || (repository.status = progressService.showWhile(gitClient.getGitStatus(thelocation), messages["Getting changes"])), function(resp) {//$NON-NLS-0$
 					var status = that.status = that.items = resp;
 					Deferred.when(that.repository || progressService.progress(gitClient.getGitClone(status.CloneLocation), messages["Getting git repository details"]), function(resp) {
 						var repository = (resp.Children&&resp.Type!=="Clone") ? resp.Children[0] : resp;//$NON-NLS-0$
@@ -361,6 +361,9 @@ define([
 				if (this.messageTextArea) {
 					this.messageTextArea.value = ""; //$FALLTHROUGH$
 				}
+			case "refreshStatus": //$NON-NLS-0$
+				if (options.prefix !== "all") break; //$NON-NLS-0$
+				//$FALLTHROUGH$
 			case "reset": //$NON-NLS-0$
 			case "applyPatch":  //$NON-NLS-0$
 			case "stage": //$NON-NLS-0$
@@ -382,6 +385,9 @@ define([
 		}.bind(this));
 		mGitCommands.getModelEventDispatcher().addEventListener("stateChanging", this._modelChangingListener = function(event) { //$NON-NLS-0$
 			switch (event.action) {
+			case "refreshStatus": //$NON-NLS-0$
+				if (options.prefix !== "all") break; //$NON-NLS-0$
+				//$FALLTHROUGH$
 			case "commit": //$NON-NLS-0$
 			case "stash": //$NON-NLS-0$
 			case "reset": //$NON-NLS-0$
@@ -414,6 +420,7 @@ define([
 				var navHandler = this.getNavHandler();
 				var index = -1;
 				var rowDiv = navHandler.getRowDiv(navHandler.currentModel());
+				var hasFocus = rowDiv === document.activeElement;
 				if (rowDiv) {
 					var nodes = rowDiv.parentNode.childNodes;
 					for (index=0; index<nodes.length; index++) {
@@ -425,21 +432,26 @@ define([
 				parent.children = parent.Children = null;
 				this.model.getChildren(parent, function(children) {
 					parent.removeAll = true;
-					that.myTree.refresh.bind(that.myTree)(parent, children, false);
-					var selection = children.filter(function(item) {
-						return mGitUtil.isStaged(item);
+					lib.returnFocus(lib.node(that.parentId), document.activeElement, function() {
+						that.myTree.refresh.bind(that.myTree)(parent, children, false);
+						var selection = children.filter(function(item) {
+							return mGitUtil.isStaged(item);
+						});
+						that.selection.setSelections(selection);
+						that.setMoreVisible(moreVisible);
+						that.setCommitInfo(commitInfo);
+	
+						navHandler.refreshModel(that.getNavDict(), that.model, children);
+						if (hasFocus) {
+							navHandler.focus();
+						}
+						if (index !== -1) {
+							navHandler.cursorOn(children[index], true);
+						}
+	
+						deferred.resolve(children);
+						return deferred;
 					});
-					that.selection.setSelections(selection);
-					that.setMoreVisible(moreVisible);
-					that.setCommitInfo(commitInfo);
-
-					navHandler.refreshModel(that.getNavDict(), that.model, children);
-					navHandler.focus();
-					if (index !== -1) {
-						navHandler.cursorOn(children[index], true);
-					}
-
-					deferred.resolve(children);
 				});
 			} else if (this.prefix === "diff") { //$NON-NLS-0$
 				var model = this.model;
@@ -523,8 +535,8 @@ define([
 			var outerDiv = document.createElement("div"); //$NON-NLS-0$
 			outerDiv.id = "gitCommitMessage"; //$NON-NLS-0$
 			outerDiv.className = "gitCommitMessage toolComposite"; //$NON-NLS-0$
-			outerDiv.setAttribute("role", "group"); //$NON-NLS-1$ //$NON-NLS-0$
-			outerDiv.setAttribute("aria-label", messages["CommitOptions"]); //$NON-NLS-0$
+			lib.setSafeAttribute(outerDiv, "role", "group");
+			lib.setSafeAttribute(outerDiv, "aria-label", messages["CommitOptions"]);
 
 			var label = document.createElement("label"); //$NON-NLS-0$
 			label.htmlFor = "commitMsgparameterCollector"; //$NON-NLS-0$
@@ -558,13 +570,14 @@ define([
 			bottomLeft.className = "layoutLeft"; //$NON-NLS-0$
 			bottomRow.appendChild(bottomLeft);
 			
-			function createInput(parent, id, key, placeholderKey, value, isCheck) {
+			function createInput(parent, id, key, placeholderKey, value, isCheck, autocomplete) {
 				var label = document.createElement("label"); //$NON-NLS-0$
 				label.classList.add(isCheck ? "gitChangeListCheckLabel" : "gitChangeListInputLabel"); //$NON-NLS-1$ //$NON-NLS-0$
-				label.setAttribute("for", id); //$NON-NLS-0$
+				lib.setSafeAttribute(label, "for", id);
 				label.textContent = messages[key];
 				var input = document.createElement("input"); //$NON-NLS-0$
 				if (isCheck) input.type = "checkbox"; //$NON-NLS-0$
+				if (autocomplete) input.autocomplete = autocomplete;
 				if (value) input.value = value;
 				input.classList.add(isCheck ? "gitChangeListCheck" : "gitChangeListInput"); //$NON-NLS-1$ //$NON-NLS-0$
 				if (placeholderKey) input.placeholder = messages[placeholderKey];
@@ -590,8 +603,8 @@ define([
 			
 			function createGroup(parent, key) {
 				var div = document.createElement("div"); //$NON-NLS-0$
-				div.setAttribute("role", "group"); //$NON-NLS-1$ //$NON-NLS-0$
-				div.setAttribute("aria-labelledby", key); //$NON-NLS-0$
+				lib.setSafeAttribute(div, "role", "group");
+				lib.setSafeAttribute(div, "aria-labelledby", key);
 				div.classList.add("gitChangeListGroup"); //$NON-NLS-0$
 				var label = document.createElement("div"); //$NON-NLS-0$
 				label.id = key;
@@ -651,21 +664,21 @@ define([
 				
 			var div1Content = createGroup(moreDiv, "Author:"); //$NON-NLS-0$
 			var div1ContentTable = document.createElement("table"); //$NON-NLS-0$
-			div1ContentTable.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.setSafeAttribute(div1ContentTable, "role", "presentation");
 			var div1ContentTbody = document.createElement("tbody"); //$NON-NLS-0$
 			div1ContentTable.appendChild(div1ContentTbody);
 			div1Content.appendChild(div1ContentTable);
-			explorer.authorNameInput = createInput(div1ContentTbody, "authorNameInput", "Name:", "AuthorNamePlaceholder", ""); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			explorer.authorEmailInput = createInput(div1ContentTbody, "authorEmailInput", "Email:", "AuthorEmailPlaceholder", ""); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			explorer.authorNameInput = createInput(div1ContentTbody, "authorNameInput", "Name:", "AuthorNamePlaceholder", "", false, "name"); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			explorer.authorEmailInput = createInput(div1ContentTbody, "authorEmailInput", "Email:", "AuthorEmailPlaceholder", "", false, "email"); //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 
 			var div2Content = createGroup(moreDiv, "Committer:"); //$NON-NLS-0$
 			var div2ContentTable = document.createElement("table"); //$NON-NLS-0$
-			div2ContentTable.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.setSafeAttribute(div2ContentTable, "role", "presentation");
 			var div2ContentTbody = document.createElement("tbody"); //$NON-NLS-0$
 			div2ContentTable.appendChild(div2ContentTbody);
 			div2Content.appendChild(div2ContentTable);
-			explorer.committerNameInput = createInput(div2ContentTbody, "committerNameInput", "Name:", "CommitterNamePlaceholder", ""); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
-			explorer.committerEmailInput = createInput(div2ContentTbody, "committerEmailInput", "Email:", "CommitterEmailPlaceholder", ""); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			explorer.committerNameInput = createInput(div2ContentTbody, "committerNameInput", "Name:", "CommitterNamePlaceholder", "", false, "name"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
+			explorer.committerEmailInput = createInput(div2ContentTbody, "committerEmailInput", "Email:", "CommitterEmailPlaceholder", "", false, "email"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$
 			var persistCheckDiv = document.createElement("div"); //$NON-NLS-0$
 			persistCheckDiv.className = "persitCheck";
 			div2Content.appendChild(persistCheckDiv);
@@ -853,9 +866,9 @@ define([
 		updateCommands: function() {
 			mExplorer.createExplorerCommands(this.commandService);
 			var actionsNodeScope = this.section.selectionNode.id;
-			this.section.selectionNode.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.setSafeAttribute(this.section.selectionNode, "role", "none");
 			var selectionNodeScope = this.section.actionsNode.id;
-			this.section.actionsNode.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.setSafeAttribute(this.section.actionsNode, "role", "none");
 			
 			var commandRegistry = this.commandService;
 			var explorerSelectionScope = this.prefix === "all" || this.prefix === "diff" ? this.explorerSelectionScope : actionsNodeScope; //$NON-NLS-1$ //$NON-NLS-0$
@@ -867,56 +880,60 @@ define([
 			if (node) {
 				this.commandService.destroy(node);
 			}
-			node = lib.node(selectionNodeScope);
-			if (node) {
-				this.commandService.destroy(node);
-			}
-
-			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.openGitDiff", 2000); //$NON-NLS-1$ //$NON-NLS-0$
-			commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.orion.git.diff.showCurrent", 1000); //$NON-NLS-1$ //$NON-NLS-0$
-
-			if (this.prefix === "staged") { //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.commitAndPushCommand", 200, "eclipse.gitCommitGroup"); //$NON-NLS-1$ //$NON-NLS-0$ 
-				commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.unstageCommand", 100); //$NON-NLS-0$
-				commandRegistry.registerCommandContribution("DefaultActionWrapper", "eclipse.orion.git.unstageCommand", 100); //$NON-NLS-1$ //$NON-NLS-0$
-			} else if (this.prefix === "unstaged") { //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.showPatchCommand", 100); //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.stageCommand", 200); //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.checkoutCommand", 300); //$NON-NLS-0$
-				commandRegistry.registerCommandContribution("DefaultActionWrapper", "eclipse.orion.git.stageCommand", 100); //$NON-NLS-1$ //$NON-NLS-0$
-			}  else if (this.prefix === "all") { //$NON-NLS-0$
-				if (!this.isRebasing()) {
-					commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.applyPatch", 300); //$NON-NLS-1$ //$NON-NLS-0$
-					commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.popStash", 100); //$NON-NLS-1$ //$NON-NLS-0$
-					commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.precreateStashCommand", 200); //$NON-NLS-0$
-	
-					commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.showStagedPatchCommand", 100); //$NON-NLS-0$
-					commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.checkoutStagedCommand", 200); //$NON-NLS-0$
-					
-	//				commandRegistry.addCommandGroup(selectionNodeScope, "eclipse.gitCommitGroup", 1000, "Commit", null, null, null, "Commit", null, "eclipse.orion.git.precommitCommand", "primaryButton"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$ 	549
-	//				commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.precommitAndPushCommand", 200, "eclipse.gitCommitGroup"); //$NON-NLS-0$
-					commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.precommitCommand", 400); //$NON-NLS-0$
-	
-					commandRegistry.renderCommands(selectionNodeScope, selectionNodeScope, [], this, "tool", {Clone : this.model.repository}); //$NON-NLS-1$ //$NON-NLS-0$
-					commandRegistry.renderCommands(actionsNodeScope, actionsNodeScope, this.model ? this.model.repository : this, this, "tool"); //$NON-NLS-0$	
+			lib.returnFocus(node, document.activeElement, function() {
+				node = lib.node(selectionNodeScope);
+				if (node) {
+					this.commandService.destroy(node);
 				}
-			} else if (this.prefix === "diff" && this.commit) { //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.checkoutCommit", 1); //$NON-NLS-1$ //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.undoCommit", 2); //$NON-NLS-1$ //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.resetIndex", 3); //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.addTag", 4); //$NON-NLS-1$ //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.cherryPick", 5); //$NON-NLS-1$ //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.revert", 6); //$NON-NLS-1$ //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.openGitCommit", 7); //$NON-NLS-1$ //$NON-NLS-0$
-				commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.showCommitPatchCommand", 8); //$NON-NLS-1$ //$NON-NLS-0$
-
-				commandRegistry.renderCommands(actionsNodeScope, actionsNodeScope, this.commit, this, "tool"); //$NON-NLS-0$
-			}
-			node = lib.node(explorerSelectionScope);
-			if (node) {
-				this.commandService.destroy(node);
-				this.commandService.renderCommands(explorerSelectionScope, explorerSelectionScope, this, this, "tool"); //$NON-NLS-0$	
-			}
+				lib.returnFocus(node, document.activeElement, function() {
+	
+					commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.openGitDiff", 2000); //$NON-NLS-1$ //$NON-NLS-0$
+					commandRegistry.registerCommandContribution("itemLevelCommands", "eclipse.orion.git.diff.showCurrent", 1000); //$NON-NLS-1$ //$NON-NLS-0$
+		
+					if (this.prefix === "staged") { //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.commitAndPushCommand", 200, "eclipse.gitCommitGroup"); //$NON-NLS-1$ //$NON-NLS-0$ 
+						commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.unstageCommand", 100); //$NON-NLS-0$
+						commandRegistry.registerCommandContribution("DefaultActionWrapper", "eclipse.orion.git.unstageCommand", 100); //$NON-NLS-1$ //$NON-NLS-0$
+					} else if (this.prefix === "unstaged") { //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.showPatchCommand", 100); //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.stageCommand", 200); //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.checkoutCommand", 300); //$NON-NLS-0$
+						commandRegistry.registerCommandContribution("DefaultActionWrapper", "eclipse.orion.git.stageCommand", 100); //$NON-NLS-1$ //$NON-NLS-0$
+					}  else if (this.prefix === "all") { //$NON-NLS-0$
+						if (!this.isRebasing()) {
+							commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.applyPatch", 300); //$NON-NLS-1$ //$NON-NLS-0$
+							commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.popStash", 100); //$NON-NLS-1$ //$NON-NLS-0$
+							commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.precreateStashCommand", 200); //$NON-NLS-0$
+			
+							commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.showStagedPatchCommand", 100); //$NON-NLS-0$
+							commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.checkoutStagedCommand", 200); //$NON-NLS-0$
+							
+			//				commandRegistry.addCommandGroup(selectionNodeScope, "eclipse.gitCommitGroup", 1000, "Commit", null, null, null, "Commit", null, "eclipse.orion.git.precommitCommand", "primaryButton"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0$ 	549
+			//				commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.precommitAndPushCommand", 200, "eclipse.gitCommitGroup"); //$NON-NLS-0$
+							commandRegistry.registerCommandContribution(selectionNodeScope, "eclipse.orion.git.precommitCommand", 400); //$NON-NLS-0$
+			
+							commandRegistry.renderCommands(selectionNodeScope, selectionNodeScope, [], this, "tool", {Clone : this.model.repository}); //$NON-NLS-1$ //$NON-NLS-0$
+							commandRegistry.renderCommands(actionsNodeScope, actionsNodeScope, this.model ? this.model.repository : this, this, "tool"); //$NON-NLS-0$	
+						}
+					} else if (this.prefix === "diff" && this.commit) { //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.checkoutCommit", 1); //$NON-NLS-1$ //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.undoCommit", 2); //$NON-NLS-1$ //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.resetIndex", 3); //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.addTag", 4); //$NON-NLS-1$ //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.cherryPick", 5); //$NON-NLS-1$ //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.revert", 6); //$NON-NLS-1$ //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.openGitCommit", 7); //$NON-NLS-1$ //$NON-NLS-0$
+						commandRegistry.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.showCommitPatchCommand", 8); //$NON-NLS-1$ //$NON-NLS-0$
+		
+						commandRegistry.renderCommands(actionsNodeScope, actionsNodeScope, this.commit, this, "tool"); //$NON-NLS-0$
+					}
+					node = lib.node(explorerSelectionScope);
+					if (node) {
+						this.commandService.destroy(node);
+						this.commandService.renderCommands(explorerSelectionScope, explorerSelectionScope, this, this, "tool"); //$NON-NLS-0$	
+					}
+				}.bind(this));
+			}.bind(this));
 		},
 		updateSelectionStatus: function(selections) {
 			if (!this.explorerSelectionStatus) return;

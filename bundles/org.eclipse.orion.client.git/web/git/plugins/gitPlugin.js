@@ -1,6 +1,6 @@
 /******************************************************************************* 
  * @license
- * Copyright (c) 2013, 2014 IBM Corporation and others.
+ * Copyright (c) 2013, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -263,7 +263,7 @@ define([
 			variableName: "EclipseGitLocation", 
 			variableMatchPosition: "after"
 		}],
-		uriTemplate: "http://git.eclipse.org/c{+EclipseGitLocation}"
+		uriTemplate: "https://git.eclipse.org/c{+EclipseGitLocation}"
 	});
 	
 	provider.registerService("orion.page.link.related", null, {
@@ -316,7 +316,7 @@ define([
 		{source: "Type", match: "Commit"},
 		{source: "Name", variableName: "commitName"}
 		],
-		uriTemplate: "http://git.eclipse.org/c{+EclipseGitLocation}/commit/?id={+commitName}"
+		uriTemplate: "https://git.eclipse.org/c{+EclipseGitLocation}/commit/?id={+commitName}"
 	});
 	
 	var tryParentRelative = true;
@@ -325,9 +325,8 @@ define([
 			try {
 				if (window.location.host === parent.location.host && window.location.protocol === parent.location.protocol) {
 					return location.substring(parent.location.href.indexOf(parent.location.host) + parent.location.host.length);
-				} else {
-					tryParentRelative = false;
 				}
+				tryParentRelative = false;
 			} catch (e) {
 				tryParentRelative = false;
 			}

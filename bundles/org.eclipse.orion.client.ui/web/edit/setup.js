@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2018 IBM Corporation and others.
+ * Copyright (c) 2010, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -129,7 +129,7 @@ objects.mixin(MenuBar.prototype, {
 		// Create the main menu bar
 		var editMenuBar = document.createElement("ul"); //$NON-NLS-0$
 		var menuBarScope = editMenuBar.id = this.menuBarActionScope;
-		editMenuBar.setAttribute("role", "menubar");
+		lib.setSafeAttribute(editMenuBar, "role", "menubar");
 		editMenuBar.style.outline = "none";
 		var menuBar = new mMenuBar.MenuBar({
 			dropdown: editMenuBar,
@@ -286,7 +286,7 @@ function TabWidget(options) {
 	// Used to hide horizontal scroll bar.
 	var editorTabScrollHider = document.createElement("div");
 	editorTabScrollHider.className = "editorTabContainerOuter";
-	editorTabScrollHider.setAttribute("role", "tablist");
+	lib.setSafeAttribute(editorTabScrollHider, "role", "tablist");
 	this.parent.appendChild(editorTabScrollHider);
 	
 	var editorTabContainer = this.editorTabContainer = document.createElement("div");
@@ -300,7 +300,7 @@ function TabWidget(options) {
 	tabWidgetDropdownNode.id = "tabWidgetDropdownNode" + this.id;
 	tabWidgetDropdownNode.className = "editorViewerTabDropdown";
 	tabWidgetDropdownNode.style.display = "none";
-	tabWidgetDropdownNode.setAttribute("aria-haspopup", "true");
+	lib.setSafeAttribute(tabWidgetDropdownNode, "aria-haspopup", "true");
 
 	this.parent.appendChild(tabWidgetDropdownNode);
 
@@ -505,8 +505,8 @@ objects.mixin(TabWidget.prototype, {
 		var editorTab = document.createElement("div");
 		editorTab.className = "editorTab";
 		// NOTE: Setting role=presentation to this div otherwise VoiceOver reads "tab 1 of 1" for all tabs
-		editorTab.setAttribute("role", "presentation");
-		editorTab.setAttribute("draggable", true);
+		lib.setSafeAttribute(editorTab, "role", "presentation");
+		lib.setSafeAttribute(editorTab, "draggable", true);
 		if (!this.enableEditorTabs) {
 			editorTab.classList.add("editorTabsDisabled");
 		}
@@ -515,11 +515,11 @@ objects.mixin(TabWidget.prototype, {
 		var labelID = "editorTabLabel_" + LABEL_ID++;
 		var panelIP = "editorViewerContent_Panel" + this.id;
 		var editorTabContent = document.createElement("div");
-		editorTabContent.setAttribute("aria-labelledby", labelID);
+		lib.setSafeAttribute(editorTabContent, "aria-labelledby", labelID);
 		editorTabContent.tabIndex = 0;
 		editorTabContent.className = "editorTabContent";
-		editorTabContent.setAttribute("role", "tab");
-		editorTabContent.setAttribute("aria-controls", panelIP);
+		lib.setSafeAttribute(editorTabContent, "role", "tab");
+		lib.setSafeAttribute(editorTabContent, "aria-controls", panelIP);
 		editorTab.appendChild(editorTabContent);
 
 		var editorTabContentFocus = document.createElement("div");
@@ -553,8 +553,8 @@ objects.mixin(TabWidget.prototype, {
 		curFileNode.textContent = curFileNodeName;
 
 		var closeButton = document.createElement("div");
-		closeButton.setAttribute("role", "button");
-		closeButton.setAttribute("aria-label", messages["closeSelf"]);
+		lib.setSafeAttribute(closeButton, "role", "button");
+		lib.setSafeAttribute(closeButton, "aria-label", messages["closeSelf"]);
 		closeButton.tabIndex = 0;
 		closeButton.className = "editorTabCloseButton core-sprite-close imageSprite ";
 		// Unicode multiplication sign
@@ -730,7 +730,7 @@ objects.mixin(TabWidget.prototype, {
 			this.selectedFile.checked = false;
 			curEditorTabNode = this.getCurrentEditorTabNode();
 			curEditorTabNode.classList.remove("focusedEditorTab");
-			curEditorTabNode.firstChild.setAttribute("aria-selected", "false");
+			lib.setSafeAttribute(curEditorTabNode.firstChild, "aria-selected", "false");
 		}
 		// If the editor tab exists, reuse it.
 		if (this.editorTabs.hasOwnProperty(metadata.Location)) {
@@ -807,7 +807,7 @@ objects.mixin(TabWidget.prototype, {
 
 		// Style the editor tab
 		editorTab.editorTabNode.classList.add("focusedEditorTab");
-		editorTab.editorTabNode.firstChild.setAttribute("aria-selected", "true");
+		lib.setSafeAttribute(editorTab.editorTabNode.firstChild, "aria-selected", "true");
 		// Update the selected file
 		this.selectedFile = this.fileList[0];
 		// Enforce maximum editor tabs
@@ -977,7 +977,7 @@ objects.mixin(EditorViewer.prototype, {
 	createTabWidgetContextMenu: function(){
 		var tabWidgetContextMenuNode = document.createElement("ul"); //$NON-NLS-0$
 		tabWidgetContextMenuNode.className = "dropdownMenu"; //$NON-NLS-0$
-		tabWidgetContextMenuNode.setAttribute("role", "menu"); //$NON-NLS-1$ //$NON-NLS-2$
+		lib.setSafeAttribute(tabWidgetContextMenuNode, "role", "menu");
 		tabWidgetContextMenuNode.style.zIndex = "201";  // Need to be greater than tooltipcontainer's zindex which is 200
 		this.tabWidget.editorTabContainer.parentElement.appendChild(tabWidgetContextMenuNode);
 		// Hook the context menu to the tabWidget's editorTabNode node
@@ -1198,7 +1198,7 @@ objects.mixin(EditorViewer.prototype, {
 				var textView = editorView.editor.getTextView();
 				textView.addEventListener("ModelChanged", function(){
 					if(this.editor.isFileInitiallyLoaded){
-						if(this.tabWidget.transientTab && this.tabWidget.transientTab.location === this.pool.metadata.Location){
+						if(this.tabWidget.transientTab && this.pool.metadata && this.tabWidget.transientTab.location === this.pool.metadata.Location){
 							this.tabWidget.transientToPermanent(this.tabWidget.transientTab.href);
 						}
 					}
@@ -1369,6 +1369,7 @@ objects.mixin(EditorViewer.prototype, {
 			preferences: this.preferences,
 			searcher: this.searcher,
 			selection: this.selection,
+			viewerID: this.id,
 			problemsServiceID: this.problemsServiceID,
 			editContextServiceID: this.editContextServiceID,
 			fileService: this.fileClient,
@@ -1709,7 +1710,7 @@ function EditorSetup(serviceRegistry, pluginRegistry, preferences, readonly) {
 	this.sidebarDomNode = lib.node("pageSidebar"); //$NON-NLS-0$
 	this.sidebarToolbar = lib.node("sidebarToolbar"); //$NON-NLS-0$
 	this.pageToolbar = lib.node("pageToolbar"); //$NON-NLS-0$
-	lib.node("auxpane").setAttribute("aria-label", messages.Navigator); //$NON-NLS-1$ //$NON-NLS-0$
+	lib.setSafeAttribute(lib.node("auxpane"), "aria-label", messages.Navigator);
 
 	this.editorViewers = [];
 }
@@ -2413,7 +2414,7 @@ exports.getEditorViewers = function() {
 };
 
 exports.setUpEditor = function(serviceRegistry, pluginRegistry, preferences, readonly) {
-	enableSplitEditor = localStorage.enableSplitEditor !== "false"; //$NON-NLS-0$
+	enableSplitEditor = util.readSetting("enableSplitEditor") !== "false"; //$NON-NLS-0$
 	
 	setup = new EditorSetup(serviceRegistry, pluginRegistry, preferences, readonly);
 	Deferred.when(setup.createBanner(), function(result) {

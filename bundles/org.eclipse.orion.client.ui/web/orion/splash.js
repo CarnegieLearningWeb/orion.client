@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2015 IBM Corporation and others.
+ * Copyright (c) 2015, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -10,7 +10,14 @@
  ******************************************************************************/
 
 /*eslint-env amd, browser*/
-define(['module', 'i18n!orion/nls/messages', 'orion/i18nUtil', 'orion/banner/banner'], function(module, messages, i18nUtil, Banner) {
+define([
+	'module', 
+	'i18n!orion/nls/messages', 
+	'orion/i18nUtil', 
+	'orion/banner/banner', 
+	'orion/webui/littlelib',
+	'orion/util'
+], function(module, messages, i18nUtil, Banner, lib, util) {
 	
 var pageLoader;
 
@@ -60,11 +67,11 @@ step.prototype.getStepNode = function() {
 	
 	var stepNode = document.createElement( 'div' );
 	stepNode.className = 'splashStep';
-	stepNode.innerHTML =  '<div class="splashVisual">' + 
+	var inner =  '<div class="splashVisual">' + 
 								'<div id="step' + this.order + '"></div>' +
 							'</div>' +
 							'<div class="splashVerbal">' + this.description + '</div>';
-	
+	lib.setSafeInnerHTML(stepNode, inner);
 	this.domNode = stepNode.firstChild.firstChild;
 	
 	if (this.state === this.HAPPENING) {
@@ -198,7 +205,7 @@ loader.prototype.nextStep = function(){
 
 loader.prototype.initialize = function(){
 	this.content = document.getElementById( this.domNode );
-	this.content.innerHTML = this.template;
+	lib.setSafeInnerHTML(this.content, this.template);
 	this.splashProgress = document.getElementById( "progressbar" );
 	this.stepMessages = document.getElementById( "stepMessages" );
 	this.splashProgress.value = 0;
@@ -269,7 +276,7 @@ loader.prototype.update = function(){
 		total += this.steps[s].total;
 	}
 	
-	this.stepMessages.innerHTML = "";
+	lib.setSafeInnerHTML(this.stepMessages, "");
 	var message = cs.message || "";
 	var detailedMessage = cs.detailedMessage || "";
 	if (!Array.isArray(message)) message = [message];
@@ -343,14 +350,15 @@ function start() {
 	// Mark all elements behind the splash as "busy" until splash is torn down so screen readers don't go there.
 	for(var child = document.body.firstElementChild; child !== null; child = child.nextElementSibling) {
 		if (child !== splash && child.tagName !== "SCRIPT") {
-			child.setAttribute("aria-busy", "true");
+			lib.setSafeAttribute(child, "aria-busy", "true");
 		}
 	}
 	
 	var showTimeout = 3000;
-	if (localStorage.showSplashTimeout) {
+	var splashTimout = util.readSetting("showSplashTimeout");
+	if (splashTimout) {
 		try {
-			showTimeout = parseInt(localStorage.showSplashTimeout, 10);
+			showTimeout = parseInt(splashTimout, 10);
 		} catch (ex) {}
 	}
 	setTimeout(function() {

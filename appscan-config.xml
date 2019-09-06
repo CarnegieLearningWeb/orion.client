@@ -1,0 +1,39 @@
+<Configuration>
+  <Targets>
+    <Target outputs-only="false" path=".">
+      <Exclude>bundles/org.eclipse.orion.client.core/web/js-tests/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.core/web/chai/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.core/web/mocha/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.core/web/requirejs/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.core/web/socketio/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.editor/web/js-tests/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.editor/web/examples/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.javascript/web/js-tests/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.javascript/web/tern/defs/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/embeddedEditor/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/examplePages/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/gcli/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/js-tests/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/marked/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/mixloginstatic/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/orion/compare/examples/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/orion/sites/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/orion/shell/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/sites/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/shell/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/plugins/samples/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/plugins/site/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/plugins/sampleCommandsPlugin.html</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.ui/web/webapp/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.webtools/web/js-tests/</Exclude>
+      <Exclude>releng/org.eclipse.orion.client.releng/test/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.collab/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.git.greasemonkey/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.help/</Exclude>
+      <Exclude>bundles/org.eclipse.orion.client.jsdoc/</Exclude>
+      <Exclude>lib/orion.client/</Exclude>
+      <Exclude>modules/</Exclude>
+      <Exclude>modules/orionode/node_modules/nodegit/</Exclude>
+    </Target>
+  </Targets>
+</Configuration>

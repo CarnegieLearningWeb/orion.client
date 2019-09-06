@@ -1,5 +1,5 @@
 /*******************************************************************************
- * @license Copyright (c) 2014 IBM Corporation and others. All rights
+ * @license Copyright (c) 2014, 2019 IBM Corporation and others. All rights
  *          reserved. This program and the accompanying materials are made
  *          available under the terms of the Eclipse Public License v1.0
  *          (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse
@@ -453,6 +453,7 @@ define([
 			case "cherrypick": //$NON-NLS-0$
 				this.changedItem();
 				break;
+			case "refreshStatus":  //$NON-NLS-0$
 			case "applyPatch":  //$NON-NLS-0$
 			case "stage": //$NON-NLS-0$
 			case "unstage": //$NON-NLS-0$
@@ -460,16 +461,18 @@ define([
 			case "popStash": //$NON-NLS-0$
 			case "applyStash": //$NON-NLS-0$
 			case "checkoutFile": //$NON-NLS-0$
-			    var that = this;
-			    var theRepo = this.model.root.repository;
-			    // if the status is an object here, we delete it. Because we only expect a Deferred status here if some changes happended in gitChangeList.js
-			    if(!(theRepo.status instanceof Deferred)) {
-				 	delete theRepo.status;
+				var that = this;
+				var theRepo = this.model.root.repository;
+				// if the status is an object here, we delete it. Because we only expect a Deferred status here if some changes happended in gitChangeList.js
+				if(!(theRepo.status instanceof Deferred)) {
+					delete theRepo.status;
 				}
-				Deferred.when(theRepo.status || (theRepo.status = that.progressService.progress(that.gitClient.getGitStatus(theRepo.StatusLocation), messages["Getting changes"])),  function(theStatus) {
+				Deferred.when(theRepo.status || (theRepo.status = that.progressService.showWhile(that.gitClient.getGitStatus(theRepo.StatusLocation), messages["Getting changes"])),  function(theStatus) {
 					theStatus.parent = this.model.root;
 					this.model.root.children[0] = theStatus;
-					this.myTree.redraw(theStatus);
+					lib.returnFocus(lib.node(this.parentId), document.activeElement, function() {
+						this.myTree.redraw(theStatus);
+					}.bind(this));
 				}.bind(this));
 				break;
 			}
@@ -512,15 +515,18 @@ define([
 			if (progress) progress.begin(messages["Getting git log"]);
 			model.getChildren(item, function(children) {
 				item.removeAll = true;
-				that.myTree.refresh.bind(that.myTree)(item, children, false);
-				if (item.Type === "CommitRoot") { //$NON-NLS-0$
-					that.expandSections(children);
-				}
-				if (item.Type !== "Synchronized") { //$NON-NLS-0$
-					that.updateCommands();
-				}
-				if (progress) progress.done();
-				deferred.resolve(children);
+				lib.returnFocus(lib.node(that.parentId), document.activeElement, function() {
+					that.myTree.refresh.bind(that.myTree)(item, children, false);
+					if (item.Type === "CommitRoot") { //$NON-NLS-0$
+						that.expandSections(children);
+					}
+					if (item.Type !== "Synchronized") { //$NON-NLS-0$
+						that.updateCommands();
+					}
+					if (progress) progress.done();
+					deferred.resolve(children);
+					return deferred;
+				});
 			});
 			return deferred;
 		},
@@ -581,7 +587,7 @@ define([
 				section.appendChild(inputCol);
 				
 				var label = document.createElement("label");
-				label.setAttribute("for", commitFilterSectionId); //$NON-NLS-0$
+				lib.setSafeAttribute(label, "for", commitFilterSectionId);
 				label.textContent = title;
 				
 				var filter = document.createElement("input"); //$NON-NLS-0$
@@ -610,9 +616,9 @@ define([
 					this.sibling = parent.firstChild;
 					parent.insertBefore(content, parent.firstChild);
 					content.classList.add("commitFilterPanel");
-					content.setAttribute("role", "dialog");
-					content.setAttribute("aria-modal", "true");
-					content.setAttribute("aria-label", messages.FilterCommits);
+					lib.setSafeAttribute(content, "role", "dialog");
+					lib.setSafeAttribute(content, "aria-modal", "true");
+					lib.setSafeAttribute(content, "aria-label", messages.FilterCommits);
 					content.tabIndex = -1;
 					content.style.outline = "none";
 					content.addEventListener("keydown", escHandler);
@@ -626,16 +632,16 @@ define([
 					if (this.hidden === hidden) return;
 					this.hidden = hidden;
 					if (that._filterButton) {
-						that._filterButton.setAttribute("aria-expanded", !hidden); //$NON-NLS-0$
+						lib.setSafeAttribute(that._filterButton, "aria-expanded", !hidden);
 					}
 					if (hidden) {
-						this.sibling.setAttribute("aria-hidden", false);
+						lib.setSafeAttribute(this.sibling, "aria-hidden", false);
 						lib.returnFocus(this.content, this.originalFocus, function() {
 							this.content.style.display = "none";
 						}.bind(this));
 					} else {
 						// Hide sibling to work around JAWS bug https://github.com/FreedomScientific/VFO-standards-support/issues/91
-						this.sibling.setAttribute("aria-hidden", true);
+						lib.setSafeAttribute(this.sibling, "aria-hidden", true);
 						sections.forEach(function(s) {
 							var field = lib.$(".gitFilterInput", s); //$NON-NLS-0$
 							var result = s.query.getValue ? s.query.getValue() : s.query.value;
@@ -717,7 +723,7 @@ define([
 			
 			var contentTable = document.createElement("table"); //$NON-NLS-0$
 			contentTable.className = "filterSections";
-			contentTable.setAttribute("role", "presentation"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.setSafeAttribute(contentTable, "role", "presentation");
 			var contentTbody = document.createElement("tbody"); //$NON-NLS-0$
 			contentTable.appendChild(contentTbody);
 			mainSection.content.appendChild(contentTable);
@@ -773,7 +779,7 @@ define([
 			var commitFilterScope = "commitFilterActions"; //$NON-NLS-0$
 			var actionsArea = document.createElement("ul"); //$NON-NLS-0$
 			actionsArea.className = "layoutRight commandList"; //$NON-NLS-0$
-			actionsArea.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+			lib.setSafeAttribute(actionsArea, "role", "none");
 			filterActions.appendChild(actionsArea);
 			this.commandService.registerCommandContribution(commitFilterScope, "eclipse.orion.git.commit.clearFilter", 300); //$NON-NLS-0$
 			this.commandService.registerCommandContribution(commitFilterScope, "eclipse.orion.git.commit.performFilter", 400); //$NON-NLS-0$
@@ -817,6 +823,7 @@ define([
 				selectionPolicy: this.selectionPolicy,
 				onComplete: function() {
 					that.status = model.status;
+					that.updateCommands();
 					var fetched = function(result) {
 						if (result) {
 							deferred.resolve(model.log);
@@ -951,7 +958,20 @@ define([
 				type: "toggle" //$NON-NLS-0$		
 			});
 			commandService.addCommand(graphCommand);
-			
+
+			var refreshStatusCommand = new mCommands.Command({
+				id: "eclipse.orion.git.commit.refreshStatus", //$NON-NLS-0$
+				callback: function() {
+					mGitCommands.getModelEventDispatcher().dispatchEvent({type: "modelChanged", action: "refreshStatus"});
+				},
+				visibleWhen: function(item){
+					return item.Type === "Status"; //$NON-NLS-0$
+				},
+				name: messages["RefreshStatus"],
+				tooltip: messages["RefreshStatusTooltip"],
+				spriteClass: "gitCommandSprite", //$NON-NLS-0$
+			});
+			commandService.addCommand(refreshStatusCommand);
 		},
 		fetch: function() {
 			var model = this.model;
@@ -996,11 +1016,11 @@ define([
 			if (!section) return;
 			var actionsNodeScope = section.actionsNode.id;
 			var node = lib.node(actionsNodeScope);
-			lib.returnFocus(node, node, function() {
+			lib.returnFocus(node, document.activeElement, function() {
 				if (node) {
 					commandService.destroy(actionsNodeScope);
 				}
-				node.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+				lib.setSafeAttribute(node, "role", "none");
 				var itemActionScope = "itemLevelCommands";
 				commandService.registerCommandContribution(itemActionScope, "eclipse.checkoutCommit", 1); //$NON-NLS-1$ //$NON-NLS-0$
 				commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.undoCommit", 2); //$NON-NLS-1$ //$NON-NLS-0$
@@ -1010,7 +1030,7 @@ define([
 				commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.revert", 6); //$NON-NLS-1$ //$NON-NLS-0$
 				commandService.registerCommandContribution(itemActionScope, "eclipse.openGitCommit", 7); //$NON-NLS-1$ //$NON-NLS-0$
 				commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.showCommitPatchCommand", 8); //$NON-NLS-1$ //$NON-NLS-0$
-									
+				commandService.registerCommandContribution(itemActionScope, "eclipse.orion.git.commit.refreshStatus", 9); //$NON-NLS-0$
 	
 				if (model.isRebasing()) {
 					commandService.registerCommandContribution(actionsNodeScope, "eclipse.orion.git.commit.toggleFilter", 100, null, false, new KeyBinding.KeyBinding('h', true, true)); //$NON-NLS-1$ //$NON-NLS-0$
@@ -1064,8 +1084,8 @@ define([
 				
 				var filterButton = this._filterButton = node.querySelector(".filterButton");
 				if (filterButton) {
-					filterButton.setAttribute("aria-haspopup", "dialog");
-					filterButton.setAttribute("aria-expanded", "false");
+					lib.setSafeAttribute(filterButton, "aria-haspopup", "dialog");
+					lib.setSafeAttribute(filterButton, "aria-expanded", "false");
 				}
 			}.bind(this));
 		}
@@ -1221,6 +1241,12 @@ define([
 							? i18nUtil.formatMessage(messages["FilesChangedVsReadyToCommit"], changed, messages[changed === 1 ? "file" : "files"], staged, messages[staged === 1 ? "file" : "files"])
 							: messages["Nothing to commit."];
 					detailsView.appendChild(description);
+					
+					actionsArea = document.createElement("ul"); //$NON-NLS-0$
+					actionsArea.className = "layoutLeft commandList toolComposite commitActions"; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0
+					actionsArea.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+					horizontalBox.appendChild(actionsArea);
+					explorer.commandService.renderCommands("itemLevelCommands", actionsArea, item, explorer, "tool"); //$NON-NLS-0$
 				} else if (item.Type !== "Commit" && item.Type !== "StashCommit") { //$NON-NLS-1$ //$NON-NLS-0$
 					if (item.Type !== "NoCommits") { //$NON-NLS-0$
 						sectionItem.className = "gitCommitSectionTableItem"; //$NON-NLS-0$
@@ -1260,14 +1286,14 @@ define([
 					if (item.Type !== "NoCommits") { //$NON-NLS-0$
 						actionsArea.id = item.Type + "Actions";
 					}
-					actionsArea.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+					lib.setSafeAttribute(actionsArea, "role", "none");
 					horizontalBox.appendChild(actionsArea);
 					
 					horizontalBox.classList.add("toolComposite"); //$NON-NLS-0$
 					if (explorer.slideout) {
 						var slideoutFragment = mHTMLFragments.slideoutHTMLFragment(actionsArea.id);
 						var slideoutDiv = document.createElement("div"); //$NON-NLS-0$
-						slideoutDiv.innerHTML = slideoutFragment;
+						lib.setSafeInnerHTML(slideoutDiv, slideoutFragment);
 						horizontalBox.appendChild(slideoutDiv);
 					}
 				} else {
@@ -1310,7 +1336,7 @@ define([
 					var itemActionScope = "itemLevelCommands"; //$NON-NLS-0$
 					actionsArea = document.createElement("ul"); //$NON-NLS-0$
 					actionsArea.className = "layoutLeft commandList toolComposite commitActions"; //$NON-NLS-3$ //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-0
-					actionsArea.setAttribute("role", "none"); //$NON-NLS-1$ //$NON-NLS-0$
+					lib.setSafeAttribute(actionsArea, "role", "none");
 					var moreDiv = commitInfo.moreButton.parentNode;
 					moreDiv.appendChild(actionsArea);
 					

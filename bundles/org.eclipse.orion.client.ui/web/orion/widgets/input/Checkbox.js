@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -14,7 +14,7 @@ define(['orion/objects', 'orion/webui/littlelib'], function(objects, lib) {
 	function Checkbox(options, node) {
 		objects.mixin(this, options);
 		this.node = node || document.createElement('div'); //$NON-NLS-0$
-		this.node.innerHTML = this.templateString;
+		lib.setSafeInnerHTML(this.node, this.templateString);
 		this.checkbox = lib.$('.setting-control', this.node); //$NON-NLS-0$
 	}
 	objects.mixin(Checkbox.prototype, {
@@ -70,7 +70,7 @@ define(['orion/objects', 'orion/webui/littlelib'], function(objects, lib) {
             this.checkbox.style.width = '20px';
             
             if( this.editmode && this.editmode === 'readonly' ){ //$NON-NLS-0$
-				this.checkbox.setAttribute("disabled", "disabled"); //$NON-NLS-1$ //$NON-NLS-0$
+				lib.setSafeAttribute(this.checkbox, "disabled", "disabled");
             }
         }
     });

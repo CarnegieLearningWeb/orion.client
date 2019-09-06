@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014 IBM Corporation and others.
+ * Copyright (c) 2014, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -514,7 +514,7 @@ define(["require", "i18n!orion/help/nls/messages", "orion/bootstrap", "orion/com
 			var span = document.createElement("span"); //$NON-NLS-0$
 			span.appendChild(document.createTextNode(item.title));
 			var href = TEMPLATE.expand({resource: tableRow.id});
-			span.setAttribute("href", href); //$NON-NLS-0$
+			lib.setSafeAttribute(span, "href", href);
 			span.classList.add("targetSelector"); //$NON-NLS-0$
 			td.appendChild(span);
 			return td;
@@ -574,8 +574,7 @@ define(["require", "i18n!orion/help/nls/messages", "orion/bootstrap", "orion/com
 			outputDocument.body.scrollTop = 0;
 			outputDocument.body.style = "";
 			/* it's safe to use innerHTML here because the HTML content was generated from sanitized markdown */
-			outputDocument.childNodes[0].innerHTML = item.content.documentElement.innerHTML;
-
+			lib.setSafeInnerHTML(outputDocument.childNodes[0], item.content.documentElement.innerHTML);
 			var link = outputDocument.createElement("link"); //$NON-NLS-0$
 			link.href = require.toUrl("help/help.css"); //$NON-NLS-0$
 			link.rel = "stylesheet"; //$NON-NLS-0$
@@ -730,7 +729,7 @@ define(["require", "i18n!orion/help/nls/messages", "orion/bootstrap", "orion/com
 						var html = "<html><body>" + marked(content, markedOptions) + "</body></html>"; //$NON-NLS-1$ //$NON-NLS-0$
 			            content = document.implementation.createHTMLDocument("");
 						/* it's safe to use innerHTML here because the HTML content was generated from sanitized markdown */
-			            content.documentElement.innerHTML = html;
+						lib.setSafeInnerHTML(content.documentElement, html);
 						result.resolve(content);
 					}.bind(this),
 					result.reject
@@ -815,9 +814,9 @@ define(["require", "i18n!orion/help/nls/messages", "orion/bootstrap", "orion/com
 		mGlobalCommands.setPageTarget({task: messages.Help, serviceRegistry: serviceRegistry, commandService: commandRegistry});
 
 		var toc = lib.node("auxpane"); //$NON-NLS-0$
-		toc.setAttribute("aria-label", messages.TOC); //$NON-NLS-0$
+		lib.setSafeAttribute(toc, "aria-label", messages.TOC);
 		var topic = lib.node("rightPane"); //$NON-NLS-0$
-		topic.setAttribute("aria-label", messages.Topic); //$NON-NLS-0$
+		lib.setSafeAttribute(topic, "aria-label", messages.Topic);
 		
 		var sideBar = lib.node("pageSidebar"); //$NON-NLS-0$
 		var outputDiv = lib.node("output"); //$NON-NLS-0$
@@ -870,7 +869,7 @@ define(["require", "i18n!orion/help/nls/messages", "orion/bootstrap", "orion/com
 				link.onload = function() {
 					link.onload = null;
 					/* it's safe to use innerHTML here because the HTML content was generated from sanitized markdown */
-					outputDocument.body.innerHTML = html;
+					lib.setSafeInnerHTML(outputDocument.body, html);
 				};
 				outputDocument.body.classList.add("orionMarkdown"); //$NON-NLS-0$
 				outputDocument.head.appendChild(link);

@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -89,12 +89,12 @@ define([
 					var element = this._makeMenuItem(messages["Sign Out"], function() {
 						authService.logout().then(function(){
 							_self.addUserItem(key, authService, _self.authenticatedServices[key].label);
-							localStorage.removeItem(key);
+							util.deleteSetting(key);
 							//TODO: Bug 368481 - Re-examine localStorage caching and lifecycle
 							for (var i = localStorage.length - 1; i >= 0; i--) {
 								var name = localStorage.key(i);
 								if (name && name.indexOf("/orion/preferences/user") === 0) { //$NON-NLS-0$
-									localStorage.removeItem(name);
+									util.deleteSetting(name);
 								}
 							}
 							authService.getAuthForm(PageLinks.getOrionHome()).then(function(formURL) {
@@ -156,7 +156,7 @@ define([
 
 					var li = doc.createElement("li");//$NON-NLS-0$
 					var link = doc.createElement("a"); //$NON-NLS-0$
-					link.setAttribute("role", "menuitem"); //$NON-NLS-0$ //$NON-NLS-1$
+					lib.setSafeAttribute(link, "role", "menuitem");
 					if(typeof this._dropDownItemClass === "string") {//$NON-NLS-0$
 						if(this._dropDownItemClass !== "") {
 							link.classList.add(this._dropDownItemClass);
@@ -192,7 +192,7 @@ define([
 				}
 
 				if (util.isElectron) {
-					var clearLocalStorage = this._makeMenuItem(messages["Clear Local Storage"], function() { localStorage.clear(); });
+					var clearLocalStorage = this._makeMenuItem(messages["Clear Local Storage"], function() { util.clearSettings(); });
 					getCategory(0).appendChild(clearLocalStorage.parentNode);
 					var about = this._makeMenuItem(messages["About"], function() {
 						var newDialog = new dialog.Dialog();

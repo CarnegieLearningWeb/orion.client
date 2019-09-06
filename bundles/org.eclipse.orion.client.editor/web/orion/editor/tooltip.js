@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2015 IBM Corporation and others.
+ * Copyright (c) 2010, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -67,8 +67,8 @@ function Tooltip (view, editor) {
 			var tooltipDiv = this._tooltipDiv = util.createElement(document, "div"); //$NON-NLS-0$
 			tooltipDiv.tabIndex = 0;
 			tooltipDiv.className = "textviewTooltip"; //$NON-NLS-0$
-			tooltipDiv.setAttribute("aria-live", "assertive"); //$NON-NLS-1$ //$NON-NLS-2$
-			tooltipDiv.setAttribute("aria-atomic", "true"); //$NON-NLS-1$ //$NON-NLS-2$
+			lib.setSafeAttribute(tooltipDiv, "aria-live", "assertive");
+			lib.setSafeAttribute(tooltipDiv, "aria-atomic", "true");
 			this._tooltipDiv.style.visibility = "hidden"; //$NON-NLS-0$
 			this._tipShowing = false;
 			document.body.appendChild(tooltipDiv);
@@ -308,7 +308,7 @@ function Tooltip (view, editor) {
 			
 			var newTooltipContents;
 			if (update && this._tooltipContents) {
-				this._tooltipContents.innerHTML = "";
+				lib.setSafeInnerHTML(this._tooltipContents, "");
 				newTooltipContents = this._tooltipContents;
 			} else {
  				newTooltipContents = util.createElement(this._tooltipDiv.ownerDocument, "div"); //$NON-NLS-0$
@@ -741,7 +741,7 @@ function Tooltip (view, editor) {
 			if (data.title && !data.hiddenTitle) {
 				var titleDiv = util.createElement(document, "div"); //$NON-NLS-0$;
 				if (this.hover.renderMarkDown) {
-					titleDiv.innerHTML = this.hover.renderMarkDown(data.title);
+					lib.setSafeInnerHTML(titleDiv, this.hover.renderMarkDown(data.title));
 				} else {
 					titleDiv.textContent = data.title;
 				}
@@ -786,7 +786,7 @@ function Tooltip (view, editor) {
 					}
 					case 'markdown': {
 						if (this.hover.renderMarkDown) {
-							contentDiv.innerHTML = this.hover.renderMarkDown(data.content);
+							lib.setSafeInnerHTML(contentDiv, this.hover.renderMarkDown(data.content));
 						}
 						break;
 					}
@@ -948,7 +948,7 @@ function Tooltip (view, editor) {
 				if (annotation.html) {
 					var htmlHolder = util.createElement(document, "div"); //$NON-NLS-0$
 					htmlHolder.className = "tooltipImage"; //$NON-NLS-0$
-					htmlHolder.innerHTML = annotation.html;
+					lib.setSafeInnerHTML(htmlHolder, annotation.html);
 					if (htmlHolder.lastChild) {
 						textUtil.addEventListener(htmlHolder.lastChild, "click", function() {
 							var start = annotation.start, end = annotation.end;

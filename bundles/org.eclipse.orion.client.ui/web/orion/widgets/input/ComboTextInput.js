@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014 IBM Corporation and others.
+ * Copyright (c) 2014, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -11,12 +11,13 @@
 /*eslint-env browser, amd*/
 define([
 	'orion/objects',
+	'orion/util',
 	'orion/webui/littlelib',
 	'text!orion/widgets/input/ComboTextInput.html',
 	'i18n!orion/widgets/nls/messages',
 	'orion/inputCompletion/inputCompletion',
 	'orion/bidiUtils'
-], function(objects, lib, ComboTextInputTemplate, messages, InputCompletion, bidiUtils) {
+], function(objects, util, lib, ComboTextInputTemplate, messages, InputCompletion, bidiUtils) {
 
 	/**
 	 * Creates a text input box combined with:
@@ -158,7 +159,7 @@ define([
 				deleteToolTips: messages["DeleteSearchTrmMsg"] //$NON-NLS-0$
 			});
 			
-			this._recentEntryButton.setAttribute("aria-label", messages["Open"]);
+			lib.setSafeAttribute(this._recentEntryButton, "aria-label", messages["Open"]);
 			this._recentEntryButton.addEventListener("click", function(event){ 
 				this._textInputNode.focus();
 				this._inputCompletion._proposeOn();
@@ -311,7 +312,7 @@ define([
 			var recentEntryArray = null;
 
 			if (this._localStorageKey) {
-				var recentEntryString = localStorage.getItem(this._localStorageKey);
+				var recentEntryString = util.readSetting(this._localStorageKey);
 				if (recentEntryString) {
 					recentEntryArray = JSON.parse(recentEntryString);
 				}
@@ -326,7 +327,7 @@ define([
 		 */
 		_storeRecentEntryArray: function(recentEntryArray) {
 			var recentEntryString = JSON.stringify(recentEntryArray);
-			localStorage.setItem(this._localStorageKey, recentEntryString);
+			util.saveSetting(this._localStorageKey, recentEntryString);
 		},
 		
 		_showRecentEntryButton: function() {

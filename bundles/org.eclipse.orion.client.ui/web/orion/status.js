@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2009, 2017 IBM Corporation and others.
+ * Copyright (c) 2009, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License v1.0
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution
@@ -63,7 +63,7 @@ define([
 				this._hookedClose = true;
 				var container = lib.node(this.notificationContainerDomId);
 				lib.addAutoDismiss([container],  function(){
-					if(this._clickToDisMiss) {
+					if(!this._clickToDisMiss) {
 						this.close();
 					}
 				}.bind(this));
@@ -92,7 +92,7 @@ define([
 			window.clearTimeout(this._timer);
 			var closeButton = lib.node(closeButtonDomId);
 			if(this._cancelMsg && this._cancelFunc && closeButton) {
-				closeButton.innerHTML = "";
+				lib.setSafeInnerHTML(closeButton, "");
 				closeButton.classList.remove("cancelButton"); //$NON-NLS-0$
 				closeButton.classList.add("dismissButton"); //$NON-NLS-0$
 				closeButton.classList.add("core-sprite-close"); //$NON-NLS-0$
@@ -125,12 +125,14 @@ define([
 				// this is kind of a hack; when there is good screen reader support for aria-busy,
 				// this should be done by toggling that instead
 				var readSetting = node.getAttribute("aria-live"); //$NON-NLS-0$
-				node.setAttribute("aria-live", isAccessible ? "polite" : "off"); //$NON-NLS-2$ //$NON-NLS-1$ //$NON-NLS-3$
+				lib.setSafeAttribute(node, "aria-live", isAccessible ? "polite" : "off");
 				window.setTimeout(function() {
 					if (msg === this.statusMessage) {
 						lib.empty(node);
 						node.appendChild(document.createTextNode(msg));
-						window.setTimeout(function() { node.setAttribute("aria-live", readSetting); }, 100); //$NON-NLS-0$
+						window.setTimeout(function() { 
+							lib.setSafeAttribute(node, "aria-live", readSetting);
+						}, 100); //$NON-NLS-0$
 					}
 				}.bind(this), 100);
 			}
@@ -326,7 +328,7 @@ define([
 					closeButton.classList.remove("imageSprite"); //$NON-NLS-0$
 					closeButton.textContent = this._cancelMsg;
 				} else {
-					closeButton.innerHTML = "";
+					lib.setSafeInnerHTML(closeButton, "");
 					closeButton.classList.remove("cancelButton"); //$NON-NLS-0$
 					closeButton.classList.add("dismissButton"); //$NON-NLS-0$
 					closeButton.classList.add("core-sprite-close"); //$NON-NLS-0$
@@ -346,7 +348,7 @@ define([
 			if (_status.HTML) {
 				// msg is HTML to be inserted directly
 				var span = document.createElement("span");
-				span.innerHTML = msg;
+				lib.setSafeInnerHTML(span, msg);
 				return span;
 			}
 			// Check for Markdown
@@ -370,7 +372,7 @@ define([
 			var msgNode, links = [];
 			if (html) {
 				msgNode = document.createElement("div");
-				msgNode.innerHTML = html;
+				lib.setSafeInnerHTML(msgNode, html);
 				// All status links open in new window
 				links = lib.$$("a", msgNode); //$NON-NLS-0$
 				if(!_status.stayOnTarget) {

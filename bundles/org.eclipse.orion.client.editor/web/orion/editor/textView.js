@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2010, 2017 IBM Corporation and others.
+ * Copyright (c) 2010, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -21,8 +21,9 @@ define("orion/editor/textView", [
 	'orion/editor/util',
 	'orion/util',
 	'orion/bidiUtils',
+	'orion/webui/littlelib',
 	'orion/metrics'
-], function(messages, mTextModel, mKeyModes, mEventTarget, mTextTheme, textUtil, util, bidiUtils, mMetrics) {
+], function(messages, mTextModel, mKeyModes, mEventTarget, mTextTheme, textUtil, util, bidiUtils, lib, mMetrics) {
 
 	/** @private */
 	function getWindow(doc) {
@@ -62,7 +63,7 @@ define("orion/editor/textView", [
 		if (attributes) {
 			for (var a in attributes) {
 				if (attributes.hasOwnProperty(a)) {
-					node.setAttribute(a, attributes[a]);
+					lib.setSafeAttribute(node, a, attributes[a]);
 				}
 			}
 		}
@@ -710,7 +711,7 @@ define("orion/editor/textView", [
 			var span, style, oldSpan, oldStyle, text, oldText, end = 0, oldEnd = 0, next, i;
 			if (util.isFirefox && lineText.length > 2000) {
 				if (div) {
-					lineDiv.innerHTML = "";
+					lib.setSafeInnerHTML(lineDiv, "");
 					div.lineWidth = undefined;
 				}
 				var frag = doc.createDocumentFragment();
@@ -886,7 +887,7 @@ define("orion/editor/textView", [
 			var child = util.createElement(_parent.ownerDocument, tagName);
 			child.appendChild(doc.createTextNode(style && style.text ? style.text : text));
 			if (style && style.html) {
-				child.innerHTML = style.html;
+				lib.setSafeInnerHTML(child, style.html);
 				child.ignore = true;
 			} else if (style && style.node) {
 				if (this.drawing) {
@@ -965,7 +966,7 @@ define("orion/editor/textView", [
 							lineChild.appendChild(span);
 							lineChild.appendChild(doc.createTextNode(text.substring(index + 1)));
 							result = new TextRect(span.getBoundingClientRect());
-							lineChild.innerHTML = "";
+							lib.setSafeInnerHTML(lineChild, "");
 							lineChild.appendChild(textNode);
 							if (!this._createdDiv) {
 								/*
@@ -1344,7 +1345,7 @@ define("orion/editor/textView", [
 						}
 						newText.push("</span>"); //$NON-NLS-1$
 					}
-					lineChild.innerHTML = newText.join("");
+					lib.setSafeInnerHTML(lineChild, newText.join(""));
 					var rangeChild = lineChild.firstChild;
 					while (rangeChild) {
 						rect = rangeChild.getBoundingClientRect();
@@ -1361,7 +1362,7 @@ define("orion/editor/textView", [
 						rangeChild = rangeChild.nextSibling;
 					}
 					if (!that._createdDiv) {
-						lineChild.innerHTML = "";
+						lib.setSafeInnerHTML(lineChild, "");
 						lineChild.appendChild(textNode);
 						/*
 						 * Removing the element node that holds the selection start or end
@@ -3795,16 +3796,14 @@ define("orion/editor/textView", [
 				var startIME = true;
 				
 				/*
-				* Bug in Safari. Some Control+key combinations send key events
+				* Bug in Safari. Some key combinations send key events
 				* with keyCode equals to 229. This is unexpected and causes the
 				* view to start an IME composition. The fix is to ignore these
 				* events.
 				*/
 				if (util.isSafari && util.isMac) {
-					if (e.ctrlKey) {
-						startIME = false;
-						e.keyCode = 0x81;
-					}
+					startIME = false;
+					e.keyCode = 0x81;
 				}
 				if (startIME) {
 					this._startIME();
@@ -5538,14 +5537,14 @@ define("orion/editor/textView", [
 				div1.style.position = "fixed"; //$NON-NLS-1$
 				div1.style.left = "-1000px"; //$NON-NLS-1$
 				_parent.appendChild(div1);
-				div1.innerHTML = newArray(2).join("a"); //$NON-NLS-1$
+				lib.setSafeInnerHTML(div1, newArray(2).join("a"));
 				rect1 = div1.getBoundingClientRect();
 				charWidth = Math.ceil(rect1.right - rect1.left);
 				if (this._wrapOffset || this._marginOffset) {
-					div1.innerHTML = newArray(this._wrapOffset + 1 + (util.isWebkit ? 0 : 1)).join(" "); //$NON-NLS-1$
+					lib.setSafeInnerHTML(div1, newArray(this._wrapOffset + 1 + (util.isWebkit ? 0 : 1)).join(" "));
 					rect1 = div1.getBoundingClientRect();
 					wrapWidth = Math.ceil(rect1.right - rect1.left);
-					div1.innerHTML = newArray(this._marginOffset + 1).join(" "); //$NON-NLS-1$
+					lib.setSafeInnerHTML(div1, newArray(this._marginOffset + 1).join(" "));
 					rect2 = div1.getBoundingClientRect();
 					marginWidth = Math.ceil(rect2.right - rect2.left);
 				}
@@ -5690,7 +5689,7 @@ define("orion/editor/textView", [
 			div.style.bottom = "0px"; //$NON-NLS-1$
 			div.style.cursor = "default"; //$NON-NLS-1$
 			div.style.display = "none"; //$NON-NLS-1$
-			div.setAttribute("aria-hidden", "true"); //$NON-NLS-1$ //$NON-NLS-2$
+			lib.setSafeAttribute(div, "aria-hidden", "true");
 			this._rootDiv.appendChild(div);
 			return div;
 		},
@@ -5820,7 +5819,7 @@ define("orion/editor/textView", [
 			clientDiv.style.outline = "none"; //$NON-NLS-1$
 			clientDiv.style.zIndex = "1"; //$NON-NLS-1$
 			clientDiv.style.WebkitUserSelect = "text"; //$NON-NLS-1$
-			clientDiv.setAttribute("spellcheck", "false"); //$NON-NLS-1$ //$NON-NLS-2$
+			lib.setSafeAttribute(clientDiv, "spellcheck", "false");
 			if (util.isIOS || util.isAndroid) {
 				clientDiv.style.WebkitTapHighlightColor = "transparent"; //$NON-NLS-1$
 			}
@@ -6123,12 +6122,12 @@ define("orion/editor/textView", [
 					clipboardDiv.style.left = "-1000px"; //$NON-NLS-1$
 					this._rootDiv.appendChild(clipboardDiv);
 				}
-				clipboardDiv.innerHTML = "<pre contenteditable=''></pre>"; //$NON-NLS-1$
+				lib.setSafeInnerHTML(clipboardDiv, "<pre contenteditable=''></pre>");
 				clipboardDiv.firstChild.focus();
 				var that = this;
 				var _getText = function() {
 					var noteText = that._getTextFromElement(clipboardDiv);
-					clipboardDiv.innerHTML = "";
+					lib.setSafeInnerHTML(clipboardDiv, "");
 					return convert(noteText);
 				};
 				
@@ -7109,7 +7108,7 @@ define("orion/editor/textView", [
 					cursorDiv.style.color = "transparent"; //$NON-NLS-1$
 					cursorDiv.style.position = "absolute"; //$NON-NLS-1$
 					cursorDiv.style.pointerEvents = "none"; //$NON-NLS-1$
-					cursorDiv.innerHTML = "&nbsp;"; //$NON-NLS-1$
+					lib.setSafeInnerHTML(cursorDiv, "&nbsp;");
 					viewDiv.appendChild(cursorDiv);
 					this._updateDOMSelection();
 				}
@@ -7122,10 +7121,10 @@ define("orion/editor/textView", [
 		},
 		_setLabel: function(label) {
 			if (label === "__hidden__" ) {
-				this._rootDiv.setAttribute("aria-hidden", "true"); //$NON-NLS-1$
+				lib.setSafeAttribute(this._rootDiv, "aria-hidden", "true");
 			} else {
-				this._rootDiv.setAttribute("role", "application"); //$NON-NLS-1$ //$NON-NLS-2$
-				this._rootDiv.setAttribute("aria-label", label); //$NON-NLS-1$
+				lib.setSafeAttribute(this._rootDiv, "role", "application");
+				lib.setSafeAttribute(this._rootDiv, "aria-label", label);
 			}
 		},
 		_setMarginOffset: function(marginOffset, init) {
@@ -7845,7 +7844,7 @@ define("orion/editor/textView", [
 						if (annotation) {
 							applyStyle(annotation.style, widthDiv);
 							if (annotation.html) {
-								widthDiv.innerHTML = annotation.html;
+								lib.setSafeInnerHTML(widthDiv, annotation.html);
 							}
 						}
 						widthDiv.lineIndex = lineIndex;
@@ -7873,7 +7872,7 @@ define("orion/editor/textView", [
 							if (annotation) {
 								applyStyle(annotation.style, lineDiv);
 								if (annotation.html) {
-									lineDiv.innerHTML = annotation.html;
+									lib.setSafeInnerHTML(lineDiv, annotation.html);
 								}
 								lineDiv.annotation = annotation;
 							}
@@ -7921,7 +7920,7 @@ define("orion/editor/textView", [
 							lineDiv.style.position = "absolute"; //$NON-NLS-1$
 							lineDiv.style.top = arrowWidth + lineHeight + Math.floor(lineIndex * divHeight) + "px"; //$NON-NLS-1$
 							if (annotation.html) {
-								lineDiv.innerHTML = annotation.html;
+								lib.setSafeInnerHTML(lineDiv, annotation.html);
 							}
 							lineDiv.annotation = annotation;
 							lineDiv.lineIndex = lineIndex;

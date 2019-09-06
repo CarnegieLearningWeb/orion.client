@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2014 IBM Corporation and others.
+ * Copyright (c) 2014, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -10,7 +10,15 @@
  ******************************************************************************/
 /*eslint-env browser, amd*/
 /*global URL*/
-define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'orion/webui/tooltip', 'orion/util', 'orion/URL-shim'], function(messages, lib, PageUtil, mTooltip, util) {
+define([
+	'i18n!orion/nls/messages', 
+	'orion/webui/littlelib', 
+	'orion/PageUtil', 
+	'orion/webui/tooltip', 
+	'orion/util', 
+	'orion/URL-shim'
+], function(messages, lib, PageUtil, mTooltip, util) {
+
 	var LOCAL_STORAGE_NAME = "sideMenuNavigation";
 	var OPEN_STATE = "open";
 	var CLOSED_STATE = "closed";
@@ -29,7 +37,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 		this._categorizedRelatedLinks = {};
 
 		this._categorizedAnchors = null;
-		this._state = localStorage.getItem(LOCAL_STORAGE_NAME) || DEFAULT_STATE;
+		this._state = util.readSetting(LOCAL_STORAGE_NAME) || DEFAULT_STATE;
 		this._currentCategory = "";
 		this._notificationTimeout = null;
 		this._renderTimeout = null;
@@ -154,9 +162,9 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 					}
 					listItem.appendChild(anchor);
 					sideMenuList.appendChild(listItem);
-					anchor.setAttribute("aria-label", listItem.categoryName);
+					lib.setSafeAttribute(anchor, "aria-label", listItem.categoryName);
 					if (this._currentCategory === categoryInfo.id) {
-						anchor.setAttribute("aria-current", "page");
+						lib.setSafeAttribute(anchor, "aria-current", "page");
 					}
 					anchor.commandTooltip = new mTooltip.Tooltip({
 						node: anchor,
@@ -171,7 +179,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 				this._topScrollButton.classList.add("sideMenuScrollButton"); //$NON-NLS-0$
 				this._topScrollButton.classList.add("sideMenuTopScrollButton"); //$NON-NLS-0$
 				this._topScrollButton.classList.add("core-sprite-openarrow"); //$NON-NLS-0$
-				this._topScrollButton.setAttribute("aria-label", messages["Up"]); //$NON-NLS-0$
+				lib.setSafeAttribute(this._topScrollButton, "aria-label", messages["Up"]);
 				this._topScrollButton.tabIndex = -1;
 								
 				this._topScrollButton.addEventListener("mousedown", function(){ //$NON-NLS-0$
@@ -192,7 +200,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 				this._bottomScrollButton.classList.add("sideMenuScrollButton"); //$NON-NLS-0$
 				this._bottomScrollButton.classList.add("sideMenuBottomScrollButton"); //$NON-NLS-0$
 				this._bottomScrollButton.classList.add("core-sprite-openarrow"); //$NON-NLS-0$
-				this._bottomScrollButton.setAttribute("aria-label", messages["Down"]); //$NON-NLS-0$
+				lib.setSafeAttribute(this._bottomScrollButton, "aria-label", messages["Down"]);
 				this._bottomScrollButton.tabIndex = -1;
 				
 				this._bottomScrollButton.addEventListener("mousedown", function(){ //$NON-NLS-0$
@@ -215,7 +223,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 
 				this._updateCategoryAnchors();
 				this._show = function() {
-					this._parentNode.setAttribute("aria-label", messages.sidebar); //$NON-NLS-1$
+					lib.setSafeAttribute(this._parentNode, "aria-label", messages.sidebar);
 					this._parentNode.appendChild(sideMenuHome);
 					this._parentNode.appendChild(this._topScrollButton);
 					this._parentNode.appendChild(sideMenuList);
@@ -285,7 +293,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 			this._updateScrollButtonVisibility();
 		},
 		hide: function() {
-			localStorage.setItem(LOCAL_STORAGE_NAME, CLOSED_STATE);
+			util.saveSetting(LOCAL_STORAGE_NAME, CLOSED_STATE);
 			this._parentNode.classList.add("sideMenu-closed"); //$NON-NLS-0$
 			this._contentNode.classList.add("content-sideMenu-closed"); //$NON-NLS-0$
 		},
@@ -303,9 +311,9 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 			}
 
 			if (this._state === DEFAULT_STATE) {
-				localStorage.removeItem(LOCAL_STORAGE_NAME);
+				util.deleteSetting(LOCAL_STORAGE_NAME);
 			} else {
-				localStorage.setItem(LOCAL_STORAGE_NAME, this._state);
+				util.saveSetting(LOCAL_STORAGE_NAME, this._state);
 			}
 			this.render();
 		},
@@ -385,7 +393,7 @@ define(['i18n!orion/nls/messages', 'orion/webui/littlelib', 'orion/PageUtil', 'o
 								}
 							});
 							if (level) {
-								listItem.setAttribute("level", level);
+								lib.setSafeAttribute(listItem, "level", level);
 							} else {
 								listItem.removeAttribute("level");
 							}

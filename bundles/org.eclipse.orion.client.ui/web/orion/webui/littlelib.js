@@ -1,6 +1,6 @@
 /*******************************************************************************
  * @license
- * Copyright (c) 2012 IBM Corporation and others.
+ * Copyright (c) 2012, 2019 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials are made 
  * available under the terms of the Eclipse Public License v1.0 
  * (http://www.eclipse.org/legal/epl-v10.html), and the Eclipse Distribution 
@@ -236,8 +236,8 @@ define(["orion/util"], function(util) {
 	
 					var e = focusElement.ownerDocument.createEvent("MouseEvents");
 					e.initMouseEvent("contextmenu", true, true,
-					    focusElement.ownerDocument.defaultView, 1, 0, 0, xPos, yPos, false,
-					    false, false, false,2, null);
+						focusElement.ownerDocument.defaultView, 1, 0, 0, xPos, yPos, false,
+						false, false, false,2, null);
 					return !focusElement.dispatchEvent(e);				
 				}
 			}, true);
@@ -350,7 +350,7 @@ define(["orion/util"], function(util) {
 			if (targetNode.nodeType === 3) { // TEXT_NODE
 				targetNode.parentNode.replaceChild(document.createTextNode(replaceText), targetNode);
 			} else if (targetNode.nodeType === 1 && attribute) { // ELEMENT_NODE
-				targetNode.setAttribute(attribute, replaceText); //$NON-NLS-0$
+				setSafeAttribute(targetNode, attribute, replaceText);
 			}
 		});
 	}
@@ -475,6 +475,27 @@ define(["orion/util"], function(util) {
 		return offsetParent;
 	}
 	
+	function getPathTo(element) {
+		if (!element) return "";
+		if (element.id !== "") {
+			return 'id("' + element.id +'")';
+		}
+		if (element === document.body) {
+			return element.tagName;
+		}
+		var ix= 0;
+		var siblings = element.parentNode.childNodes;
+		for (var i= 0; i < siblings.length; i++) {
+			var sibling = siblings[i];
+			if (sibling === element) {
+				return getPathTo(element.parentNode)+ '/'+ element.tagName+'['+(ix+1)+']';
+			}
+			if (sibling.nodeType === Node.ELEMENT_NODE && sibling.tagName === element.tagName) {
+				ix++;
+			}
+		}
+	}
+	
 	/**
 	 * Return focus to the element that was active before the <code>hidingParent</code> was
 	 * shown if the parent contains the active element. If the previous active node is no
@@ -488,35 +509,43 @@ define(["orion/util"], function(util) {
 	 */
 	function returnFocus(hidingParent, previousActiveElement, hideCallback) {
 		var activeElement = document.activeElement;
+		var focusPath = getPathTo(previousActiveElement);
 		var hasFocus = hidingParent && (hidingParent === activeElement || (hidingParent.compareDocumentPosition(activeElement) & 16) !== 0);
+		var deferred;
 		if (hideCallback) {
-			hideCallback();
+			deferred = hideCallback();
 		}
-		var temp = previousActiveElement;
-		if (hasFocus) {
-			while (temp && temp !== document.body) {
-				if (document.compareDocumentPosition(temp) !== 1 && temp.offsetParent) {
-					var tabbable = firstTabbable(temp, previousActiveElement === temp);
-					if (tabbable) {
-						temp = tabbable;
+		function restore() {
+			var temp = previousActiveElement;
+			if (hasFocus) {
+				while (temp && temp !== document.body) {
+					if (document.compareDocumentPosition(temp) !== 1 && temp.offsetParent) {
+						var tabbable = firstTabbable(temp, previousActiveElement === temp);
+						if (tabbable) {
+							temp = tabbable;
+							break;
+						}
+					}
+					if (temp.classList.contains("contextMenu")) {
+						if (temp.triggerNode) {
+							temp = temp.triggerNode;
+							continue;
+						}
 						break;
 					}
+					temp = temp.parentNode;
 				}
-				if (temp.classList.contains("contextMenu")) {
-					if (temp.triggerNode) {
-						temp = temp.triggerNode;
-						continue;
-					}
-					break;
+				if (!temp && focusPath) {
+					temp = document.evaluate(focusPath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
 				}
-				temp = temp.parentNode;
+				if (temp) {
+					temp.focus();
+					return true;
+				}
 			}
-			if (temp) {
-				temp.focus();
-				return true;
-			}
+			return false;
 		}
-		return false;
+		return deferred && deferred.then ? deferred.then(restore) : restore();
 	}
 	
 	/**
@@ -593,7 +622,7 @@ define(["orion/util"], function(util) {
 			parent = document.createElement("div"); //$NON-NLS-0$
 		}
 
-		parent.innerHTML = templateString;	
+		setSafeInnerHTML(parent, templateString);	
 		if (parent.children.length > 1) {
 			newNodes = parent.children;
 		} else {
@@ -602,6 +631,33 @@ define(["orion/util"], function(util) {
 		
 		return newNodes;
 	}
+
+  /**
+   * @description This function is a delegate to set the value of an attribute on a given node
+   * @param {Element} node
+   * @param {string} name
+   * @param {?} value
+   * @since 20.0
+   */
+  function setSafeAttribute(node, name, value) {
+	if(node instanceof Element && name !== null && name !== undefined) {
+			//TODO - add more checks, this is not sufficient
+	  node.setAttribute(name, value);
+	}
+	}
+	
+	/**
+   * @description This function is a delegate to set the value of innerHTML on a given node
+   * @param {Element} node
+   * @param {string} value
+   * @since 20.0
+   */
+  function setSafeInnerHTML(node, value) {
+	if(node instanceof Element && (value instanceof String || typeof value === "string")) {
+			//TODO - we do not allow third party content, so not a problem currently
+	  node.innerHTML = value;
+	}
+  }
 
 	//return module exports
 	return {
@@ -627,6 +683,8 @@ define(["orion/util"], function(util) {
 		returnFocus: returnFocus,
 		keyName: keyName,
 		KEY: KEY,
-		createNodes: createNodes
+		createNodes: createNodes,
+		setSafeAttribute: setSafeAttribute,
+		setSafeInnerHTML: setSafeInnerHTML
 	};
 });
