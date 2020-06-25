@@ -21,6 +21,7 @@ var api = require('./api'),
 	Promise = require('bluebird'),
 	mkdirp = require('mkdirp'),
 	fs = Promise.promisifyAll(require('fs')),
+	fsextra = require('fs-extra'),
 	fileUtil = require('./fileUtil'),
 	log4js = require('log4js'),
 	logger = log4js.getLogger("xfer"),
@@ -278,7 +279,7 @@ function completeTransfer(req, res, tempFile, file, fileName, xferOptions, shoul
 		if (!overwrite && fs.existsSync(newFile)) {
 			return overrideError([fileName]);
 		}
-		fs.rename(tempFile, newFile, function(err) {
+		fsextra.move(tempFile, newFile, {clobber: true}, function(err) {
 			if (err) {
 				return writeError(400, res, "Transfer failed");
 			}

@@ -785,10 +785,11 @@ function revert(req, res, commitToRevert) {
 		writeResponse(200, res, null, {
 			"Result": theRC ? "FAILURE" : "OK"
 		});
+		return clone.getSignature(theRepo);
 	})
-	.then(function() {
+	.then(function(sig) {
 		return git.Reflog.read(theRepo, "HEAD").then(function(reflog) {
-			return replaceMostRecentRefLogMessageHeaderfromCommit("revert", reflog, theRepo);
+			return replaceMostRecentRefLogMessageHeaderfromCommit("revert", reflog, sig);
 		});
 	})
 	.catch(function(err) {
@@ -830,10 +831,11 @@ function cherryPick(req, res, commitToCherrypick) {
 			"Result": theRC ? "FAILED" : "OK",
 			"HeadUpdated": !theRC && theHead !== newHead
 		});
+		return clone.getSignature(theRepo);
 	})
-	.then(function() {
+	.then(function(sig) {
 		return git.Reflog.read(theRepo, "HEAD").then(function(reflog) {
-			return replaceMostRecentRefLogMessageHeaderfromCommit("cherrypick", reflog, theRepo);
+			return replaceMostRecentRefLogMessageHeaderfromCommit("cherrypick", reflog, sig);
 		});
 	})
 	.catch(function(err) {
@@ -851,7 +853,7 @@ function cherryPick(req, res, commitToCherrypick) {
 	});
 }
 
-function replaceMostRecentRefLogMessageHeaderfromCommit (toHeader,reflog, repo ){
+function replaceMostRecentRefLogMessageHeaderfromCommit (toHeader,reflog, sig){
 	var mostRecentReflog = reflog.entryByIndex(0);
 	if(mostRecentReflog){
 		var targetMessage = mostRecentReflog.message();
@@ -859,7 +861,7 @@ function replaceMostRecentRefLogMessageHeaderfromCommit (toHeader,reflog, repo )
 			var targetOID = mostRecentReflog.idOld();
 			targetMessage = targetMessage.replace(/^commit(:\s)/,  toHeader+"$1");
 			reflog.drop(0, 1);
-			reflog.append(targetOID, clone.getSignature(repo),targetMessage);
+			reflog.append(targetOID, sig, targetMessage);
 			return reflog.write();
 		}
 	}
@@ -902,9 +904,11 @@ function rebase(req, res, commitToRebase, rebaseOperation) {
 				}).then(function(rebase) {
 					if (rebase.operationCurrent() === rebase.operationEntrycount() - 1) {
 						// if skipping the last operation, then we're done here
-						rebase.finish(repo.defaultSignature());
-						// return the commit that we're currently on
-						return head;
+						return clone.getSignature(repo).then(function(sig) {
+							rebase.finish(sig);
+							// return the commit that we're currently on
+							return head;
+						});
 					}
 					// move to the next one and continue
 					return rebase.next().then(function(rebaseOperation) {
@@ -1073,7 +1077,7 @@ function merge(req, res, branchToMerge, squash) {
 }
 
 /**
- * Force a merge from the specified comment onto HEAD. This may leave
+ * Force a merge from the specified commit onto HEAD. This may leave
  * the repository in a conflicted state. If there are no conflits, a
  * merge commit will be created to complete the merge.
  * 
@@ -1089,22 +1093,23 @@ function merge(req, res, branchToMerge, squash) {
 function forceMerge(repo, head, commit, branchToMerge, createMergeCommit, conflictingPathsCallback) {
 	return git.AnnotatedCommit.lookup(repo, commit.id())
 	.then(function(annotated) {
-		var retCode = git.Merge.merge(repo, annotated, null, null);
-		if (retCode === git.Error.CODE.ECONFLICT) {
-			// checkout failed due to a conflict
+		return git.Merge.merge(repo, annotated, null, null).then(function() {
+			if (repo.state() !== git.Repository.STATE.MERGE) {
+				throw new Error("Internal merge failure ");
+			}
+	
+			if (createMergeCommit) {
+				return clone.getSignature(repo).then(function(signature) {
+					var message = "Merged branch '" + branchToMerge + "'"; 
+					return createCommit(repo,
+						signature.name(), signature.email(),
+						signature.name(), signature.email(),
+						message, false, false);
+				});
+			}
+		}).catch (function(err) {
 			return getConflictingPaths(repo, head, commit).then(conflictingPathsCallback);
-		} else if (retCode !== git.Error.CODE.OK) {
-			throw new Error("Internal merge failure (error code " + retCode + ")");
-		}
-
-		if (createMergeCommit) {
-			var signature = repo.defaultSignature();
-			var message = "Merged branch '" + branchToMerge + "'"; 
-			return createCommit(repo,
-				signature.name(), signature.email(),
-				signature.name(), signature.email(),
-				message, false, false);
-		}
+		});
 	});
 }
 
@@ -1172,17 +1177,15 @@ function createCommit(repo, committerName, committerEmail, authorName, authorEma
 		return index.writeTree();
 	})
 	.then(function(oidResult) {
-		oid = oidResult;	
-		if (authorEmail) {
-			author = git.Signature.now(authorName, authorEmail);
-		} else {
-			author = clone.getSignature(repo);		
-		}
-		if (committerEmail) {
-			committer = git.Signature.now(committerName, committerEmail);
-		} else {
-			committer = clone.getSignature(repo);
-		}	
+		oid = oidResult;
+		return authorEmail ? Promise.resolve(git.Signature.now(authorName, authorEmail)) : clone.getSignature(repo);
+	})
+	.then(function(sig) {
+		author = sig;
+		return committerEmail ? Promise.resolve(git.Signature.now(committerName, committerEmail)) : clone.getSignature(repo);
+	})
+	.then(function(sig) {
+		committer = sig;
 		if(repo.isEmpty()){
 			if(insertChangeid) {
 				message = insertChangeId(message, oid, null, author, committer);
@@ -1242,10 +1245,10 @@ function tag(req, res, commitId, name, isAnnotated, message) {
 	})
 	.then(function(commit) {
 		thisCommit = commit;
-		if(isAnnotated) {
-			var tagger = clone.getSignature(theRepo);
-		}
-		return isAnnotated ? theRepo.createTag (commit, name, message, tagger) : theRepo.createLightweightTag(commit, name);
+		return  clone.getSignature(theRepo);
+	})
+	.then(function(tagger) {
+		return isAnnotated ? theRepo.createTag (thisCommit, name, message, isAnnotated ? tagger : undefined) : theRepo.createLightweightTag(thisCommit, name);
 	})
 	.then(function() {
 		return getDiff(theRepo, thisCommit, fileDir);

@@ -484,7 +484,7 @@ define(["orion/util"], function(util) {
 			return element.tagName;
 		}
 		var ix= 0;
-		var siblings = element.parentNode.childNodes;
+		var siblings = element.parentNode && element.parentNode.childNodes || [];
 		for (var i= 0; i < siblings.length; i++) {
 			var sibling = siblings[i];
 			if (sibling === element) {
@@ -583,7 +583,7 @@ define(["orion/util"], function(util) {
 	 * @returns A valid html id string
 	 */
 	function validId(str) {
-		return str.replace(/\s/, '-').replace(/[^A-Za-z0-9_.-]/, '.');
+		return str.replace(/\s/g, '-').replace(/[^A-Za-z0-9_.-]/g, '.');
 	}
 	
 	/**

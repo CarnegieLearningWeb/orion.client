@@ -646,6 +646,10 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 	padding-right: 0;
 }
 
+.keyAssistInput::placeholder {
+	color: #b4a454;
+}
+
 .keyAssistBindingInput {
 	font-size: 10pt;
 	font-weight: bold;
@@ -707,6 +711,10 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 	visibility: visible;
 }
 
+.keyAssistEditButton:focus {
+  background-color: #a5b5bc;
+}
+
 .keyAssistSpacer {
 	width: 16px;
 	height: 14px;
@@ -722,6 +730,7 @@ html[dir="rtl"] .keyAssistFloat { /* ACGC */
 .keyAssistName {
 	text-align: left;
 	padding: 3px;
+	padding-left: 20px;
 }
 
 .keyAssistAccel {

@@ -79,10 +79,16 @@ define([
 			label = messages.Warning;
 			icon.classList.add("problemsWarning"); //$NON-NLS-1$
 		}
-		if (hidden) {
+		var parent = holderDiv.parentElement;
+		if (parent !== null && parent.nodeName === "TD") { // gridcell
+			lib.setSafeAttribute(parent, "aria-label", hidden ? messages["Category"] : label);
 			lib.setSafeAttribute(icon, "aria-hidden", true);
 		} else {
-			lib.setSafeAttribute(icon, "aria-label", label);
+			if (hidden) {
+				lib.setSafeAttribute(icon, "aria-hidden", true);
+			} else {
+				lib.setSafeAttribute(icon, "aria-label", label);
+			}
 		}
 		holderDiv.appendChild(icon);
 	}
@@ -119,7 +125,7 @@ define([
 			child.fileName = fileItem.name;
 			child.filePath = fileItem.path;
 			child.fileLocation = fileItem.location;
-			child.location = fileItem.location + child.description + child.start + child.end;
+			child.location = lib.validId(fileItem.location + child.description + child.start + child.end);
 			totalProblems.push(child);
 		});
 	}
@@ -229,8 +235,8 @@ define([
 	            result = this.rootId;
 	        } else {
 	            result = item.location;
-	            // remove all non valid chars to make a dom id. 
-	            result = result.replace(/[^\.\:\-\_0-9A-Za-z]/g, "");
+	            // remove all non valid chars to make a dom id.
+	            result = lib.validId(result);
 	        }
 	        return result;
 		}
